@@ -3,12 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { heightfieldToLocal, modelBounds } from './mesh';
 import {
   LOOP_DISTANCE_M,
+  MAX_TEXTURE_SCALE,
   OCCLUDED_OPACITY,
+  TEXTURE_SCALE,
   createMarkerLayer,
   drawMarker,
   isOccluded,
   markerBox,
   markerExtent,
+  markerTextureScale,
   routeMarkerIndices,
   type TerrainMarkerKind,
 } from './markers';
@@ -256,6 +259,28 @@ describe('createMarkerLayer', () => {
     layer.dispose();
   });
 
+  it('repaints its textures at a larger scale without changing the sprite sizes', () => {
+    const layer = createMarkerLayer(hills(), LOOP);
+    layer.setViewport(600, 30);
+    const sprite = layer.sprite('summit');
+    const texture = sprite?.material.map;
+    const image = texture?.image as HTMLCanvasElement | undefined;
+    const before = image?.width ?? 0;
+    const size = sprite?.scale.x;
+    const version = texture?.version ?? 0;
+    const dispose = texture ? vi.spyOn(texture, 'dispose') : null;
+    layer.setTextureScale(markerTextureScale(7.5));
+    expect(image?.width).toBe(Math.ceil(markerBox('summit') * 8));
+    expect(image?.width).toBeGreaterThan(before);
+    expect(texture?.version).toBeGreaterThan(version);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(sprite?.scale.x).toBe(size);
+    // Same scale again: nothing to repaint.
+    layer.setTextureScale(8);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    layer.dispose();
+  });
+
   it('frees every material and texture', () => {
     const layer = createMarkerLayer(hills(), POINT_TO_POINT);
     const spies = (['start', 'finish', 'summit', 'scrub'] as const).flatMap((kind) => {
@@ -267,6 +292,18 @@ describe('createMarkerLayer', () => {
     layer.dispose();
     for (const spy of spies) expect(spy).toHaveBeenCalledTimes(1);
     expect(layer.group.children.length).toBeGreaterThan(0); // sprites stay; their GPU data is gone
+  });
+});
+
+describe('markerTextureScale', () => {
+  it('is at least 4 and at least the drawing scale, in whole steps', () => {
+    expect(markerTextureScale(1)).toBe(TEXTURE_SCALE);
+    expect(markerTextureScale(2)).toBe(4);
+    expect(markerTextureScale(4)).toBe(4);
+    expect(markerTextureScale(4.2)).toBe(5);
+    expect(markerTextureScale(7.5)).toBe(8);
+    expect(markerTextureScale(100)).toBe(MAX_TEXTURE_SCALE);
+    expect(markerTextureScale(Number.NaN)).toBe(TEXTURE_SCALE);
   });
 });
 

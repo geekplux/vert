@@ -40,10 +40,45 @@ slots, and export.
 - Accessibility: the poster root is `role="img"` with a summary (`posterAriaLabel`) as its name and
   the drawn text `aria-hidden`: it is artwork to be exported, and the summary carries the same
   facts.
-- Export is client-side. Print sizes render as tiles of ≤ 4096 px, stitched in an OffscreenCanvas.
+- Export is client-side; see "Export" below.
 - Await `document.fonts.load(...)` for every face a style uses before drawing: `loadPosterFonts(style,
 text)` (`fonts.ts`) does it, and for B and E first injects `src/styles/poster-fonts.css` (never
   loaded at app start).
+
+## Export
+
+Download runs `posterExporter` (`src/page/PosterState/posterExporter.ts`, the app's
+`defaultExporter`) with the `ExportJob` Poster mode builds:
+
+- The element is the preview's own `LivePoster` with `exportScale = posterLayout(size).scale`:
+  same style, size, content, units, exaggeration, View camera, trimmed track and frame. In export
+  mode B and E lay out for the reported box at once and pass `detailScale` (lines sampled to 0.3
+  output px), the fonts gate is skipped (the engine loads the faces first), and style A draws no
+  preview figure. The poster reports its figure through `onFigureStatus` (`loading`, `ready`,
+  `error`); the engine's `waitFor` holds until it has been `ready` for 50 ms. Height grids come
+  from the preview's loader (`job.sources.loadFigureTerrain`, cached by bounds), so an export
+  usually fetches no tiles; style A with the whole route uses the View's grid
+  (`job.sources.terrain`), built afresh only if it is not ready.
+- Style A's terrain is a raster `FigureLayer`: its own `TerrainFigureRenderer` (lazy three.js
+  chunk) draws each output tile's part of the figure box with `renderTile` (whole-figure camera,
+  view offset, 24 logical px bleed), at the export scale: route core 4 × s, halo 9 × s, ridge
+  lines and marker sprites (textures repainted at `markerTextureScale(s)`, 8× at 18 × 24). The
+  renderer and its WebGL context are disposed when the export ends, however it ends.
+- The engine (`export/export.ts`, a lazy chunk): mount off-screen, load faces, serialize to SVG,
+  rasterize in tiles of ≤ 4096 px into one canvas, encode PNG (300 dpi pHYs for print) or a
+  one-page PDF holding a JPEG (q 1.0). Progress: `{ done: 0, total }` once the tiles are planned
+  (poster tiles plus one figure tile per poster tile the figure overlaps: 18 × 24 style A is 4 + 4),
+  then one report per tile; "Preparing…" until then.
+- Cancel: the signal is checked between every step; waits (grids, font settling, the encode)
+  reject at once; nothing is downloaded after an abort; canvases and the renderer are released.
+- Errors shown to the user (`ExportError`): too large for this browser (`TOO_LARGE_MESSAGE`), the
+  terrain could not be loaded (`TERRAIN_UNAVAILABLE_MESSAGE`), the browser could not draw it
+  (`TERRAIN_DRAW_MESSAGE`); anything else is the generic message.
+- Measured (M4 Mac mini, Chromium, Metal; download event after the click): 18 × 24 PNG A 0.8 s,
+  B 0.8 s, E 0.7 s; PDF A 0.7 s, E 0.8 s; A3 A 0.5 s; 4 : 5 and 9 : 16 A 0.4 s; CCC (99 km)
+  18 × 24 A 0.8 s, B 0.7 s, E 0.7 s. Peak: 8 tiles (18 × 24 A). `e2e/export.spec.ts` checks the
+  files (size, pHYs, PDF page and JPEG, terrain and text pixels, Latin Extended glyphs against the
+  preview, Cancel, the network log).
 
 ## Styles B and E
 
@@ -109,5 +144,5 @@ width, height` in output px of the figure box, `scale`, `boxWidth`, `boxHeight`)
 part with the whole figure's camera plus a view offset (`figureViewOffset` in `stage.ts`), with a
 24 logical px bleed on inner edges so the route's per-point visibility and strokes match across
 seams. Tests check that tiles reproduce the whole frame's camera matrices exactly. Marker textures
-are drawn at 4× (`markers.ts` `TEXTURE_SCALE`); at 18 × 24 (scale 7.5) they would be upscaled, so
-the exporter may want a larger texture scale.
+are drawn at 4× (`markers.ts` `TEXTURE_SCALE`), or at `markerTextureScale(pixelScale)` when the
+figure is drawn larger (8× at 18 × 24), so markers are never magnified.

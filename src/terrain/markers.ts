@@ -16,7 +16,9 @@
  * 28 × 24), which is a little larger than the 18 px `Marker` box used in the profile and legend:
  * on the terrain the markers sit on a 9 px halo and must stand clear of it.
  *
- * Each marker is a small canvas texture drawn at {@link TEXTURE_SCALE}× its CSS size.
+ * Each marker is a small canvas texture drawn at {@link TEXTURE_SCALE}× its CSS size, or more for
+ * a figure drawn at a larger scale (`setTextureScale`, {@link markerTextureScale}: the 18 × 24
+ * export draws them at 7.5×, so their textures are painted at 8×).
  *
  * Occlusion: a marker behind a ridge would otherwise float over the ridge with no route near it
  * (the route itself is depth-tested). Before each frame `updateOcclusion` marches a ray from each
@@ -53,8 +55,20 @@ export const SUMMIT_EDGE_PX = 2.5;
 export const SCRUB_DIAMETER_PX = 14;
 export const SCRUB_RING_PX = 3;
 export const SCRUB_HAIRLINE_PX = 1;
-/** Texture pixels per CSS pixel. */
+/** Texture pixels per CSS pixel (at least: see {@link markerTextureScale}). */
 export const TEXTURE_SCALE = 4;
+/** The largest texture scale a figure asks for (a summit texture of 40 × 16 = 640 px). */
+export const MAX_TEXTURE_SCALE = 16;
+
+/**
+ * Texture px per CSS px for markers drawn at `pixelScale` output px per CSS px: never below
+ * {@link TEXTURE_SCALE}, and at least the scale itself (whole steps), so a marker is never
+ * magnified from a smaller texture.
+ */
+export function markerTextureScale(pixelScale: number): number {
+  if (!(pixelScale > 0) || !Number.isFinite(pixelScale)) return TEXTURE_SCALE;
+  return Math.min(MAX_TEXTURE_SCALE, Math.max(TEXTURE_SCALE, Math.ceil(pixelScale - 1e-6)));
+}
 /** Opacity of a marker the terrain hides from the camera. */
 export const OCCLUDED_OPACITY = 0.35;
 
@@ -269,14 +283,19 @@ export function drawMarker(
   }
 }
 
-/** Paints `kind` into `canvas` at {@link TEXTURE_SCALE}×. Without a 2D context it stays blank. */
-function paintMarker(canvas: HTMLCanvasElement, kind: TerrainMarkerKind, palette: RoutePalette) {
+/** Paints `kind` into `canvas` at `scale`×. Without a 2D context it stays blank. */
+function paintMarker(
+  canvas: HTMLCanvasElement,
+  kind: TerrainMarkerKind,
+  palette: RoutePalette,
+  scale: number = TEXTURE_SCALE,
+) {
   const box = markerBox(kind);
-  canvas.width = Math.ceil(box * TEXTURE_SCALE);
+  canvas.width = Math.ceil(box * scale);
   canvas.height = canvas.width;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  ctx.setTransform(TEXTURE_SCALE, 0, 0, TEXTURE_SCALE, 0, 0);
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, box, box);
   drawMarker(ctx, kind, palette, box);
 }
@@ -329,6 +348,11 @@ export interface MarkerLayer {
   fixedMarkers(): { kind: TerrainMarkerKind; position: Vector3 }[];
   setExaggeration(exaggeration: number): void;
   setPalette(palette: RoutePalette): void;
+  /**
+   * Texture px per CSS px (default {@link TEXTURE_SCALE}); repaints the textures when it changes.
+   * Only the textures' resolution changes: the sprites keep their size.
+   */
+  setTextureScale(scale: number): void;
   /** Viewport height in CSS px and the camera's vertical field of view: sets the sprites' size. */
   setViewport(heightPx: number, fovDeg: number): void;
   /** Moves the scrub marker `d` metres along the route; null hides it. No rebuild. */
@@ -352,6 +376,16 @@ export function createMarkerLayer(
   group.name = 'marker-layer';
   const markers = new Map<TerrainMarkerKind, MarkerSprite>();
   let currentExaggeration = exaggeration;
+  let currentPalette = palette;
+  let textureScale = TEXTURE_SCALE;
+  const repaint = () => {
+    for (const marker of markers.values()) {
+      paintMarker(marker.canvas, marker.kind, currentPalette, textureScale);
+      // A new size needs a new GPU texture: dispose, and the next draw uploads it afresh.
+      marker.texture.dispose();
+      marker.texture.needsUpdate = true;
+    }
+  };
 
   const place = (marker: MarkerSprite, lon: number, lat: number) => {
     marker.base.copy(heightfieldToLocal(heightfield, lon, lat, 1, lift));
@@ -383,10 +417,17 @@ export function createMarkerLayer(
       for (const marker of markers.values()) marker.sprite.position.y = marker.base.y * value;
     },
     setPalette(next) {
+      currentPalette = next;
       for (const marker of markers.values()) {
-        paintMarker(marker.canvas, marker.kind, next);
+        paintMarker(marker.canvas, marker.kind, next, textureScale);
         marker.texture.needsUpdate = true;
       }
+    },
+    setTextureScale(scale) {
+      const next = scale > 0 && Number.isFinite(scale) ? scale : TEXTURE_SCALE;
+      if (next === textureScale) return;
+      textureScale = next;
+      repaint();
     },
     setViewport(heightPx, fovDeg) {
       // With sizeAttenuation off a sprite of scale s spans s · P11 in NDC, P11 = 1 / tan(fov / 2):

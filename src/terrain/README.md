@@ -66,7 +66,9 @@ scrub marker. No map library, no basemap.
   a 1 px ink hairline so the ring reads over the white halo). Sizes follow the canvas's terrain
   figure. A route ending within 50 m of its start is a loop and gets one ○; otherwise the finish
   is a ◉ (the start circle with an ink dot), never a second ○. `setScrub(d)` moves the scrub
-  marker without rebuilding. Before each frame `updateOcclusion` marches a ray from each marker
+  marker without rebuilding. Textures are painted at 4× their CSS size; a poster figure drawn at a
+  larger scale repaints them at `markerTextureScale(scale)` (the 18 × 24 export: 8×) so a sprite
+  is never magnified (`setTextureScale`, called by `renderFigure`). Before each frame `updateOcclusion` marches a ray from each marker
   to the eye over the height grid and fades markers behind a ridge to 35% opacity.
 - The stage builds both layers once it has a heightfield and a track (`setTrack`, `setScrub`,
   `setRoutePalette`); `setOverlays` keeps the model 12 px clear of rectangles on the box, and

@@ -1,16 +1,19 @@
 /**
  * The poster export: one poster element in, one PNG or PDF Blob out, all in the browser.
  *
- * 1. Plan the tiles (≤ 4096 px) and report `{ done: 0, total }`; fail at once on a canvas size
- *    this browser already refused.
+ * 1. Fail at once on a canvas size this browser already refused.
  * 2. Mount the poster off-screen at its logical size (its own React root, hidden from the
  *    accessibility tree), with every face it uses loaded first, so it never draws a fallback.
  * 3. Serialize it to a standalone SVG (`serialize.ts`): styles inlined, fonts and images embedded.
  * 4. Load the embedded font files in the page (`preloadFonts`), so SVG images never draw a face
  *    that is still loading; then rasterize at `scale = target / logical`, after a small draw that
- *    settles the fonts, tile by tile (`rasterize.ts`), one progress report per tile, cancellable
- *    between tiles. The output canvas is verified as it is made (no up-front canvas probe).
- * 5. Encode: PNG (marked 300 dpi for print sizes) or a single-image PDF (`pdf.ts`).
+ *    settles the fonts, tile by tile (`rasterize.ts`). The first progress report, `{ done: 0,
+ *    total }`, comes once the tiles are planned (poster tiles ≤ 4096 px, plus a figure tile for
+ *    each poster tile the raster figure layer overlaps), then one per tile; cancellable between
+ *    tiles. Until then the page says "Preparing…". The output canvas is verified as it is made
+ *    (no up-front canvas probe).
+ * 5. Encode: PNG (marked 300 dpi for print sizes) or a single-image PDF (`pdf.ts`). The encode
+ *    cannot be interrupted, but an abort rejects at once and the canvas is released.
  *
  * `downloadBlob` is the only place a file is handed to the browser.
  */
@@ -30,7 +33,7 @@ import { ExportError, TOO_LARGE_MESSAGE } from './errors';
 import { preloadFonts } from './fontPreload';
 import { PRINT_DPI, pdfPageSize, writeSingleImagePdf } from './pdf';
 import { withPngDensity } from './png';
-import { CanvasLimitError, planTiles, rasterize } from './rasterize';
+import { CanvasLimitError, rasterize } from './rasterize';
 import type { FigureLayer, RasterizeOptions, SettleResult } from './rasterize';
 import { posterSvg, serializePoster } from './serialize';
 import type { SerializeOptions, SerializedPoster } from './serialize';
@@ -178,11 +181,36 @@ export function isCanvasLimitError(error: unknown): boolean {
   );
 }
 
-function abortError(signal: AbortSignal | undefined): unknown {
+function abortError(signal: AbortSignal | undefined): Error {
   const reason: unknown = signal?.reason;
   return reason instanceof DOMException && reason.name === 'AbortError'
     ? reason
     : new DOMException('The export was cancelled.', 'AbortError');
+}
+
+/** `promise`, or a rejection as soon as `signal` aborts (the work itself runs on, unobserved). */
+export function untilAborted<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(abortError(signal));
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }
 
 /** The file name without its extension, as the PDF's title. */
@@ -205,9 +233,6 @@ export async function exportPoster(
     if (deps.canvasKnown(size.width, size.height) === false) {
       throw new CanvasLimitError('This canvas size failed before');
     }
-    const total = planTiles(size.width, size.height, MAX_TILE).length;
-    onProgress?.({ done: 0, total });
-
     // Faces first, so the poster's first render already measures with them.
     await loadPosterFonts(style);
     signal?.throwIfAborted();
@@ -239,7 +264,7 @@ export async function exportPoster(
     signal?.throwIfAborted();
 
     if (format === 'pdf') {
-      const jpeg = await deps.encode(canvas, 'image/jpeg', PDF_JPEG_QUALITY);
+      const jpeg = await untilAborted(deps.encode(canvas, 'image/jpeg', PDF_JPEG_QUALITY), signal);
       signal?.throwIfAborted();
       const page = pdfPageSize(size);
       return writeSingleImagePdf({
@@ -249,7 +274,7 @@ export async function exportPoster(
         title: options.title ?? titleFromFileName(fileName),
       });
     }
-    const png = await deps.encode(canvas, 'image/png');
+    const png = await untilAborted(deps.encode(canvas, 'image/png'), signal);
     signal?.throwIfAborted();
     return size.use === 'print' ? await withPngDensity(png, PRINT_DPI) : png;
   } catch (error) {

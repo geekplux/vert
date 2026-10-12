@@ -1,10 +1,10 @@
 /**
- * PHASE 2 PLACEHOLDER: a simulated exporter, so the Exporting overlay can be exercised end to end
- * before the real pipeline lands. After one interval ("Preparing…") it reports 12 tiles to render,
+ * A simulated exporter for stories and tests: the Exporting overlay exercised end to end without
+ * a canvas. After one interval ("Preparing…") it reports 12 tiles to render,
  * then finishes one tile every `intervalMs` and resolves with the job's file name. It renders
  * nothing and never downloads a file.
  *
- * PHASE 3 replaces it with `src/poster/export.ts` (same `Exporter` signature; see `exporter.ts`).
+ * The app uses the real one, `posterExporter.ts` (same `Exporter` signature; see `exporter.ts`).
  */
 import { timeoutSchedule } from '../hooks';
 import type { Schedule } from '../hooks';

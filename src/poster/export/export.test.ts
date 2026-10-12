@@ -202,6 +202,36 @@ describe('exportPoster', () => {
     expect(spies.unmount).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects at once when cancelled during the encode, and releases the canvas', async () => {
+    const controller = new AbortController();
+    let canvas: ProbeCanvas | null = null;
+    const { deps } = fakeDeps({
+      encode: (target) => {
+        canvas = target;
+        controller.abort();
+        // An encode that never finishes: the abort must not wait for it.
+        return new Promise<Blob>(() => undefined);
+      },
+    });
+    const job = options('4x5', { signal: controller.signal });
+    await expect(exportPoster(job, deps)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(canvas).not.toBeNull();
+    expect((canvas as ProbeCanvas | null)?.width).toBe(0);
+  });
+
+  it('counts the figure tiles in the total', async () => {
+    const { deps } = fakeDeps();
+    const job = options('4x5', {
+      figure: { render: () => 'figure' as unknown as CanvasImageSource },
+    });
+    await exportPoster(job, deps);
+    expect(job.progress).toEqual([
+      { done: 0, total: 2 },
+      { done: 1, total: 2 },
+      { done: 2, total: 2 },
+    ]);
+  });
+
   it('does nothing when already cancelled', async () => {
     const controller = new AbortController();
     controller.abort();

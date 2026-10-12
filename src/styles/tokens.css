@@ -13,6 +13,7 @@
   --ink: #1b2a3a; /* text, primary buttons, terrain lines */
   --muted: #5b6b7a; /* secondary text, labels */
   --rule: #c9d1d9; /* borders, dividers */
+  --rule-strong: #83909c; /* form-field borders: 3.26:1 on white, 3.01:1 on --bg (WCAG 1.4.11) */
   --route: #d9480f; /* the route, scrub marker, vert number; as text only at >= 24px */
   --route-text: #bb3e0d; /* route-coloured text under 24px: 5.09:1 on --bg (docs/DECISIONS.md) */
   --white: #ffffff;

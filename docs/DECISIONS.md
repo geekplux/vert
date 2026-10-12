@@ -15,13 +15,17 @@ everything.
 
 ## Tokens
 
-| Token              | Value     | Why                                                                                                                                                                                            |
-| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--route-text`     | `#BB3E0D` | `--route` is 3.97:1 on `--bg`: fine for strokes, markers and text ≥ 24px (the 34px Vert stat), not for small text. `--route-text` is 5.09:1 on `--bg`, 4.56:1 on `--surface`, 5.51:1 on white. |
-| `--surface-strong` | `#DCE2E8` | The steepest climb's shading in the elevation profile (Main frame).                                                                                                                            |
-| `--radius-poster`  | `0`       | Canvas frame 00.                                                                                                                                                                               |
+| Token              | Value     | Why                                                                                                                                                                                                    |
+| ------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--route-text`     | `#BB3E0D` | `--route` is 3.97:1 on `--bg`: fine for strokes, markers and text ≥ 24px (the 34px Vert stat), not for small text. `--route-text` is 5.09:1 on `--bg`, 4.56:1 on `--surface`, 5.51:1 on white.         |
+| `--surface-strong` | `#DCE2E8` | The steepest climb's shading in the elevation profile (Main frame).                                                                                                                                    |
+| `--rule-strong`    | `#83909C` | Text-field borders. `--rule` on white is 1.54:1; a field's boundary is the only cue that it is a field, so it needs 3:1 (WCAG 1.4.11): 3.26:1 on white. Dividers and decorative borders keep `--rule`. |
+| `--radius-poster`  | `0`       | Canvas frame 00.                                                                                                                                                                                       |
 
 ## Type details from the canvas
+
+- Line-height: `normal` by default (the canvas sets none), 1.5 on running text (`p`, help text,
+  hints). `base.css` does this globally; components don't need to reset it.
 
 - Stat and section labels (DISTANCE, CLIMBS, STYLE, ELEVATION…): **11px** mono, uppercase,
   `letter-spacing: 0.08em`, `--muted`. The date line and chips stay 12px.
@@ -60,6 +64,8 @@ everything.
   "social · 1080 × 1350", "9 : 16" / "story · 1080 × 1920". Unselected: transparent, 1px `--rule`
   border, sub-line `--muted`. Selected: `--ink` fill, white text, sub-line white at 80% opacity.
   Padding 10×12, left aligned.
+- **TextField**: border `--rule-strong` (not `--rule`). The counter's accessible text says
+  "characters" ("37 / 40 characters") through a visually hidden word; the visible text stays "37 / 40".
 - **Slider**: the drawn layout matches the canvas (native track directly under the label row,
   gap 6px). The 44px hit area may extend invisibly over the slider's own label row (clicking a
   label focuses its input anyway) and into the space below, never over another control.

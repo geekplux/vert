@@ -6,7 +6,7 @@ import { Page } from '../Page';
 import { SAMPLE_RUN } from '../sample';
 import { INITIAL_PREFS, posterTextFor } from '../state';
 import type { PageState, PosterPrefs } from '../state';
-import { PosterState } from './PosterState';
+import { PosterState, figurePixelScale } from './PosterState';
 import type { PosterStateAction } from './PosterState';
 
 // jsdom has no WebGL: the View's lazy TerrainView is a fake (src/test/fakeTerrainView.tsx).
@@ -334,5 +334,25 @@ describe('PosterState', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'B Night Ridge' }));
     await screen.findByText('Drawing the terrain…');
     await expectNoAxeViolations(container);
+  });
+});
+
+describe('figurePixelScale', () => {
+  it('rounds the preview scale × device pixel ratio up to 1/20, never stretching the canvas', () => {
+    const before = window.devicePixelRatio;
+    try {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
+      // A 1080-wide share card in a 432 px preview: 0.4 × 2 = 0.8 exactly.
+      expect(figurePixelScale(0.4)).toBe(0.8);
+      // Just past a step rounds up, not to the nearest (which would upscale the canvas).
+      expect(figurePixelScale(0.3787)).toBe(0.8);
+      expect(figurePixelScale(0.3787)).toBeGreaterThanOrEqual(0.3787 * 2);
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 3 });
+      // The ratio is capped at 2.
+      expect(figurePixelScale(0.5)).toBe(1);
+      expect(figurePixelScale(0.001)).toBe(0.05);
+    } finally {
+      Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: before });
+    }
   });
 });

@@ -332,6 +332,39 @@ describe('TerrainStage camera moves', () => {
     stage.dispose();
   });
 
+  it('starts at a handed camera with no intro, flat or oblique (back from Poster mode)', () => {
+    const hf = hills();
+    const { stage } = makeStage();
+    const turned = { azimuth: 2.1, polar: 0.8, zoom: 0.9, view: 'oblique' } as const;
+    stage.show(hf, {
+      exaggeration: 1.6,
+      view: 'oblique',
+      reducedMotion: false,
+      camera: turned,
+    });
+    // No tween: the controls are live and the camera is there at once.
+    expect(stage.controls.enabled).toBe(true);
+    expect(spherical(stage).phi).toBeCloseTo(0.8);
+    expect(spherical(stage).theta).toBeCloseTo(2.1);
+    const camera = stage.viewCamera();
+    expect(camera.azimuth).toBeCloseTo(2.1, 6);
+    expect(camera.polar).toBeCloseTo(0.8, 6);
+    expect(camera.zoom).toBeCloseTo(0.9, 6);
+    expect(camera.view).toBe('oblique');
+
+    // The camera's flat flag wins over `view`.
+    stage.show(hf, {
+      exaggeration: 1.6,
+      view: 'oblique',
+      reducedMotion: false,
+      camera: { azimuth: 0, polar: 0, zoom: 1, view: 'flat' },
+    });
+    expect(stage.controls.enabled).toBe(true);
+    expect(spherical(stage).phi).toBeLessThan(1 * DEG);
+    expect(stage.viewCamera().view).toBe('flat');
+    stage.dispose();
+  });
+
   it('with reduced motion, shows the final view at once and jumps on rotate (no tween)', () => {
     const hf = hills();
     const { stage, renderer } = makeStage();

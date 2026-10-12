@@ -8,8 +8,12 @@
  * plus a small lift. Positions are stored at exaggeration 1; the vertex shader multiplies y by the
  * shared `uExaggeration`, so the slider never rebuilds the line.
  *
- * Two `Line2` objects share one `LineGeometry`: the halo (9 px) and the core (4 px), widths in CSS
- * pixels whatever the zoom (`worldUnits: false`).
+ * Three `Line2` objects share one `LineGeometry`: the halo (9 px) and the core (4 px) where the
+ * route is in sight, and a faded line (2 px, 40% opacity, no halo) where the terrain hides it, so a
+ * route that runs behind a ridge still reads as one line and the hidden stretches differ by width,
+ * opacity and the missing halo, not by colour. Widths are CSS pixels whatever the zoom
+ * (`worldUnits: false`) times the layer's line scale ({@link RouteLayer.setLineScale}: 1 in the
+ * View, output px per logical px in a poster figure).
  *
  * Visibility: a ridge in front of the route hides it, as it should in a 3D view, but the decision
  * is made once per route point, not per fragment. A screen-space ribbon has the depth of its centre
@@ -22,9 +26,24 @@
  * depth test: a segment between two shown points draws whole, one between two hidden points not
  * at all, and a mixed one up to its middle from the shown end (the core stops 2.5 px short of the
  * halo, so the halo closes around it). Caps take their point's verdict. The core draws after the
- * halo (render order); both read the same verdicts, so the core never shows without its halo.
+ * halo (render order); both read the same verdicts, so the core never shows without its halo. The
+ * faded line takes the opposite verdicts (whole between two hidden points, from the hidden end to
+ * the middle of a mixed segment), so the two styles meet end to end and, since the clean-up keeps
+ * every hidden and every shown run whole, neither leaves slivers. It is drawn before the halo,
+ * blended, and each pixel once (one constant fragment depth nearer than the terrain, depth test
+ * `less`), so its round joints never darken where they overlap.
  */
-import { Group, Vector2, type Camera, type Texture } from 'three';
+import {
+  CustomBlending,
+  Group,
+  LessDepth,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
+  SrcAlphaFactor,
+  Vector2,
+  type Camera,
+  type Texture,
+} from 'three';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
@@ -79,6 +98,9 @@ export const DEFAULT_LIFT_M = 2;
 /** Route core and halo widths, CSS px (DESIGN-SPEC §4, style A). */
 export const ROUTE_WIDTH_PX = 4;
 export const HALO_WIDTH_PX = 9;
+/** Where the terrain hides the route: a thinner, faded route-colour line with no halo, CSS px. */
+export const HIDDEN_ROUTE_WIDTH_PX = 2;
+export const HIDDEN_ROUTE_OPACITY = 0.4;
 /**
  * How far in front of a route point terrain must be to hide it, in pixels' worth of depth at the
  * point's distance (the line is a chord between samples and the depth texture is sampled at one
@@ -87,6 +109,29 @@ export const HALO_WIDTH_PX = 9;
 export const ROUTE_OCCLUSION_TOLERANCE_PX = 16;
 /** Where a segment is cut, how much shorter the core is than the halo, CSS px. */
 export const CORE_CUT_INSET_PX = (HALO_WIDTH_PX - ROUTE_WIDTH_PX) / 2;
+
+/** The route's line widths and cut inset at a line scale, in the units of the lines' resolution. */
+export interface RouteLineWidths {
+  readonly halo: number;
+  readonly core: number;
+  readonly hidden: number;
+  readonly coreInset: number;
+}
+
+/**
+ * The widths for `scale` (1 in the View, where the resolution is the canvas in CSS px; output px
+ * per logical px in a poster figure, where the resolution is the drawn canvas in output px, as
+ * `Line2` sets it before each draw from the renderer's viewport at pixel ratio 1).
+ */
+export function routeLineWidths(scale: number): RouteLineWidths {
+  const s = scale > 0 && Number.isFinite(scale) ? scale : 1;
+  return {
+    halo: HALO_WIDTH_PX * s,
+    core: ROUTE_WIDTH_PX * s,
+    hidden: HIDDEN_ROUTE_WIDTH_PX * s,
+    coreInset: CORE_CUT_INSET_PX * s,
+  };
+}
 
 /** The parts of a track the route needs. */
 export type RouteTrack = Pick<RunTrack, 'lat' | 'lon' | 'cumulative'>;
@@ -285,7 +330,11 @@ export function patchRouteShader(source: string): string {
  * centre line it belongs to (its projection onto the segment, clamped to the ends, so the round
  * caps count as the end) and draws if that lies within half the segment of the shown end, less
  * `uRouteCutInset` CSS px (the core's, so the halo's flat end closes around it; caps at the shown
- * end always draw). All fragments of a cross-section reach the same verdict, in both lines.
+ * end always draw). All fragments of a cross-section reach the same verdict, in every line. The
+ * faded line (`uRouteHidden` 1) swaps shown and hidden, so it draws exactly the rest; with
+ * `ROUTE_FLAT_DEPTH` defined it writes one constant depth (nearer than any terrain) from the
+ * fragment shader, exactly the same value everywhere, so with depth test `less` each pixel draws
+ * once. (A depth set per vertex picks up rounding in the perspective divide, and joints draw twice.)
  */
 export function patchRouteFragmentShader(source: string): string {
   if (
@@ -303,24 +352,30 @@ export function patchRouteFragmentShader(source: string): string {
         'uniform vec2 resolution;',
         'uniform vec2 uRouteBuffer;',
         'uniform float uRouteCutInset;',
+        'uniform float uRouteHidden;',
         ROUTE_VARYINGS,
       ].join('\n'),
     )
     .replace(
       FRAGMENT_MAIN_LINE,
       [
-        'if ( vRouteShown.x < 0.5 || vRouteShown.y < 0.5 ) {',
-        '  if ( vRouteShown.x < 0.5 && vRouteShown.y < 0.5 ) discard;',
+        '// The faded line (uRouteHidden = 1) draws what the halo and core do not.',
+        'vec2 routeShown = uRouteHidden > 0.5 ? vec2( 1.0 ) - vRouteShown : vRouteShown;',
+        'if ( routeShown.x < 0.5 || routeShown.y < 0.5 ) {',
+        '  if ( routeShown.x < 0.5 && routeShown.y < 0.5 ) discard;',
         '  vec2 routeA = ( vRouteStart.xy * 0.5 + 0.5 ) * uRouteBuffer;',
         '  vec2 routeAB = ( vRouteEnd.xy * 0.5 + 0.5 ) * uRouteBuffer - routeA;',
         '  float routeLength = length( routeAB );',
         '  float routeT = routeLength > 1e-3 ? clamp( dot( gl_FragCoord.xy - routeA, routeAB ) / ( routeLength * routeLength ), 0.0, 1.0 ) : 0.0;',
         '  // CSS px: from the shown end, and the half segment less the inset.',
         '  float routeScale = resolution.y / uRouteBuffer.y;',
-        '  float routeFromShown = ( vRouteShown.x > 0.5 ? routeT : 1.0 - routeT ) * routeLength * routeScale;',
+        '  float routeFromShown = ( routeShown.x > 0.5 ? routeT : 1.0 - routeT ) * routeLength * routeScale;',
         '  float routeReach = max( 0.0, 0.5 * routeLength * routeScale - uRouteCutInset );',
         '  if ( routeFromShown > routeReach ) discard;',
         '}',
+        '#ifdef ROUTE_FLAT_DEPTH',
+        '  gl_FragDepth = 0.25;',
+        '#endif',
         FRAGMENT_MAIN_LINE,
       ].join('\n'),
     );
@@ -331,6 +386,7 @@ function createRouteMaterial(
   linewidth: number,
   cutInset: number,
   uniforms: RouteUniforms,
+  hidden = false,
 ) {
   const material = new LineMaterial({
     color,
@@ -340,6 +396,22 @@ function createRouteMaterial(
     depthTest: false,
     depthWrite: false,
   });
+  if (hidden) {
+    // Faded and blended, but drawn in the opaque pass by render order (before the halo, which
+    // covers it where a hidden stretch passes under a shown one). The alpha channel adds up to
+    // the terrain's 1, so the canvas stays opaque there.
+    material.opacity = HIDDEN_ROUTE_OPACITY;
+    material.blending = CustomBlending;
+    material.blendSrc = SrcAlphaFactor;
+    material.blendDst = OneMinusSrcAlphaFactor;
+    material.blendSrcAlpha = OneFactor;
+    material.blendDstAlpha = OneMinusSrcAlphaFactor;
+    // Each pixel once (see patchRouteFragmentShader): overlapping joints do not darken.
+    material.depthTest = true;
+    material.depthWrite = true;
+    material.depthFunc = LessDepth;
+    material.defines = { ...material.defines, ROUTE_FLAT_DEPTH: '' };
+  }
   material.vertexShader = patchRouteShader(material.vertexShader);
   material.fragmentShader = patchRouteFragmentShader(material.fragmentShader);
   material.uniforms.uExaggeration = uniforms.uExaggeration;
@@ -347,6 +419,7 @@ function createRouteMaterial(
   material.uniforms.uRouteVisibilityOn = uniforms.uRouteVisibilityOn;
   material.uniforms.uRouteBuffer = uniforms.uRouteBuffer;
   material.uniforms.uRouteCutInset = { value: cutInset };
+  material.uniforms.uRouteHidden = { value: hidden ? 1 : 0 };
   return material;
 }
 
@@ -376,13 +449,20 @@ export interface RouteLayer {
   readonly group: Group;
   readonly halo: Line2;
   readonly core: Line2;
+  /** The faded line where the terrain hides the route. */
+  readonly hidden: Line2;
   /** The draped samples (positions at exaggeration 1). */
   readonly samples: ResampledTrack;
   readonly positions: Float32Array;
   setExaggeration(exaggeration: number): void;
   setPalette(palette: RoutePalette): void;
-  /** Viewport size in CSS px (`Line2` also takes it from the renderer before each draw). */
+  /**
+   * Viewport size in the units line widths are in: CSS px in the View, output px in a figure
+   * (`Line2` also takes it from the renderer's viewport before each draw).
+   */
   setResolution(width: number, height: number): void;
+  /** Multiplies every line width and the core's cut inset ({@link routeLineWidths}). */
+  setLineScale(scale: number): void;
   /**
    * Decides which points the terrain hides for this frame (GPU passes, visibility.ts), from its
    * depth (a depth texture the size of the drawing buffer, rendered with the same camera just
@@ -392,11 +472,18 @@ export interface RouteLayer {
   dispose(): void;
 }
 
-/** Draw order after the terrain (0): halo, then core. Markers come later (see markers.ts). */
+/**
+ * Draw order after the terrain (0): the faded hidden line, the halo, then the core. Markers come
+ * later (see markers.ts).
+ */
+export const HIDDEN_RENDER_ORDER = 0.5;
 export const HALO_RENDER_ORDER = 1;
 export const CORE_RENDER_ORDER = 2;
 
-/** The route on `heightfield`: halo and core lines over the draped, resampled track. */
+/**
+ * The route on `heightfield`: halo and core lines over the draped, resampled track, and the faded
+ * line where it is hidden.
+ */
 export function createRouteLayer(
   heightfield: Heightfield,
   track: RouteTrack,
@@ -418,26 +505,27 @@ export function createRouteLayer(
     uRouteVisibilityOn: { value: 0 },
     uRouteBuffer: { value: new Vector2(1, 1) },
   };
-  const haloMaterial = createRouteMaterial(palette.halo, HALO_WIDTH_PX, 0, uniforms);
-  const coreMaterial = createRouteMaterial(
-    palette.route,
-    ROUTE_WIDTH_PX,
-    CORE_CUT_INSET_PX,
-    uniforms,
-  );
+  const widths = routeLineWidths(1);
+  const haloMaterial = createRouteMaterial(palette.halo, widths.halo, 0, uniforms);
+  const coreMaterial = createRouteMaterial(palette.route, widths.core, widths.coreInset, uniforms);
+  const hiddenMaterial = createRouteMaterial(palette.route, widths.hidden, 0, uniforms, true);
   let visibility: RouteVisibility | null = null;
   const halo = new Line2(geometry, haloMaterial);
   const core = new Line2(geometry, coreMaterial);
+  const hidden = new Line2(geometry, hiddenMaterial);
   halo.name = 'route-halo';
   core.name = 'route';
+  hidden.name = 'route-hidden';
   halo.renderOrder = HALO_RENDER_ORDER;
   core.renderOrder = CORE_RENDER_ORDER;
+  hidden.renderOrder = HIDDEN_RENDER_ORDER;
   // The bounding volume is at exaggeration 1; the shader scales y.
   halo.frustumCulled = false;
   core.frustumCulled = false;
+  hidden.frustumCulled = false;
   const group = new Group();
   group.name = 'route-layer';
-  group.add(halo, core);
+  group.add(hidden, halo, core);
   // An empty geometry draws nothing.
   group.visible = positions.length >= 6;
 
@@ -445,6 +533,7 @@ export function createRouteLayer(
     group,
     halo,
     core,
+    hidden,
     samples,
     positions,
     setExaggeration(value) {
@@ -453,10 +542,20 @@ export function createRouteLayer(
     setPalette(next) {
       haloMaterial.color.set(next.halo);
       coreMaterial.color.set(next.route);
+      hiddenMaterial.color.set(next.route);
     },
     setResolution(width, height) {
       haloMaterial.resolution.set(width, height);
       coreMaterial.resolution.set(width, height);
+      hiddenMaterial.resolution.set(width, height);
+    },
+    setLineScale(scale) {
+      const next = routeLineWidths(scale);
+      haloMaterial.linewidth = next.halo;
+      coreMaterial.linewidth = next.core;
+      hiddenMaterial.linewidth = next.hidden;
+      const inset = coreMaterial.uniforms.uRouteCutInset;
+      if (inset) inset.value = next.coreInset;
     },
     updateVisibility(frame) {
       if (!frame || !group.visible) {
@@ -482,6 +581,7 @@ export function createRouteLayer(
       geometry.dispose();
       haloMaterial.dispose();
       coreMaterial.dispose();
+      hiddenMaterial.dispose();
     },
   };
 }

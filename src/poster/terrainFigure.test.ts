@@ -1,5 +1,6 @@
 import { Matrix4, PerspectiveCamera, Spherical, Vector3 } from 'three';
-import type { Camera, Object3D } from 'three';
+import type { Camera, Object3D, Vector4, WebGLRenderer } from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import type { ViewCamera } from '../terrain/camera';
@@ -232,26 +233,74 @@ describe('TerrainFigureRenderer', () => {
     }
   });
 
-  it('scales line widths with the output scale (ridge lines, route resolution)', () => {
+  it('scales line widths with the output scale (ridge lines, route widths)', () => {
     const { figures } = figureRenderer();
     figures.render({ ...scene(), width: 400, height: 300, pixelScale: 2.5 });
     const stage = (figures as unknown as { stage: TerrainStage }).stage;
     let pixelRatio: unknown;
-    let resolution: unknown;
     stage.scene.traverse((object) => {
       const material = (object as { material?: { uniforms?: Record<string, { value: unknown }> } })
         .material;
       if (material?.uniforms?.uPixelRatio) pixelRatio = material.uniforms.uPixelRatio.value;
-      if (object.name === 'route') {
-        resolution = (object as unknown as { material: { resolution: { x: number; y: number } } })
-          .material.resolution;
-      }
     });
     expect(pixelRatio).toBe(2.5);
-    // Logical px over the drawn canvas: a 4 px core is 10 output px.
-    expect(resolution).toMatchObject({ x: 400, y: 300 });
+    const lines = routeLines(stage);
+    // Output px over the drawn canvas, as Line2 sets it: a 4 px core is 10 output px.
+    expect(lines.core.material.resolution.toArray()).toEqual([1000, 750]);
+    expect(lines.core.material.linewidth).toBe(10);
+    expect(lines.halo.material.linewidth).toBe(22.5);
+    expect(lines.hidden.material.linewidth).toBe(5);
+    expect(lines.core.material.uniforms.uRouteCutInset?.value).toBe(6.25);
+  });
+
+  it('keeps the route’s output px per logical px constant at every scale and in tiles', () => {
+    const box = { width: 300, height: 200 };
+    for (const scale of [1, 2, 4, 7.5]) {
+      const { figures, renderer } = figureRenderer();
+      const { width, height } = figurePixelSize(box.width, box.height, scale);
+      const tiles: PixelRect[] = [{ x: 0, y: 0, width, height }, ...quarters(width, height)];
+      for (const tile of tiles) {
+        figures.renderTile(scene(), {
+          ...tile,
+          scale,
+          boxWidth: width,
+          boxHeight: height,
+        });
+        const [drawnWidth, drawnHeight] = renderer.setSize.mock.lastCall as [number, number];
+        const stage = (figures as unknown as { stage: TerrainStage }).stage;
+        const lines = routeLines(stage);
+        for (const [line, logicalPx] of [
+          [lines.core, 4],
+          [lines.halo, 9],
+          [lines.hidden, 2],
+        ] as const) {
+          // What three does before each draw: the resolution is the viewport (pixel ratio 1).
+          line.onBeforeRender({
+            getViewport: (target: Vector4) => target.set(0, 0, drawnWidth, drawnHeight),
+          } as unknown as WebGLRenderer);
+          const { resolution, linewidth } = line.material;
+          // LineMaterial offsets by linewidth / resolution.y of the clip height = output px.
+          const outputPx = (linewidth / resolution.y) * drawnHeight;
+          expect(outputPx / scale).toBeCloseTo(logicalPx, 9);
+        }
+      }
+      figures.dispose();
+    }
   });
 });
+
+/** The stage's route lines. */
+function routeLines(stage: TerrainStage) {
+  const found: Record<string, Line2> = {};
+  stage.scene.traverse((object) => {
+    if (object instanceof Line2) found[object.name] = object;
+  });
+  const core = found.route;
+  const halo = found['route-halo'];
+  const hidden = found['route-hidden'];
+  if (!core || !halo || !hidden) throw new Error('no route');
+  return { core, halo, hidden };
+}
 
 describe('TerrainStage.viewCamera', () => {
   function viewStage() {

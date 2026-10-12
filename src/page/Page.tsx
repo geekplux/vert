@@ -21,6 +21,7 @@ import type { PageState } from './state';
 import { UploadState } from './UploadState/UploadState';
 import type { TerrainCameraSource } from './ViewState/TerrainBox';
 import { ViewState } from './ViewState/ViewState';
+import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import styles from './Page.module.css';
 
 export interface PageProps extends Omit<RunProviderProps, 'children'> {
@@ -134,6 +135,11 @@ function PageContent({
             dispatch({ type: 'SET_EXAGGERATION', value });
           }}
           cameraRef={cameraRef}
+          // Back from Poster mode: start where the poster's camera is (Make a poster set it from
+          // this View; New file resets it to the default, which plays the intro instead).
+          initialCamera={
+            prefs.poster.camera === DEFAULT_VIEW_CAMERA ? undefined : prefs.poster.camera
+          }
         />
       ) : isPosterMode(screen) && run ? (
         // Exporting is poster mode with the export progress under the Download button.

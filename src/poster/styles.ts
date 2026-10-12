@@ -28,8 +28,13 @@ export interface PosterSharePalette {
   text: string;
   /** The big vert number. */
   accent: string;
-  /** Footer text. */
+  /** Footer text, and the elevation strip (at `profileOpacity`). */
   muted: string;
+  /**
+   * Opacity of the 9:16 elevation strip, drawn in `muted`: 0.6 blends to #838E99 on `bg`, 4.37:1
+   * (a graphic needs 3:1). The accent at 35% was 1.90:1.
+   */
+  profileOpacity: number;
   /** The figure box behind the terrain. */
   figure: string;
 }
@@ -95,6 +100,7 @@ export const POSTER_STYLES: readonly PosterStyleOption[] = [
       text: '#F4F6F8',
       accent: '#FF8A50',
       muted: '#C9D1D9',
+      profileOpacity: 0.6,
       figure: '#E6EAEE',
     },
   },

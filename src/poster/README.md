@@ -81,8 +81,11 @@ social layout is the print design at 1.5×, strokes included, except that no soc
   pack under 2.5 px; the label states the interval drawn), index every 5th (100 m, 250 ft), top-down true-aspect projection, RDP
   simplification, scale bar of four round segments.
 - Hide start and end: both figure-data functions take `drawnTrack` (the run's track with the
-  hidden ends cut off by `trimTrack`, or null for no route); sunrise, the start time, the map's
-  centre and coordinates still come from the whole run.
+  hidden ends cut off by `trimTrack`, or null for no route); sunrise and the start time still come
+  from the whole run. Every style is framed on what is drawn (`figureFrameBounds`: the drawn
+  route's bounds when ends are hidden), so the empty margin never shows where the start was:
+  `ridgeBounds` / `quadBounds` take it, Survey Quad centres its map and coordinates on it
+  (`frame`), and style A builds its own grid from it plus 15% (`padBounds`).
 - Palettes: `NIGHT_RIDGE_PALETTE` and `SURVEY_QUAD_PALETTE` in `styles.ts`. B's small text is
   `#B9D3DE` (10.36:1); `#8EC5DA` is for strokes only.
 
@@ -90,10 +93,13 @@ social layout is the print design at 1.5×, strokes included, except that no soc
 
 `terrainFigure.ts` (three.js; load it with `loadTerrainFigure()` from `terrainFigureChunk.ts`):
 `renderTerrainFigure({ heightfield, track, camera, exaggeration, width, height, pixelScale })`
-draws the terrain, the route (#C2410C core 4 px, white halo 9 px) and ○ / ▲ markers into a canvas
+draws the terrain, the route (#C2410C core 4 px, white halo 9 px; where a ridge hides it, a 2 px
+line at 40% with no halo) and ○ / ▲ markers into a canvas
 of `round(width × pixelScale) × round(height × pixelScale)` px. `width × height` is the figure box
 in logical px; every line width and marker size is logical px × `pixelScale`, so the preview
-(preview scale) and the export (export scale) show the same picture. The camera is the View's
+(preview scale) and the export (export scale) show the same picture. (The canvas is drawn at
+pixel ratio 1 and `Line2` takes its resolution from the viewport in output px, so the route's
+widths are multiplied by the scale: `RouteLayer.setLineScale`.) The camera is the View's
 (`ViewCamera`: azimuth, polar, zoom factor, flat or oblique); the model is framed for the box at
 that azimuth (no zoom band: a figure never turns). One off-screen `TerrainStage` (`interactive:
 false`) is reused; `releaseTerrainFigure()` frees it and loses its WebGL context.

@@ -1,4 +1,12 @@
-import { DepthTexture, PerspectiveCamera, Vector2, WebGLRenderTarget } from 'three';
+import {
+  CustomBlending,
+  DepthTexture,
+  LessDepth,
+  OneFactor,
+  PerspectiveCamera,
+  Vector2,
+  WebGLRenderTarget,
+} from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { describe, expect, it, vi } from 'vitest';
 import { haversine } from '../lib/geo';
@@ -10,6 +18,9 @@ import {
   DEFAULT_LIFT_M,
   HALO_RENDER_ORDER,
   HALO_WIDTH_PX,
+  HIDDEN_RENDER_ORDER,
+  HIDDEN_ROUTE_OPACITY,
+  HIDDEN_ROUTE_WIDTH_PX,
   MAX_ROUTE_POINTS,
   ROUTE_STEP_M,
   ROUTE_WIDTH_PX,
@@ -20,6 +31,7 @@ import {
   pointAtDistance,
   readRoutePalette,
   resampleTrack,
+  routeLineWidths,
   trackLength,
   type RouteTrack,
 } from './route';
@@ -151,13 +163,21 @@ describe('patchRouteShader', () => {
 
   it("draws a segment from its points' verdicts, cut halfway between a shown and a hidden one", () => {
     const patched = patchRouteFragmentShader(new LineMaterial().fragmentShader);
-    expect(patched).toContain('if ( vRouteShown.x < 0.5 && vRouteShown.y < 0.5 ) discard;');
+    expect(patched).toContain(
+      'vec2 routeShown = uRouteHidden > 0.5 ? vec2( 1.0 ) - vRouteShown : vRouteShown;',
+    );
+    expect(patched).toContain('if ( routeShown.x < 0.5 && routeShown.y < 0.5 ) discard;');
     // The fragment is projected onto the segment; the cut is measured from the shown end there.
     expect(patched).toContain('dot( gl_FragCoord.xy - routeA, routeAB )');
     expect(patched).toContain(
       'float routeReach = max( 0.0, 0.5 * routeLength * routeScale - uRouteCutInset );',
     );
     expect(patched).toContain('if ( routeFromShown > routeReach ) discard;');
+    // The faded line's one constant depth, only where it is defined, after every discard.
+    expect(patched).toContain('#ifdef ROUTE_FLAT_DEPTH\n  gl_FragDepth = 0.25;\n#endif');
+    expect(patched.indexOf('gl_FragDepth')).toBeGreaterThan(
+      patched.indexOf('routeFromShown > routeReach'),
+    );
     expect(patched.indexOf('routeFromShown > routeReach')).toBeLessThan(
       patched.indexOf('float alpha = opacity;'),
     );
@@ -224,7 +244,54 @@ describe('createRouteLayer', () => {
     expect(halo.geometry).toBe(core.geometry);
     expect(`#${halo.material.color.getHexString()}`).toBe('#ffffff');
     expect(`#${core.material.color.getHexString()}`).toBe('#d9480f');
-    expect(layer.group.children).toEqual([halo, core]);
+    expect(layer.group.children).toEqual([layer.hidden, halo, core]);
+    layer.dispose();
+  });
+
+  it('draws hidden stretches as a thin, faded route-colour line with no halo, each pixel once', () => {
+    const layer = createRouteLayer(hills(), straight());
+    const { hidden, halo, core } = layer;
+    expect(HIDDEN_ROUTE_WIDTH_PX).toBe(2);
+    expect(HIDDEN_ROUTE_OPACITY).toBe(0.4);
+    expect(hidden.material.linewidth).toBe(HIDDEN_ROUTE_WIDTH_PX);
+    expect(hidden.material.opacity).toBe(HIDDEN_ROUTE_OPACITY);
+    // Width, opacity and the missing halo set it apart, not colour: it is the route's colour.
+    expect(hidden.material.color.getHexString()).toBe(core.material.color.getHexString());
+    expect(hidden.geometry).toBe(core.geometry);
+    // The opposite verdicts, drawn before the halo (which covers it where they cross).
+    expect(hidden.material.uniforms.uRouteHidden?.value).toBe(1);
+    expect(core.material.uniforms.uRouteHidden?.value).toBe(0);
+    expect(halo.material.uniforms.uRouteHidden?.value).toBe(0);
+    expect(hidden.renderOrder).toBe(HIDDEN_RENDER_ORDER);
+    expect(hidden.renderOrder).toBeLessThan(halo.renderOrder);
+    expect(hidden.renderOrder).toBeGreaterThan(0);
+    // Blended in the opaque pass; one constant depth and `less`, so overlapping joints draw once.
+    expect(hidden.material.transparent).toBe(false);
+    expect(hidden.material.blending).toBe(CustomBlending);
+    expect(hidden.material.blendSrcAlpha).toBe(OneFactor);
+    expect(hidden.material.depthTest).toBe(true);
+    expect(hidden.material.depthWrite).toBe(true);
+    expect(hidden.material.depthFunc).toBe(LessDepth);
+    expect(hidden.material.defines).toHaveProperty('ROUTE_FLAT_DEPTH');
+    expect(core.material.defines).not.toHaveProperty('ROUTE_FLAT_DEPTH');
+    layer.setPalette({ route: '#FFD9A0', halo: '#0F2233', ink: '#E8F1F5' });
+    expect(hidden.material.color.getHexString()).toBe('ffd9a0');
+    layer.dispose();
+  });
+
+  it('scales every width and the core’s cut inset with the line scale', () => {
+    expect(routeLineWidths(1)).toEqual({ halo: 9, core: 4, hidden: 2, coreInset: 2.5 });
+    expect(routeLineWidths(7.5)).toEqual({ halo: 67.5, core: 30, hidden: 15, coreInset: 18.75 });
+    expect(routeLineWidths(0)).toEqual(routeLineWidths(1));
+    const layer = createRouteLayer(hills(), straight());
+    layer.setLineScale(2);
+    expect(layer.halo.material.linewidth).toBe(18);
+    expect(layer.core.material.linewidth).toBe(8);
+    expect(layer.hidden.material.linewidth).toBe(4);
+    expect(layer.core.material.uniforms.uRouteCutInset?.value).toBe(5);
+    expect(layer.halo.material.uniforms.uRouteCutInset?.value).toBe(0);
+    layer.setLineScale(1);
+    expect(layer.core.material.linewidth).toBe(ROUTE_WIDTH_PX);
     layer.dispose();
   });
 
@@ -266,15 +333,17 @@ describe('createRouteLayer', () => {
     layer.dispose();
   });
 
-  it('frees its geometry and both materials', () => {
+  it('frees its geometry and its materials', () => {
     const layer = createRouteLayer(hills(), straight());
     const geometry = vi.spyOn(layer.core.geometry, 'dispose');
     const halo = vi.spyOn(layer.halo.material, 'dispose');
     const core = vi.spyOn(layer.core.material, 'dispose');
+    const hidden = vi.spyOn(layer.hidden.material, 'dispose');
     layer.dispose();
     expect(geometry).toHaveBeenCalledTimes(1);
     expect(halo).toHaveBeenCalledTimes(1);
     expect(core).toHaveBeenCalledTimes(1);
+    expect(hidden).toHaveBeenCalledTimes(1);
   });
 });
 

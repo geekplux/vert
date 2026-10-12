@@ -1044,6 +1044,17 @@ interface ViewPose {
   readonly zoom: number;
 }
 
+/** The pose for a {@link ViewCamera}: the flat view top-down and north up, angles in range. */
+function cameraPose(camera: ViewCamera): ViewPose {
+  return camera.view === 'flat'
+    ? { phi: FLAT_POLAR, theta: 0, zoom: clampZoom(camera.zoom) }
+    : {
+        phi: Math.min(MAX_POLAR, Math.max(MIN_POLAR, camera.polar)),
+        theta: camera.azimuth,
+        zoom: clampZoom(camera.zoom),
+      };
+}
+
 /** Puts `camera` on the sphere around `target` and points it there. */
 export function placeCamera(
   camera: PerspectiveCamera,
@@ -1087,6 +1098,11 @@ export interface ShowOptions {
   view: TerrainViewMode;
   /** Skip the intro camera move (prefers-reduced-motion); the view fades instead. */
   reducedMotion: boolean;
+  /**
+   * Start here instead of the default view, with no intro (back from Poster mode, which keeps the
+   * user's angle). Its `view` wins over `view`.
+   */
+  camera?: ViewCamera;
   /** Called after the first frame with this heightfield has been drawn. */
   onFirstFrame?: () => void;
 }
@@ -1676,6 +1692,7 @@ export class TerrainStage {
     this.route = createRouteLayer(heightfield, track, options);
     this.markers = createMarkerLayer(heightfield, track, options);
     this.route.setResolution(this.size.width, this.size.height);
+    if (this.figureScale !== null) this.route.setLineScale(this.figureScale);
     this.markers.setViewport(this.size.height, this.camera.fov);
     this.markers.setScrub(this.scrub);
     this.scene.add(this.route.group, this.markers.group);
@@ -1759,7 +1776,10 @@ export class TerrainStage {
     this.requestRender();
   }
 
-  /** Shows a heightfield (or nothing). A new heightfield plays the intro unless reduced motion. */
+  /**
+   * Shows a heightfield (or nothing). A new heightfield plays the intro unless reduced motion, or
+   * starts at `options.camera`.
+   */
   show(heightfield: Heightfield | null, options: ShowOptions): void {
     if (this.mesh) {
       this.scene.remove(this.mesh);
@@ -1776,7 +1796,7 @@ export class TerrainStage {
       return;
     }
     this.exaggeration = options.exaggeration;
-    this.view = options.view;
+    this.view = options.camera?.view ?? options.view;
     this.reducedMotion = options.reducedMotion;
     this.firstFrame = options.onFirstFrame ?? null;
     this.mesh = createTerrainMesh(heightfield, {
@@ -1796,13 +1816,15 @@ export class TerrainStage {
     this.zoom = 1;
 
     const flat = this.view === 'flat';
-    const end: ViewPose = {
-      phi: flat ? FLAT_POLAR : DEFAULT_POLAR,
-      theta: flat ? 0 : DEFAULT_AZIMUTH,
-      zoom: 1,
-    };
+    const end: ViewPose = options.camera
+      ? cameraPose(options.camera)
+      : {
+          phi: flat ? FLAT_POLAR : DEFAULT_POLAR,
+          theta: flat ? 0 : DEFAULT_AZIMUTH,
+          zoom: 1,
+        };
     this.applyViewLimits(this.view);
-    if (this.reducedMotion || flat) {
+    if (this.reducedMotion || flat || options.camera) {
       this.setPose(end);
       this.controls.update();
       this.requestRender();
@@ -1935,6 +1957,7 @@ export class TerrainStage {
     this.obstacles = overlays ? overlayRects(this.overlays, w, h) : [];
     this.invalidateFit();
     this.route?.setResolution(w, h);
+    this.route?.setLineScale(1);
     this.markers?.setViewport(h, this.camera.fov);
     if (this.mesh) this.mesh.material.uniforms.uPixelRatio.value = this.renderer.getPixelRatio();
   }
@@ -1988,19 +2011,14 @@ export class TerrainStage {
       this.invalidateFit();
       if (this.mesh) this.updateFit();
     }
-    // Logical px over the drawn part: line widths are logical px, so they scale with `scale`.
-    this.route?.setResolution(tileWidth / scale, tileHeight / scale);
+    // The canvas is drawn at pixel ratio 1, and `Line2` sets its resolution from the renderer's
+    // viewport (the drawn part in output px) before each draw: the widths scale instead.
+    this.route?.setResolution(tileWidth, tileHeight);
+    this.route?.setLineScale(scale);
     this.markers?.setViewport(logical.height, this.camera.fov);
     if (this.mesh) this.mesh.material.uniforms.uPixelRatio.value = scale;
 
-    const pose: ViewPose =
-      camera.view === 'flat'
-        ? { phi: FLAT_POLAR, theta: 0, zoom: clampZoom(camera.zoom) }
-        : {
-            phi: Math.min(MAX_POLAR, Math.max(MIN_POLAR, camera.polar)),
-            theta: camera.azimuth,
-            zoom: clampZoom(camera.zoom),
-          };
+    const pose = cameraPose(camera);
     this.view = camera.view;
     let shiftX = 0;
     let shiftY = 0;

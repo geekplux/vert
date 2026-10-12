@@ -77,6 +77,7 @@ export function TrailSignPoster({
     '--share-text': PALETTE.share.text,
     '--share-accent': PALETTE.share.accent,
     '--share-muted': PALETTE.share.muted,
+    '--share-profile-opacity': String(PALETTE.share.profileOpacity),
     '--share-figure': PALETTE.share.figure,
     '--figure-aspect': String(figureAspect),
   } as CSSProperties;

@@ -3,7 +3,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { expectNoAxeViolations } from '../../test/axe';
 import { fakeTerrainView } from '../../test/fakeTerrainView';
 import { trimTrack } from '../../gpx/trim';
-import { nightRidgeFigureData, surveyQuadFigureData } from '../../poster/figures';
+import {
+  nightRidgeFigureData,
+  padBounds,
+  surveyQuadFigureData,
+  trackBounds,
+} from '../../poster/figures';
+import type { Bounds } from '../../lib/geo';
 import { loadPosterFonts } from '../../poster/fonts';
 import type { TerrainFigureInput } from '../../poster/terrainFigure';
 import { DEFAULT_VIEW_CAMERA } from '../../terrain/camera';
@@ -133,7 +139,10 @@ function posterState(poster: Partial<PosterPrefs> = {}): PageState {
 
 function renderPage(
   initialState: PageState,
-  { loadTerrain = readyTerrain }: { loadTerrain?: LoadTerrain } = {},
+  {
+    loadTerrain = readyTerrain,
+    loadFigureTerrain = readyFigureTerrain,
+  }: { loadTerrain?: LoadTerrain; loadFigureTerrain?: LoadFigureTerrain } = {},
 ) {
   return render(
     <Page
@@ -141,7 +150,7 @@ function renderPage(
       initialRun={SAMPLE_RUN}
       initialState={initialState}
       loadTerrain={loadTerrain}
-      loadFigureTerrain={readyFigureTerrain}
+      loadFigureTerrain={loadFigureTerrain}
     />,
   );
 }
@@ -173,7 +182,8 @@ describe('Live poster figures', () => {
       new Promise((resolve) => {
         finish = resolve;
       });
-    renderPage(posterState(), { loadTerrain: pending });
+    // Nothing hidden: style A draws on the View's own grid.
+    renderPage(posterState({ hideEnds: 0 }), { loadTerrain: pending });
     expect(await screen.findByText(FIGURE_LOADING_TEXT)).toBeDefined();
     expect(figure.renders).toHaveLength(0);
 
@@ -219,6 +229,47 @@ describe('Live poster figures', () => {
     });
   });
 
+  it('frames every style on the drawn route when the ends are hidden', async () => {
+    const pending: LoadTerrain = () => new Promise(() => undefined);
+    // A loader of its own: the figure grids are cached per loader.
+    const grids: Bounds[] = [];
+    const loadFigureTerrain: LoadFigureTerrain = (bounds) => {
+      grids.push(bounds);
+      return Promise.resolve(hills());
+    };
+    // The View's grid never arrives: with the ends hidden, A builds its own.
+    renderPage(posterState({ hideEnds: 500 }), { loadTerrain: pending, loadFigureTerrain });
+    await waitFor(() => {
+      expect(figure.renders.length).toBeGreaterThan(0);
+    });
+    const drawn = trimTrack(SAMPLE_RUN.track, 500);
+    const drawnBounds = drawn && trackBounds(drawn);
+    if (!drawnBounds) throw new Error('nothing drawn');
+    // The drawn route's bounds plus the View's 15%, not the whole run's.
+    expect(grids[0]).toEqual(padBounds(drawnBounds, 0.15));
+    expect(lastRender().heightfield).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'E Survey Quad' }));
+    await waitFor(() => {
+      const withGrid = vi
+        .mocked(surveyQuadFigureData)
+        .mock.calls.filter(([, heightfield, box]) => heightfield && box);
+      expect(withGrid.length).toBeGreaterThan(0);
+    });
+    expect(vi.mocked(surveyQuadFigureData).mock.calls.at(-1)?.[3]?.frame).toEqual(drawnBounds);
+    const quadGrid = grids.at(-1);
+    if (!quadGrid) throw new Error('no grid');
+    // Centred on the drawn route.
+    expect((quadGrid.west + quadGrid.east) / 2).toBeCloseTo(
+      (drawnBounds.west + drawnBounds.east) / 2,
+      9,
+    );
+    expect((quadGrid.south + quadGrid.north) / 2).toBeCloseTo(
+      (drawnBounds.south + drawnBounds.north) / 2,
+      9,
+    );
+  });
+
   it('hands the View’s camera to the poster figure on Make a poster', async () => {
     const turned: ViewCamera = { azimuth: 2.1, polar: 0.8, zoom: 0.9, view: 'oblique' };
     renderPage({
@@ -233,6 +284,42 @@ describe('Live poster figures', () => {
     expect(lastRender().camera).toEqual(turned);
     const mount = document.querySelector('[data-figure="terrain"]');
     expect(mount?.getAttribute('data-camera')).toBe('oblique 120.3 45.8 0.900');
+  });
+
+  it('starts the View from the poster’s camera on Back to the run; New file resets it', async () => {
+    const flat: ViewCamera = { azimuth: 0, polar: 0.0001, zoom: 0.8, view: 'flat' };
+    const rendered = async () => {
+      await waitFor(() => {
+        expect(fakeTerrainView.props.length).toBeGreaterThan(0);
+      });
+      return fakeTerrainView.last();
+    };
+    renderPage({ screen: { name: 'view', runId: SAMPLE_RUN.id }, prefs: INITIAL_PREFS });
+    // A fresh run plays the intro.
+    expect((await rendered()).initialCamera).toBeUndefined();
+    fakeTerrainView.camera = flat;
+    fireEvent.click(await screen.findByRole('button', { name: 'Make a poster' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to the run' }));
+    fakeTerrainView.props.length = 0;
+    expect((await rendered()).initialCamera).toEqual(flat);
+    // Its flat flag too: the Flat map button is pressed and the view is flat.
+    expect(fakeTerrainView.last().view).toBe('flat');
+    expect(screen.getByRole('button', { name: 'Flat map' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    // A second Make a poster keeps the angle.
+    fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
+    await waitFor(() => {
+      expect(figure.renders.length).toBeGreaterThan(0);
+    });
+    expect(lastRender().camera).toEqual(flat);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New file' }));
+    fakeTerrainView.props.length = 0;
+    fireEvent.click(await screen.findByRole('button', { name: 'try a sample run' }));
+    const fresh = await rendered();
+    expect(fresh.initialCamera).toBeUndefined();
+    expect(fresh.view).toBe('oblique');
   });
 
   it('releases the figure renderer when Poster mode closes', async () => {

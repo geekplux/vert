@@ -126,6 +126,14 @@ everything.
   `src/lib`); its top nav (RUNS / COMPARE / UPLOAD) is mockup decoration and is omitted.
 - Terrain look, style A (View and poster): oblique 3D, `--surface` fill, 1px ink ridge lines along
   rows of the grid (front rows darker), route 4px `--route` with a 9px white halo, ○ start, ▲ summit.
+  Where a ridge hides the route it is drawn, not dropped: 2px, route colour at 40%, no halo (told
+  apart by width, opacity and the missing halo, not colour). Poster widths are logical px × scale.
+- Hide start and end also reframes: with ends hidden every poster figure is framed on the drawn
+  route's bounds (A builds its own grid, +15%; the View keeps the whole run), so the margin does
+  not show where the trimmed start was.
+- The 9:16 share card's elevation strip is the muted `#C9D1D9` at 60% (4.37:1 on the card).
+- Back to the run starts the View from the poster's camera (angle, zoom, flat), no intro; New file
+  resets it.
 
 ## Architecture
 

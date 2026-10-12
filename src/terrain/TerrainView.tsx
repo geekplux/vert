@@ -40,6 +40,11 @@ export interface TerrainViewProps {
   exaggeration: number;
   /** `flat` = top-down map, north up, no orbit ("Flat map" button). */
   view?: TerrainViewMode;
+  /**
+   * Where the camera starts when a heightfield is shown, with no intro (the poster's camera, back
+   * from Poster mode); its `view` should match `view`. Default: the intro to the default view.
+   */
+  initialCamera?: ViewCamera;
   /** Fires once the first frame with a new heightfield has been drawn. */
   onReady?: () => void;
   /** Describes the route and terrain for screen readers (the canvas is `role="img"`). */
@@ -86,6 +91,7 @@ export function TerrainView({
   heightfield,
   exaggeration,
   view = 'oblique',
+  initialCamera,
   onReady,
   ariaLabel,
   className,
@@ -105,9 +111,9 @@ export function TerrainView({
   const hintId = useId();
 
   // Latest values for callbacks and for the heightfield effect, without re-running effects.
-  const latest = useRef({ exaggeration, view, onReady, onRenderFrame });
+  const latest = useRef({ exaggeration, view, initialCamera, onReady, onRenderFrame });
   useEffect(() => {
-    latest.current = { exaggeration, view, onReady, onRenderFrame };
+    latest.current = { exaggeration, view, initialCamera, onReady, onRenderFrame };
   });
 
   // One stage per mount: renderer, camera, controls, resize observer, key handling.
@@ -161,6 +167,7 @@ export function TerrainView({
     stage.show(heightfield, {
       exaggeration: latest.current.exaggeration,
       view: latest.current.view,
+      camera: latest.current.initialCamera,
       reducedMotion,
       onFirstFrame: () => {
         canvas.dataset.visible = 'true';

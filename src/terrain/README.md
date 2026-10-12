@@ -53,7 +53,11 @@ scrub marker. No map library, no basemap.
   distance along the route. The line draws with no depth test: a segment between shown points
   whole, between hidden points not at all, a mixed one up to its middle (the core 2.5 px shorter,
   so the halo closes around it). Halo and core read the same verdicts, so side-on slopes never
-  thin the halo, crests leave no slivers, and the core never shows without its halo.
+  thin the halo, crests leave no slivers, and the core never shows without its halo. Hidden
+  stretches are not dropped: a third line (2 px, 40% opacity, route colour, no halo) takes the
+  opposite verdicts, drawn before the halo and each pixel once (a constant `gl_FragDepth`, depth
+  test `less`), so a route behind a ridge still reads as one line, told apart by width, opacity
+  and the missing halo. Widths scale with `setLineScale` (poster figures).
   `pointAtDistance` (binary search) maps metres along the track to lon/lat.
 - `markers.ts`: screen-size sprites (`sizeAttenuation: false`, no depth test, drawn after the
   route) from small canvas textures, shapes as the 2D `Marker`: ○ start (white fill, 3 px ink

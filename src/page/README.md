@@ -8,5 +8,8 @@ This is the only place that owns application state and composes `components`, `t
 - `state.ts`: the one state machine (`usePageState`): `screen` (upload, view, poster, exporting)
   plus `prefs` (units, exaggeration, poster settings) in one pure reducer. Rules in its header.
 - `types.ts`, `sample.ts`: the `Run` and `Terrain` shapes, and the phase 2 placeholder sample run.
-- `hooks.ts`: `RunProvider`, `useRun()`, `useTerrain()`, `useRunChooser()`. Phase 3 swaps the
-  loader inside (GPX parsed in a Web Worker); callers stay the same.
+- `hooks.ts`: `RunProvider`, `useRun()`, `useTerrain()`, `useRunChooser()` (`chooseFile`,
+  `chooseSample`, `newFile`). The loader is injectable (`RunProvider loadRun`); phase 3 swaps the
+  placeholder default for the GPX parser in a Web Worker. It rejects with `RunLoadError` for a
+  message the user should see; anything else shows "Vert couldn't read this file."
+- Poster sizes and styles come from `src/poster/sizes.ts` and `src/poster/styles.ts`.

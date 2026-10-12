@@ -30,6 +30,8 @@ import { useReducer } from 'react';
 import type { Dispatch } from 'react';
 import { formatDateLine } from '../lib/format';
 import type { Units } from '../lib/format';
+import type { PosterSizeId } from '../poster/sizes';
+import type { PosterStyleId } from '../poster/styles';
 import type { Run } from './types';
 
 // ---------------------------------------------------------------------------------------------
@@ -147,22 +149,11 @@ export type ScreenEvent<N extends ScreenName = ScreenName> = ScreenEvents[N];
 // Preferences
 // ---------------------------------------------------------------------------------------------
 
-export type PosterStyle = 'A' | 'B' | 'E';
-
-/** Poster sizes (DESIGN-SPEC §4) with their pixel targets. */
-export const POSTER_SIZES = {
-  '18x24': { width: 5400, height: 7200 },
-  a3: { width: 3508, height: 4961 },
-  '4x5': { width: 1080, height: 1350 },
-  '9x16': { width: 1080, height: 1920 },
-} as const;
-export type PosterSizeId = keyof typeof POSTER_SIZES;
-
 export type PosterStat = 'distance' | 'vert' | 'time' | 'highPoint';
 export type PosterTextField = 'title' | 'subtitle' | 'signature';
 
 export interface PosterPrefs {
-  readonly style: PosterStyle;
+  readonly style: PosterStyleId;
   readonly size: PosterSizeId;
   readonly title: string;
   readonly subtitle: string;
@@ -199,7 +190,7 @@ export const INITIAL_PREFS: Prefs = {
 export type PrefsEvent =
   | { readonly type: 'SET_UNITS'; readonly units: Units }
   | { readonly type: 'SET_EXAGGERATION'; readonly value: number }
-  | { readonly type: 'SET_POSTER_STYLE'; readonly style: PosterStyle }
+  | { readonly type: 'SET_POSTER_STYLE'; readonly style: PosterStyleId }
   | { readonly type: 'SET_POSTER_SIZE'; readonly size: PosterSizeId }
   | { readonly type: 'SET_POSTER_TEXT'; readonly field: PosterTextField; readonly value: string }
   | { readonly type: 'SET_POSTER_STAT'; readonly stat: PosterStat; readonly shown: boolean }

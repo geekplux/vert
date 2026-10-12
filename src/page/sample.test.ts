@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import sampleGpx from '../../public/samples/coosa-backcountry.gpx?raw';
 import {
   formatDateLine,
   formatDistance,
@@ -116,5 +117,28 @@ describe('SAMPLE_RUN', () => {
     expect(south).toBeLessThan(north);
     expect(SAMPLE_RUN.lonForOffset).toBeGreaterThanOrEqual(west);
     expect(SAMPLE_RUN.lonForOffset).toBeLessThanOrEqual(east);
+  });
+
+  it('has bounds containing every point of the sample GPX, tight to 0.0001°', () => {
+    const points = [...sampleGpx.matchAll(/<trkpt\s+lat="([^"]+)"\s+lon="([^"]+)"/g)].map((m) => ({
+      lat: Number(m[1]),
+      lon: Number(m[2]),
+    }));
+    expect(points.length).toBeGreaterThan(1000);
+
+    const { west, south, east, north } = SAMPLE_RUN.bounds;
+    for (const { lat, lon } of points) {
+      expect(lon).toBeGreaterThanOrEqual(west);
+      expect(lon).toBeLessThanOrEqual(east);
+      expect(lat).toBeGreaterThanOrEqual(south);
+      expect(lat).toBeLessThanOrEqual(north);
+    }
+
+    const lons = points.map((p) => p.lon);
+    const lats = points.map((p) => p.lat);
+    expect(Math.min(...lons) - west).toBeLessThan(1e-4);
+    expect(east - Math.max(...lons)).toBeLessThan(1e-4);
+    expect(Math.min(...lats) - south).toBeLessThan(1e-4);
+    expect(north - Math.max(...lats)).toBeLessThan(1e-4);
   });
 });

@@ -59,7 +59,10 @@ export interface RidgeOptions {
 export interface RidgeRow {
   /** Closed area under the row's line down to its base: fill it with the paper colour. */
   readonly fill: string;
-  /** The ridge line. */
+  /**
+   * The ridge line, one subpath per piece (`ridgePieces`): whole, but for the stretches that would
+   * show as stray dashes above the rows in front.
+   */
   readonly line: string;
   /** Stroke opacity: 0.18 at the back to 0.88 at the front. */
   readonly opacity: number;
@@ -81,6 +84,11 @@ export interface RidgeFigure {
   readonly start: Point | null;
   /** The finish when it is apart from the start (≥ 12 px); `null` for a loop. */
   readonly finish: Point | null;
+  /**
+   * How the ground's depth is drawn against its width (sin of the view's tilt), ≤ 1: the route's
+   * plan is never stretched north–south.
+   */
+  readonly depthScale: number;
 }
 
 /** The track fields the figure reads. */
@@ -112,9 +120,19 @@ const DEFAULTS = {
   padding: 4,
   detailScale: 1,
 };
-/** Depth compression of the oblique view: sin(tilt), kept in this range. */
+/**
+ * Depth compression of the oblique view: sin(tilt), kept in this range. Never above 1: the depth
+ * is never drawn deeper than its true size, so a runner always sees the real shape of the route
+ * (DECISIONS: no route distortion). Tall stages get more ground behind the route instead
+ * (`ridgeBounds`).
+ */
 const FORESHORTEN_MIN = 0.25;
-const FORESHORTEN_MAX = 0.8;
+const FORESHORTEN_MAX = 1;
+/**
+ * On a stage taller than the figure fitted to its width, the figure is enlarged and its sides
+ * cropped, as far as the route plus this much of the figure's width on each side still fits.
+ */
+export const CROP_MARGIN = 0.04;
 /** Margin around keep-out areas, logical px. */
 const KEEP_OUT_MARGIN = 8;
 /** The figure never shrinks below this fraction of its full size to clear the keep-out areas. */
@@ -210,22 +228,26 @@ export function ridgeFigure(
     });
     return hi - lo;
   };
-  // Pick the depth compression whose figure, fitted to the width, fills the free height under the
-  // text (bisection: the height grows with f).
-  const targetH = (groundW * (1 + skew) * (innerH - keepOutBottom)) / innerW;
-  let foreshorten = FORESHORTEN_MAX;
-  if (heightAt(FORESHORTEN_MIN) >= targetH) {
-    foreshorten = FORESHORTEN_MIN;
-  } else if (heightAt(FORESHORTEN_MAX) > targetH) {
-    let lo = FORESHORTEN_MIN;
-    let hi = FORESHORTEN_MAX;
+  /** The depth compression in [lo, hi] whose figure is `target` tall (bisection: height grows with f). */
+  const compressionFor = (lo: number, hi: number, target: number) => {
+    if (heightAt(lo) >= target) return lo;
+    if (heightAt(hi) <= target) return hi;
     for (let i = 0; i < 16; i++) {
       const mid = (lo + hi) / 2;
-      if (heightAt(mid) > targetH) hi = mid;
+      if (heightAt(mid) > target) hi = mid;
       else lo = mid;
     }
-    foreshorten = lo;
-  }
+    return lo;
+  };
+  // Pick the depth compression whose figure, fitted to the width, fills the free height under the
+  // text, up to the true depth; past that the figure is enlarged with its sides cropped to the
+  // route (below).
+  const freeRatio = (innerH - keepOutBottom) / innerW;
+  const foreshorten = compressionFor(
+    FORESHORTEN_MIN,
+    FORESHORTEN_MAX,
+    groundW * (1 + skew) * freeRatio,
+  );
   const baseY = (gy: number) => gy * mps.y * foreshorten;
 
   const rowLines: { xs: Float64Array; ys: Float64Array; gy: number }[] = [];
@@ -257,15 +279,41 @@ export function ridgeFigure(
   }
   const modelW = Math.max(1e-9, right - left);
   const modelH = Math.max(1e-9, bottom - top);
-  const fullScale = Math.min(innerW / modelW, innerH / modelH);
+  const fitH = innerH / modelH;
+  let fullScale = Math.min(innerW / modelW, fitH);
+  // A tall stage: even at the steepest view, the figure fitted to the width leaves free height
+  // under the text. Enlarge it towards filling that height, cropping the sides (terrain in the
+  // margin only, never the route), centred on the route.
+  let cropCentre: number | null = null;
+  if (n > 0 && innerW / modelW < fitH) {
+    let routeLeft = Infinity;
+    let routeRight = -Infinity;
+    for (let i = 0; i < n; i++) {
+      routeLeft = Math.min(routeLeft, routeModel[2 * i] ?? 0);
+      routeRight = Math.max(routeRight, routeModel[2 * i] ?? 0);
+    }
+    const span = routeRight - routeLeft + 2 * CROP_MARGIN * modelW;
+    const enlarged = Math.min((innerH - keepOutBottom) / modelH, innerW / span, fitH);
+    if (enlarged > fullScale) {
+      fullScale = enlarged;
+      cropCentre = (routeLeft + routeRight) / 2;
+    }
+  }
   let align: 'centre' | 'right' = 'centre';
-  const offsetsFor = (scale: number) => ({
-    offsetX:
+  const offsetsFor = (scale: number) => {
+    let offsetX =
       align === 'centre'
         ? padding + (innerW - modelW * scale) / 2 - left * scale
-        : box.width - padding - right * scale,
-    offsetY: box.height - padding - bottom * scale,
-  });
+        : box.width - padding - right * scale;
+    if (cropCentre !== null && modelW * scale > innerW) {
+      // Centred on the route, without leaving a gap at either side.
+      offsetX = Math.min(
+        padding - left * scale,
+        Math.max(box.width - padding - right * scale, box.width / 2 - cropCentre * scale),
+      );
+    }
+    return { offsetX, offsetY: box.height - padding - bottom * scale };
+  };
   const collides = (scale: number): boolean => {
     const { offsetX, offsetY } = offsetsFor(scale);
     const hit = (x: number, y: number) => {
@@ -311,17 +359,24 @@ export function ridgeFigure(
   const px = (x: number) => offsetX + x * scale;
   const py = (y: number) => offsetY + y * scale;
 
-  const ridgeRows: RidgeRow[] = rowLines.map(({ xs, ys, gy }, r) => {
+  // Cropped at the box's sides (a tall stage), the rows end there: the cut is the field's edge.
+  const rowsPx = rowLines.map(({ xs, ys }) =>
+    clipRow(Float64Array.from(xs, px), Float64Array.from(ys, py), 0, box.width),
+  );
+  const runs = ridgePieces(rowsPx);
+  const ridgeRows: RidgeRow[] = rowLines.map(({ gy }, r) => {
+    const { xs, ys } = rowsPx[r] ?? { xs: new Float64Array(0), ys: new Float64Array(0) };
+    const row = runs[r] ?? { pieces: [], first: 0, last: xs.length - 1 };
     const flat: number[] = [];
-    for (let c = 0; c < samples; c++) flat.push(px(xs[c] ?? 0), py(ys[c] ?? 0));
+    for (let c = row.first; c <= row.last; c++) flat.push(xs[c] ?? 0, ys[c] ?? 0);
     const kept = simplify(flat, tolerance);
     const base = py(baseY(gy));
     const x0 = kept[0] ?? 0;
     const xn = kept[kept.length - 2] ?? 0;
     const t = rows > 1 ? r / (rows - 1) : 1;
     return {
-      fill: pathData([...kept, xn, base, x0, base], true, decimals),
-      line: pathData(kept, false, decimals),
+      fill: kept.length >= 4 ? pathData([...kept, xn, base, x0, base], true, decimals) : '',
+      line: row.pieces.map((run) => pathData(simplify(run, tolerance), false, decimals)).join(''),
       opacity: Math.round((opacity[0] + (opacity[1] - opacity[0]) * t) * 100) / 100,
     };
   });
@@ -352,7 +407,221 @@ export function ridgeFigure(
     finish = Math.hypot(end.x - start.x, end.y - start.y) >= 12 ? end : null;
   }
 
-  return { width: box.width, height: box.height, rows: ridgeRows, route, start, finish };
+  return {
+    width: box.width,
+    height: box.height,
+    rows: ridgeRows,
+    route,
+    start,
+    finish,
+    depthScale: foreshorten,
+  };
+}
+
+/** The part of a row (x increasing) between x0 and x1, its ends interpolated onto the bounds. */
+function clipRow(
+  xs: Float64Array,
+  ys: Float64Array,
+  x0: number,
+  x1: number,
+): { xs: Float64Array; ys: Float64Array } {
+  const n = xs.length;
+  if (n === 0 || ((xs[0] ?? 0) >= x0 && (xs[n - 1] ?? 0) <= x1)) return { xs, ys };
+  const outX: number[] = [];
+  const outY: number[] = [];
+  const at = (i: number, x: number) => {
+    const ax = xs[i] ?? 0;
+    const bx = xs[i + 1] ?? ax;
+    const ay = ys[i] ?? 0;
+    const by = ys[i + 1] ?? ay;
+    return bx > ax ? ay + ((by - ay) * (x - ax)) / (bx - ax) : ay;
+  };
+  for (let i = 0; i < n; i++) {
+    const x = xs[i] ?? 0;
+    if (x < x0) {
+      if ((xs[i + 1] ?? -Infinity) > x0) {
+        outX.push(x0);
+        outY.push(at(i, x0));
+      }
+      continue;
+    }
+    if (x > x1) {
+      if (i > 0 && (xs[i - 1] ?? Infinity) < x1) {
+        outX.push(x1);
+        outY.push(at(i - 1, x1));
+      }
+      break;
+    }
+    outX.push(x);
+    outY.push(ys[i] ?? 0);
+  }
+  return { xs: Float64Array.from(outX), ys: Float64Array.from(outY) };
+}
+
+/**
+ * A stretch of ridge line that shows above the rows in front only this long (logical px) and
+ * stands clear of them is a stray dash: it is not drawn.
+ */
+export const MIN_VISIBLE_RUN_PX = 3;
+/**
+ * A visible stretch no further than this above the rows in front (logical px) lies on their line
+ * (within the 1.1 px stroke): it is part of a bundle of near-coincident rows and is always drawn,
+ * so the brighter overlap stays continuous, as when every row was drawn whole.
+ */
+export const HUG_PX = 1;
+/**
+ * A visible stretch at the field's edge (reaching the row's own end, or the end of the rows in
+ * front, past which it floats over the paper) is drawn only from this long, logical px: shorter,
+ * it is a stub left at the edge.
+ */
+export const MIN_FLOATING_RUN_PX = 20;
+/** The envelope where no row in front covers, px: far below any figure (y grows downwards). */
+const UNCOVERED = 1e6;
+/** Columns of the occlusion envelope per logical px. */
+const ENVELOPE_PER_PX = 4;
+
+/** What `ridgePieces` keeps of one row. */
+export interface RowPieces {
+  /** The line's pieces to draw, flat x, y arrays in box px. */
+  readonly pieces: number[][];
+  /** The row's points first..last are kept: its fill spans them (a stub at an end is cut off). */
+  first: number;
+  last: number;
+}
+
+/**
+ * The pieces of each ridge line to draw (flat x, y arrays in box px). `rows` are back to front,
+ * each sampled left to right; a row's paper fill hides what lies below its line, between its two
+ * ends. Each line is drawn whole, as the paper fills alone would show it, except for the stretches
+ * that stand more than `hug` px clear above the rows in front (an occlusion envelope, built front
+ * to back) and would print as stray dashes:
+ * - shorter than `minRun`: a back row that just clears a crest;
+ * - shorter than `minFloating` at the field's edge (reaching the row's end, or past the end of the
+ *   rows in front): a stub left there, such as a back row sticking out a skew step.
+ * What runs along the line in front (within `hug`, inside its stroke) is always drawn, so bundles
+ * of near-coincident rows stay continuous.
+ */
+export function ridgePieces(
+  rows: readonly { readonly xs: ArrayLike<number>; readonly ys: ArrayLike<number> }[],
+  {
+    minRun = MIN_VISIBLE_RUN_PX,
+    hug = HUG_PX,
+    minFloating = MIN_FLOATING_RUN_PX,
+  }: { minRun?: number; hug?: number; minFloating?: number } = {},
+): RowPieces[] {
+  let left = Infinity;
+  let right = -Infinity;
+  for (const { xs } of rows) {
+    if (xs.length === 0) continue;
+    left = Math.min(left, xs[0] ?? 0);
+    right = Math.max(right, xs[xs.length - 1] ?? 0);
+  }
+  const result: RowPieces[] = rows.map(({ xs }) => ({
+    pieces: [],
+    first: 0,
+    last: xs.length - 1,
+  }));
+  if (!(right >= left)) return result;
+  const columns = Math.max(2, Math.ceil((right - left) * ENVELOPE_PER_PX) + 2);
+  const step = (right - left) / (columns - 1) || 1;
+  // The highest line (least y) of the rows in front, per column; Infinity where none covers.
+  const envelope = new Float64Array(columns).fill(Infinity);
+  const envelopeAt = (x: number) => {
+    const u = (x - left) / step;
+    const k = Math.min(columns - 2, Math.max(0, Math.floor(u)));
+    const a = envelope[k] ?? Infinity;
+    const b = envelope[k + 1] ?? Infinity;
+    if (a === Infinity || b === Infinity) return u - k < 0.5 ? a : b;
+    return a + (b - a) * (u - k);
+  };
+  for (let r = rows.length - 1; r >= 0; r--) {
+    const { xs, ys } = rows[r] ?? { xs: [], ys: [] };
+    const n = Math.min(xs.length, ys.length);
+    if (n === 0) continue;
+    // Clearance above the rows in front at each point (> 0 shows), and whether any covers it.
+    const clear = new Float64Array(n);
+    const covered = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const e = envelopeAt(xs[i] ?? 0);
+      covered[i] = e < UNCOVERED ? 1 : 0;
+      clear[i] = Math.min(UNCOVERED, e) - (ys[i] ?? 0);
+    }
+    // Stretches standing clear of the line in front (more than `hug` above it): only these can
+    // read as dashes. What runs along that line (within the stroke) or under it is always drawn.
+    const dropped = new Uint8Array(n);
+    let first = 0;
+    let last = n - 1;
+    let i = 0;
+    while (i < n) {
+      if (!((clear[i] ?? 0) > hug)) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < n && (clear[j + 1] ?? 0) > hug) j++;
+      const point = (k: number) => [xs[k] ?? 0, ys[k] ?? 0] as const;
+      // Where the line comes within `hug` of the line in front, between a (clear) and b.
+      const crossing = (a: number, b: number) => {
+        const ca = Math.min(clear[a] ?? 0, UNCOVERED) - hug;
+        const cb = (clear[b] ?? 0) - hug;
+        const t = ca / (ca - cb);
+        const [ax, ay] = point(a);
+        const [bx, by] = point(b);
+        return [ax + t * (bx - ax), ay + t * (by - ay)] as const;
+      };
+      // At the field's edge: it reaches the row's end, or past where the rows in front end.
+      let atEdge = i === 0 || j === n - 1;
+      for (let k = i; k <= j && !atEdge; k++) if (!covered[k]) atEdge = true;
+      const start = i > 0 && covered[i] ? crossing(i, i - 1) : point(i);
+      const end = j < n - 1 && covered[j] ? crossing(j, j + 1) : point(j);
+      let length = 0;
+      let [lx, ly] = start;
+      for (let k = i; k <= j; k++) {
+        const [kx, ky] = point(k);
+        length += Math.hypot(kx - lx, ky - ly);
+        lx = kx;
+        ly = ky;
+      }
+      length += Math.hypot(end[0] - lx, end[1] - ly);
+      const stray = length < minRun;
+      const edgeStub = atEdge && length < minFloating;
+      if (stray || edgeStub) dropped.fill(1, i, j + 1);
+      // A stub at the row's end shortens the row, fill and all: rows behind are then judged
+      // without it, so a bundle of near-coincident rows is kept or dropped as one.
+      // (One point more, so the cut end sits under the fill in front, not on its edge.)
+      if (edgeStub && j === n - 1) last = Math.min(last, i - 2);
+      if (edgeStub && i === 0) first = Math.max(first, j + 2);
+      i = j + 1;
+    }
+    const out = result[r] ?? { pieces: [], first: 0, last: n - 1 };
+    out.first = first;
+    out.last = last;
+    // The row whole, cut where a stretch is dropped.
+    let piece: number[] = [];
+    for (let k = 0; k <= n; k++) {
+      if (k < n && !dropped[k] && k >= first && k <= last) {
+        piece.push(xs[k] ?? 0, ys[k] ?? 0);
+        continue;
+      }
+      if (piece.length >= 4) out.pieces.push(piece);
+      piece = [];
+    }
+    // This row's fill now hides what lies below its line, between its (kept) ends.
+    if (last <= first) continue;
+    let c = first;
+    for (let k = 0; k < columns; k++) {
+      const x = left + k * step;
+      if (x < (xs[first] ?? 0) || x > (xs[last] ?? 0)) continue;
+      while (c + 1 < last && (xs[c + 1] ?? 0) < x) c++;
+      const x0 = xs[c] ?? 0;
+      const x1 = xs[Math.min(last, c + 1)] ?? x0;
+      const y0 = ys[c] ?? 0;
+      const y1 = ys[Math.min(last, c + 1)] ?? y0;
+      const y = x1 > x0 ? y0 + ((y1 - y0) * (x - x0)) / (x1 - x0) : y0;
+      if (y < (envelope[k] ?? Infinity)) envelope[k] = y;
+    }
+  }
+  return result;
 }
 
 /** px: y must retrace this far from its last extreme for the route to count as turning back. */

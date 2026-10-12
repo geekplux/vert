@@ -42,7 +42,12 @@ This is the only place that owns application state and composes `components`, `t
   buttons move into a row under the box (no `overlays`); at 600px and up they overlay it and their
   measured rectangles are passed as `overlays`. Tab order at every width: terrain → Rotate view →
   Flat map → profile. `viewCopy.ts` holds its data-driven copy and profile maths (the terrain
-  label says "loop" only when the track ends within 50 m of its start).
+  label says "loop" only when the track ends within 50 m of its start). The route name keeps 44px
+  unless a word is wider than the column: `useTitleFit` then steps it down to 32px, and only past
+  that lets the word hyphenate or break. A climb's range breaks only after its arrow and the gain
+  column is `max-content`, so they never overlap; the steepest climb's "steepest" is a tag that
+  wraps as a whole. At ≥ 900px the terrain box is capped at `100dvh − 339px` (floor
+  460px), so the profile is in view from 800px tall windows.
 - `PosterState/`: Poster mode, also shown under the export overlay (aside: style, size, text,
   stats, hide ends, then the sticky Download block; main: the live `PosterPreview`, fitted to the
   stage). At ≥ 900px the page is one viewport tall and the aside scrolls. `posterCopy.ts` holds

@@ -11,6 +11,7 @@ import type { Run, Terrain } from '../types';
 import { TerrainBox } from './TerrainBox';
 import type { TerrainCameraSource } from './TerrainBox';
 import { PHONE_QUERY, useMediaQuery } from './useMediaQuery';
+import { TITLE_PX, useTitleFit } from './useTitleFit';
 import {
   defaultScrub,
   elevationRangeText,
@@ -78,6 +79,7 @@ export function ViewState({
   const [scrub, setScrub] = useState(() => defaultScrub(run));
   const [flat, setFlat] = useState(() => initialCamera?.view === 'flat');
   const phone = useMediaQuery(PHONE_QUERY);
+  const [titleRef, titleFit] = useTitleFit(run.name, headingRef);
 
   const distance = formatDistance(run.distance, units);
   const vert = formatElevation(run.vert, units, { signed: true });
@@ -124,7 +126,16 @@ export function ViewState({
             ) : null}
           </p>
         ) : null}
-        <h1 ref={headingRef} tabIndex={-1} className={styles.title}>
+        {/* A word wider than the column steps the size down (useTitleFit), and only below
+            TITLE_MIN_PX may it hyphenate or break; other titles are set as the canvas draws them. */}
+        <h1
+          ref={titleRef}
+          tabIndex={-1}
+          className={[styles.title, titleFit.breakWords && styles.breakWords]
+            .filter(Boolean)
+            .join(' ')}
+          style={titleFit.size === TITLE_PX ? undefined : { fontSize: titleFit.size }}
+        >
           {run.name}
         </h1>
       </div>
@@ -155,8 +166,18 @@ export function ViewState({
               >
                 <span className={styles.climbIndex}>{index + 1}</span>
                 <span className={styles.climbRange}>
-                  {formatKmRange(climb.start, climb.end, units)}
-                  {climb.steepest ? ' · steepest' : null}
+                  {/* The range breaks only after its arrow ("km 154.6 →" / "168.5"), never
+                      into the gain; "steepest" is a tag that wraps as a whole, under the range
+                      when the column is narrow (never a lone "·"). */}
+                  <ClimbRange text={formatKmRange(climb.start, climb.end, units)} />
+                  {climb.steepest ? (
+                    <>
+                      {' '}
+                      <span className={styles.steepestTag}>
+                        <span className={styles.visuallyHidden}>· </span>steepest
+                      </span>
+                    </>
+                  ) : null}
                 </span>
                 <span className={styles.climbGain}>
                   {formatElevation(climb.gain, units, { signed: true }).text}
@@ -225,5 +246,17 @@ export function ViewState({
         />
       </section>
     </PageShell>
+  );
+}
+
+/** A climb's range, "km 5.6 → 8.4", that may break after the arrow and nowhere else. */
+function ClimbRange({ text }: { text: string }) {
+  const arrow = text.indexOf(' → ');
+  if (arrow < 0) return <span className={styles.nowrap}>{text}</span>;
+  return (
+    <>
+      <span className={styles.nowrap}>{text.slice(0, arrow + 2)}</span>{' '}
+      <span className={styles.nowrap}>{text.slice(arrow + 3)}</span>
+    </>
   );
 }

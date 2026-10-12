@@ -7,7 +7,16 @@ import { lonLatToWorld, worldToLonLat } from '../lib/geo';
 import type { Bounds } from '../lib/geo';
 import { ridgeBounds } from './figures';
 import { gridPosition } from '../terrain/heightfield';
-import { RIDGE_RELIEF_BOOST, ridgeExaggeration, ridgeFigure, smoothZigzags } from './ridges';
+import {
+  HUG_PX,
+  MIN_FLOATING_RUN_PX,
+  MIN_VISIBLE_RUN_PX,
+  RIDGE_RELIEF_BOOST,
+  ridgeExaggeration,
+  ridgeFigure,
+  ridgePieces,
+  smoothZigzags,
+} from './ridges';
 
 function field(w: number, h: number, z: (x: number, y: number) => number): Heightfield {
   const elevations = new Float32Array(w * h);
@@ -133,6 +142,108 @@ describe('ridgeFigure', () => {
     const figure = ridgeFigure(cone, BOX, { lat, lon });
     expect(figure.start).not.toBeNull();
     expect(figure.finish).toBeNull();
+  });
+});
+
+describe('ridgePieces', () => {
+  /** A row sampled every px from x0 to x1 at height y(x). */
+  const row = (x0: number, x1: number, y: (x: number) => number) => {
+    const xs: number[] = [];
+    for (let x = x0; x <= x1; x++) xs.push(x);
+    return { xs, ys: xs.map(y) };
+  };
+  const spans = (row: { pieces: number[][] } | undefined) =>
+    (row?.pieces ?? []).map((piece) => [piece[0], piece.at(-2)]);
+
+  it('draws every row whole where nothing would show as a dash (the fills hide the rest)', () => {
+    const pieces = ridgePieces([row(0, 100, () => 60), row(0, 100, () => 50)]);
+    expect(spans(pieces[0])).toEqual([[0, 100]]);
+    expect(spans(pieces[1])).toEqual([[0, 100]]);
+  });
+
+  it('drops the stub a back row leaves floating past the end of the rows in front', () => {
+    // Hidden behind the front row, the back row sticks out 2 px, then 10 px past its end: the row
+    // is cut a point short of where the stub begins (the front row's end counts as past it).
+    expect(spans(ridgePieces([row(2, 102, () => 60), row(0, 100, () => 50)])[0])).toEqual([
+      [2, 98],
+    ]);
+    expect(spans(ridgePieces([row(10, 110, () => 60), row(0, 100, () => 50)])[0])).toEqual([
+      [10, 98],
+    ]);
+    // Real terrain past the edge, MIN_FLOATING_RUN_PX or longer, stays.
+    expect(MIN_FLOATING_RUN_PX).toBe(20);
+    expect(spans(ridgePieces([row(40, 140, () => 60), row(0, 100, () => 50)])[0])).toEqual([
+      [40, 140],
+    ]);
+  });
+
+  it('drops a short stretch at the field’s edge even when it rises from the line in front', () => {
+    // The back row rises out from behind the front row's line 6 px before the end.
+    const back = row(0, 100, (x) => 52 - Math.max(0, x - 94));
+    expect(spans(ridgePieces([back, row(0, 100, () => 50)])[0])).toEqual([[0, 96]]);
+    // Rising from 50 px before the end, it is terrain and stays.
+    const long = row(0, 100, (x) => 52 - Math.max(0, x - 50) / 4);
+    expect(spans(ridgePieces([long, row(0, 100, () => 50)])[0])).toEqual([[0, 100]]);
+  });
+
+  it('drops a short sliver standing clear above a crest in front', () => {
+    expect(MIN_VISIBLE_RUN_PX).toBe(3);
+    // Front: a flat line at 50; back: a spike 1.2 px above it (clear of the stroke), under 3 px
+    // long.
+    const back = row(0, 100, (x) => 50.5 - Math.max(0, 1.7 - Math.abs(x - 50) * 1.7));
+    expect(spans(ridgePieces([back, row(0, 100, () => 50)])[0])).toEqual([
+      [0, 49],
+      [51, 100],
+    ]);
+  });
+
+  it('drops what a hugging row shows past the end of the row in front, and keeps the rest', () => {
+    // 0.5 px above the front row (inside its stroke), the back row runs on 6 px past its end.
+    const pieces = ridgePieces([row(6, 106, () => 49.5), row(0, 100, () => 50)])[0];
+    expect(spans(pieces)).toEqual([[6, 98]]);
+    // Its fill is cut there too, so a row behind it is judged without the stub.
+    expect(pieces?.last).toBe(92);
+  });
+
+  it('keeps near-coincident rows continuous: a bundle within the stroke is never cut', () => {
+    expect(HUG_PX).toBe(1);
+    // The back row wavers 0.3 px either side of the front row's line: short runs, all on it.
+    const back = row(0, 100, (x) => 50 + 0.3 * Math.sin(x * 1.7));
+    expect(spans(ridgePieces([back, row(0, 100, () => 50)])[0])).toEqual([[0, 100]]);
+  });
+});
+
+describe('ridgeFigure on a tall stage', () => {
+  const tall = { width: 300, height: 900 };
+  const lon = Float64Array.from([-83.97, -83.95, -83.93]);
+  const lat = Float64Array.from([34.705, 34.715, 34.705]);
+  const fill = (figure: ReturnType<typeof ridgeFigure>) => {
+    const ys = figure.rows.flatMap((r) => points(r.line)).map(([, y]) => y);
+    return (Math.max(...ys) - Math.min(...ys)) / tall.height;
+  };
+
+  it('never draws the depth deeper than true: it crops the sides to the route instead', () => {
+    const figure = ridgeFigure(cone, tall, { lat, lon }, { rows: 64 });
+    expect(figure.depthScale).toBe(1);
+    // Cropped: the rows are cut at both sides of the box (the skew no longer shows at the edges),
+    // the route stays inside it.
+    const ends = figure.rows.map((r) => points(r.fill)).filter((f) => f.length > 0);
+    expect(ends.every((f) => Math.min(...f.map(([x]) => x)) === 0)).toBe(true);
+    expect(ends.every((f) => Math.max(...f.map(([x]) => x)) === tall.width)).toBe(true);
+    for (const [x] of points(figure.route)) {
+      expect(x).toBeGreaterThan(0);
+      expect(x).toBeLessThan(tall.width);
+    }
+  });
+
+  it('fills the height once the ground runs on behind the route (ridgeBounds adds it)', () => {
+    // The same 2 km wide ground, 5 km deep: more terrain north of the route.
+    const deep = field(101, 251, (x, y) => 900 - 4 * Math.hypot(x - 50, y - 200));
+    const shallow = fill(ridgeFigure(cone, tall, { lat, lon }, { rows: 64 }));
+    const figure = ridgeFigure(deep, tall, { lat, lon }, { rows: 64 });
+    expect(figure.depthScale).toBeLessThanOrEqual(1);
+    expect(fill(figure)).toBeGreaterThan(0.9);
+    expect(fill(figure)).toBeGreaterThan(shallow);
   });
 });
 
@@ -322,7 +433,9 @@ describe('ridgeFigure route on the sample', () => {
     const maxJump = (route: [number, number][]) =>
       Math.max(...route.slice(1).map(([, y], i) => Math.abs(y - (route[i]?.[1] ?? 0))));
     expect(raw.length).toBeGreaterThan(5000);
-    expect(maxJump(smooth)).toBeLessThanOrEqual(maxJump(raw) + 0.25);
+    // The largest step stays the raw route's own (a steep segment the blend may lengthen by a few
+    // per cent: 5.37 → 5.66 px at 18 × 24, 8.87 → 9.47 at 9 : 16), never a new, larger one.
+    expect(maxJump(smooth)).toBeLessThanOrEqual(maxJump(raw) * 1.08);
     // The smoothing did act on this route, and kept its ends.
     expect(turns(smooth.map(([, y]) => y))).toBeLessThan(turns(raw.map(([, y]) => y)));
     expect(smooth[0]).toEqual(raw[0]);

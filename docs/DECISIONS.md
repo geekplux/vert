@@ -63,7 +63,9 @@ everything.
 - **SizePicker** copy: "18 × 24 in" / "print · 5400 × 7200", "A3" / "print · 3508 × 4961", "4 : 5" /
   "social · 1080 × 1350", "9 : 16" / "story · 1080 × 1920". Unselected: transparent, 1px `--rule`
   border, sub-line `--muted`. Selected: `--ink` fill, white text, sub-line white at 80% opacity.
-  Padding 10×12, left aligned.
+  Padding 10×12, left aligned. The sub-line breaks only between "print ·" and the pixel size, which
+  stays on one line: in the 380px poster aside (1440 and 1000 wide) the cards are narrower than at
+  390 and "5400 × / 7200" used to split.
 - **TextField**: border `--rule-strong` (not `--rule`). The counter's accessible text says
   "characters" ("37 / 40 characters") through a visually hidden word; the visible text stays "37 / 40".
 - **Slider**: the drawn layout matches the canvas (native track directly under the label row,
@@ -91,7 +93,21 @@ everything.
 - Below 600px wide the elevation profile is 100px tall (DESIGN-SPEC §3). `Main-390.png` is the fluid
   View frame rendered at 390 for reference; the canvas has no designed phone frame, so the spec wins.
 
-- Climbs list: the steepest row is shaded `--surface` **and** says "· steepest".
+- Climbs list: the steepest row is shaded `--surface` **and** says "steepest". The gain column is
+  `max-content` (never squeezed); the range breaks only after its arrow ("km 154.6 →" / "168.5"),
+  so a long range (imperial, or past 100 km with a four-digit gain) wraps instead of running into
+  the gain; "steepest" is a tag (11px mono caps, `--muted`, 4.54:1 on `--surface`) that follows
+  it when there is room and otherwise takes the line under it as a whole. The canvas's running text
+  "· steepest" wrapped as a lone "·" or a lone word in the 300px aside (accessible text is still
+  "km 14.1 → 15.5 · steepest").
+- The aside h1 (44px) never breaks inside a word: a word wider than the column steps the size down
+  2px at a time, to 32px ("Longyearbyen Loop" at 1440: 40px); only a word too wide even at 32px
+  hyphenates (`hyphens: auto`, the page's `lang="en"`), then breaks anywhere. Titles whose words fit
+  are set exactly as before (pixel-identical to the Main frame layout).
+- Side by side (≥ 900px) the terrain box is at most `100dvh − 339px` (header, main padding and gap,
+  the elevation section) and at least 460px, so the elevation profile, the scrub control, is on
+  screen from a window 800px tall (at 1440 × 900 it was 35px in view). At the Main frame's height
+  (1059) the box is its 1000:680 height, unchanged.
 - A loaded sample shows "SAMPLE DATA" in the date line, in `--route-text`.
 - "About" opens a short in-page dialog (what Vert is, privacy, credits); "GitHub" links to
   https://github.com/geekplux.
@@ -142,6 +158,35 @@ everything.
   the drawn (trimmed) route's bounds (A builds its own grid, +15%; the View keeps the whole run),
   so neither the margin nor the frame's centre shows where the trimmed start was.
 - The 9:16 share card's elevation strip is the muted `#C9D1D9` at 60% (4.37:1 on the card).
+- Style A's walls (View and poster) are plain: shade plus top and bottom edges. The ridge rows stay
+  on the top surface; drawn down the side walls they hatched a narrow block's wall with verticals.
+  (The canvas's "Trail Sign" figure drops the row ends down its wall; the acceptance run ruled it out.)
+- Night Ridge draws every ridge line whole (the paper fills hide what is behind), except stretches
+  standing more than 1 px clear above the rows in front that would print as stray dashes: under
+  3 logical px anywhere (a back row just clearing a crest), or under 20 logical px at the field's
+  edge (reaching a row's end, or past the end of the rows in front: the skew-step stubs and floating
+  "ladders" along the right edge). A stub at a row's end shortens that row, fill and all, so the rows
+  behind are judged without it. What runs within 1 px of the line in front (inside its stroke) is
+  always drawn, so bundles of near-coincident rows stay continuous, as when every row was drawn.
+- No route distortion: Night Ridge never draws the ground's depth deeper than its true size (depth
+  scale ≤ 1, the view at most straight down), so a runner always sees the real shape of the route.
+  Measured depth scale on the 16 posters below: 0.25–1.000, never above 1.
+- Night Ridge's ground is never deepened to the south, in front of the route: on a tall stage the
+  E51's ground had grown 9 km south (and north) of the route, and the Jungfrau massif and the
+  Lauterbrunnen valley's wall in front of it stood as a tall "curtain" of ridges (the DEM and tiles
+  were fine). It is widened east–west for a wide stage, and on a tall stage it runs on to the north,
+  behind the route, so distant back ridges fill the sky: as much ground as the figure needs to fill
+  the free height at true depth with its sides cropped to the route (plus 4% of the width each side),
+  at most 2× the route's north–south extent. The back rows are the dimmest (0.18 opacity rising to
+  0.88 at the front) and keep the same spacing as the rest, so they read as distance, not a wall.
+  Then the view steepens (≤ true depth) to fill, and the figure is enlarged with its sides cropped.
+  Fill of the free stage height under the text (18 × 24 / A3 / 4 : 5 / 9 : 16): sample 97/100/98/99%,
+  Lavaredo 139/120/155/100% (rising beside the text), E51 100/100/100/100% (9 : 16 was 67% with the
+  depth capped and 94% stretched), CCC 100/100/100/100%.
+- Survey Quad marks a point-to-point run ○ start and ◉ finish (as the View, A and B do), legend
+  "○ Start · ◉ Finish" on one row; a loop keeps one ○ with "Start / finish" (the View's wording,
+  instead of the canvas's "Start and finish"). Start and finish within 14 px of each other on the map
+  are drawn as one ○.
 - Camera handoff: Make a poster copies the View's camera (angle, zoom, flat) into
   `prefs.poster.camera`, and style A's figure (preview and export) is drawn from it. Back to the run
   keeps it and starts the View from it, no intro; New file resets it.

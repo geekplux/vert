@@ -126,7 +126,7 @@ describe('SurveyQuadPoster', () => {
       'DISTANCE21.5 kmASCENT1,102 mTIME3:04:58HIGH POINT1,267 m',
     );
     expect(slot('legend')?.textContent).toBe(
-      'Route runIndex contourIntermediate contourStart and finish',
+      'Route runIndex contourIntermediate contourStart / finish',
     );
     expect(slot('scale')?.textContent).toBe('01234 kmCONTOUR INTERVAL 20 METRES');
     // No invented place names.
@@ -148,10 +148,40 @@ describe('SurveyQuadPoster', () => {
     expect(line?.getAttribute('stroke')).toBe('#1E1B18');
     expect(line?.getAttribute('stroke-width')).toBe('3.5');
     expect(line?.getAttribute('stroke-dasharray')).toBe('10 6');
-    const start = svg?.querySelector('[data-marker="start"]');
-    expect(start?.tagName).toBe('circle');
-    expect(start?.getAttribute('fill')).toBe('#FFFFFF');
-    expect(start?.getAttribute('stroke')).toBe('#1E1B18');
+    const start = svg?.querySelectorAll('[data-marker="start"] circle');
+    expect(start).toHaveLength(1);
+    expect(start?.[0]?.getAttribute('fill')).toBe('#FFFFFF');
+    expect(start?.[0]?.getAttribute('stroke')).toBe('#1E1B18');
+    expect(svg?.querySelector('[data-marker="finish"]')).toBeNull();
+  });
+
+  it('marks a point-to-point run ○ start and ◉ finish, and says so in the legend', () => {
+    const map = DATA.map;
+    if (!map) throw new Error('no map');
+    const data: SurveyQuadFigureData = {
+      ...DATA,
+      map: {
+        ...map,
+        markers: [
+          { x: 100, y: 100, kind: 'start' },
+          { x: 500, y: 150, kind: 'finish' },
+        ],
+      },
+    };
+    const { root, slot } = renderPoster('18x24', { data });
+    const svg = root.querySelector('[data-figure="contours"]');
+    // The start is a hollow ring; the finish the same ring with an ink dot (shape, not colour).
+    expect(svg?.querySelectorAll('[data-marker="start"] circle')).toHaveLength(1);
+    const finish = Array.from(svg?.querySelectorAll('[data-marker="finish"] circle') ?? []);
+    expect(finish.map((circle) => circle.getAttribute('fill'))).toEqual(['#FFFFFF', '#1E1B18']);
+    // The start is drawn last, on top.
+    expect(svg?.querySelector('g[data-marker]:last-of-type')?.getAttribute('data-marker')).toBe(
+      'start',
+    );
+    const ends = slot('legend')?.querySelector('[data-legend="ends"]');
+    expect(ends?.textContent).toBe('Start ·Finish');
+    expect(ends?.querySelectorAll('svg')).toHaveLength(2);
+    expect(ends?.querySelectorAll('svg')[1]?.querySelectorAll('circle')).toHaveLength(2);
   });
 
   it('scales strokes 1.5× on the share card', () => {

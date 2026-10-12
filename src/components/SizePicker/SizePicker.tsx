@@ -43,7 +43,6 @@ export function SizePicker<Id extends string = string>({
     <div role="radiogroup" aria-label={label} className={rootClass}>
       {sizes.map((size) => {
         const inputId = `${baseId}-${size.id}`;
-        const detail = sizeDetail(size);
         return (
           <div key={size.id} className={styles.option}>
             <input
@@ -65,7 +64,14 @@ export function SizePicker<Id extends string = string>({
                 {size.name}
                 <span className={styles.hidden}>, </span>
                 <br />
-                <span className={styles.detail}>{detail}</span>
+                {/* Reads as sizeDetail(size); wraps only between "print ·" and the pixels,
+                    which stay together ("5400 × 7200"), when the card is narrow (1440 wide). */}
+                <span className={styles.detail}>
+                  <span className={styles.nowrap}>{`${size.use} ·`}</span>{' '}
+                  <span className={styles.nowrap}>
+                    {`${String(size.width)} × ${String(size.height)}`}
+                  </span>
+                </span>
               </span>
             </label>
           </div>

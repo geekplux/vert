@@ -38,7 +38,15 @@
   font-weight: 800;
   font-stretch: 75%;
   line-height: 1;
-  overflow-wrap: break-word;
+}
+
+/*
+ * Only for a word wider than the column at the smallest stepped-down size (useTitleFit):
+ * hyphenate it (the document's lang is set), and break it anywhere only if that fails.
+ */
+.breakWords {
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }
 
 /* DECISIONS "Focus on screen changes": programmatic focus on the h1 draws no ring. */
@@ -75,11 +83,15 @@
   list-style: none;
 }
 
-/* Canvas: grid 28px 1fr auto, gap 8, padding 12 0, 1px --rule bottom border, tabular figures. */
+/*
+ * Canvas: grid 28px 1fr auto, gap 8, padding 12 0, 1px --rule bottom border, tabular figures. The
+ * gain column is max-content and the range column may shrink, so the gain is never squeezed and a
+ * long range wraps after its arrow instead of running into it.
+ */
 .climb,
 .steepest {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 28px minmax(0, 1fr) max-content;
   gap: var(--space-2);
   padding: var(--space-3) 0;
   border-bottom: 1px solid var(--rule);
@@ -112,6 +124,32 @@
 
 .climbGain {
   font-family: var(--font-mono);
+}
+
+/*
+ * "steepest" as a label (11px mono caps, as the section labels; --muted is 4.54:1 on --surface):
+ * one unit that follows the range when it fits and otherwise takes the line under it, so the row
+ * never shows a stray "·" or a word on a line of its own in running text.
+ */
+.steepestTag {
+  position: relative;
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .noClimbs {

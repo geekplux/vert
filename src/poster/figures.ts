@@ -21,7 +21,7 @@ import {
 } from './contours';
 import type { BoxSize, ContourPaths, ScaleBar } from './contours';
 import type { PosterLayoutKind } from './layout';
-import { ridgeFigure, RIDGE_ROWS } from './ridges';
+import { CROP_MARGIN, ridgeFigure, RIDGE_ROWS } from './ridges';
 import type { Point, Rect, RidgeFigure } from './ridges';
 
 // ---------------------------------------------------------------------------------------------
@@ -171,7 +171,7 @@ export interface SurveyQuadMap {
    */
   readonly interval: number;
   readonly route: string;
-  /** Start ○, and a finish ○ when it is apart from the start. */
+  /** Start ○, and a finish ◉ when it is apart from the start (a loop has the one ○). */
   readonly markers: readonly QuadMarker[];
   readonly scaleBar: ScaleBar;
   readonly pxPerMetre: number;
@@ -236,9 +236,16 @@ export function quadBounds(route: Bounds, aspect: number, margin = 0.1): Bounds 
 
 /**
  * Bounds to build Night Ridge's heightfield from (with `padding: 0`): the route's bounds plus a
- * margin, widened so the figure fills the free part of the stage (below the text it keeps clear
- * of). The oblique view shows the ground's depth compressed to about 0.6 of its size, so the
- * ground's aspect is about 0.6 × the free area's, kept between 0.6:1 and 3:1.
+ * margin, widened east and west so the figure fills the free part of the stage (below the text it
+ * keeps clear of). The oblique view shows the ground's depth compressed to about 0.6 of its size,
+ * so the ground's aspect is about 0.6 × the free area's, kept between 0.6:1 and 3:1.
+ *
+ * Never deepened to the south (in front of the route): terrain there stacks its relief into a tall
+ * "curtain" across the route (DECISIONS: the E51 once grew the Jungfrau massif and the Lauterbrunnen
+ * valley's wall in front of it). A tall stage instead gets ground to the north, behind the route,
+ * so distant back ridges fill the sky: as much as the figure needs to fill the free height with its
+ * depth drawn at true size (`ridgeFigure` never draws it deeper, so the route keeps its shape) and
+ * its sides cropped to the route, at most NORTH_FILL_MAX × the route's north–south extent.
  */
 export function ridgeBounds(
   route: Bounds,
@@ -247,8 +254,29 @@ export function ridgeBounds(
   const textBottom = Math.max(0, ...(box.keepOut ?? []).map((rect) => rect.y + rect.height));
   const free = Math.max(box.height * 0.2, box.height - textBottom);
   const aspect = free > 0 ? (box.width / free) * 0.6 : 1.6;
-  return quadBounds(route, Math.min(3, Math.max(0.6, aspect)), 0.12);
+  const target = Math.min(3, Math.max(0.6, aspect));
+  const padded = quadBounds(route, 0, RIDGE_MARGIN);
+  const cos = Math.max(0.01, Math.cos((((route.north + route.south) / 2) * Math.PI) / 180));
+  const groundW = (padded.east - padded.west) * cos * METRES_PER_DEGREE_LAT;
+  const groundH = (padded.north - padded.south) * METRES_PER_DEGREE_LAT;
+  if (groundW / Math.max(1e-9, groundH) < target) return quadBounds(route, target, RIDGE_MARGIN);
+  // Depth that fills the free height at true scale, with the figure cropped to the route.
+  const routeW = Math.max(50, (route.east - route.west) * cos * METRES_PER_DEGREE_LAT);
+  const routeH = Math.max(50, (route.north - route.south) * METRES_PER_DEGREE_LAT);
+  const shown = Math.min(groundW, routeW + 2 * CROP_MARGIN * groundW);
+  const wanted = (shown * free) / Math.max(1, box.width);
+  const north = Math.min(NORTH_FILL_MAX * routeH, Math.max(0, wanted - groundH));
+  return { ...padded, north: padded.north + north / METRES_PER_DEGREE_LAT };
 }
+
+/**
+ * The most ground added north of Night Ridge's margin on a tall stage, × the route's north–south
+ * extent.
+ */
+export const NORTH_FILL_MAX = 2;
+
+/** Night Ridge's margin around the route, as a fraction of its larger side. */
+const RIDGE_MARGIN = 0.12;
 
 /** Markers this close (logical px) are drawn as one: a loop's start and finish. */
 const MARKER_MERGE_PX = 14;

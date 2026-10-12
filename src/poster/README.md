@@ -105,7 +105,10 @@ social layout is the print design at 1.5×, strokes included, except that no soc
   stage reports `{ width, height, keepOut }` through `onFigureBox` (the text's line boxes), and
   `nightRidgeFigureData(run, heightfield, box, { exaggeration, rows })` (`figures.ts`) lays the
   ridges out clear of the text. Build the heightfield from `ridgeBounds(run.bounds, box)` with
-  `padding: 0` so the rows run across the stage. Sunrise (`src/lib/sun.ts`) appears only when
+  `padding: 0` so the rows run across the stage (it widens the ground east–west for the stage but
+  never deepens it to the south, where terrain in front of the route stacks into a tall "curtain";
+  a tall stage gets ground to the north, behind the route, at most `NORTH_FILL_MAX` (2) × the
+  route's north–south extent). Sunrise (`src/lib/sun.ts`) appears only when
   the run's timestamps put it during the run; clock times use the viewer's time zone (GPX times
   carry none).
 - `SurveyQuadPoster.tsx` (E): title, map in its frame, stats band, legend and scale bar. The map box
@@ -114,15 +117,22 @@ social layout is the print design at 1.5×, strokes included, except that no soc
   `surveyQuadFigureData(run, heightfield, box, { units, layout })`. Scale labels sit on their ticks
   (the first starts at the bar, the last centres its number and hangs the unit after it, in room
   the block reserves, or ends flush with the bar when the key has no room for that); labels
-  are thinned by their measured widths (`scaleLabelsShown`).
+  are thinned by their measured widths (`scaleLabelsShown`). Markers: ○ start, and ◉ finish (the
+  ring with an ink dot, drawn under the start) when the ends are ≥ 14 px apart; the legend's last
+  row follows them: "○ Start · ◉ Finish", or "○ Start / finish" for a loop.
 - Detail: pass `detailScale` (the export scale, `posterLayout(size).scale`) to the figure-data
   functions when exporting: lines are then sampled and simplified to 0.3 output px with finer
   coordinate rounding (`lineDetail`). The preview can use the default 1.
 - `ridges.ts`: rows west to east, back (north) to front, lifted by elevation ×
   `ridgeExaggeration(setting)` (the setting × 1.5: ridgelines need the extra lift), which is also
   the factor the poster prints ("ELEVATION ×2.4") and states in its accessible name;
-  paper-filled below each line, opacity 0.18 → 0.88; the depth compression is chosen to fill the
-  free area; the route is draped on the same (lightly smoothed) surface, and vertical zigzags from
+  paper-filled below each line, opacity 0.18 → 0.88, each line drawn whole except stretches that
+  would print as stray dashes (`ridgePieces`: an occlusion envelope, front to back; stretches more
+  than `HUG_PX` clear of the rows in front and under `MIN_VISIBLE_RUN_PX`, or under
+  `MIN_FLOATING_RUN_PX` at the field's edge, where they also shorten the row); the depth
+  compression is chosen to fill the free area, never above the true depth (`depthScale` ≤ 1: the
+  route keeps its plan shape), then the figure is enlarged with its sides cropped to the route (rows
+  clipped at the box); the route is draped on the same (lightly smoothed) surface, and vertical zigzags from
   GPS jitter on steep slopes are evened out (`smoothZigzags`: blended in by a smoothed per-point
   weight, so it adds no step or lone spike; summits and valleys of 25 m or more are kept).
 - `contours.ts`: marching squares (saddles resolved by the cell centre), segments joined into

@@ -180,7 +180,7 @@ export function SurveyQuadPoster({
           </div>
         )}
         <div className={styles.key} ref={keyRef}>
-          <Legend k={k} />
+          <Legend k={k} pointToPoint={map?.markers.some((m) => m.kind === 'finish') ?? false} />
           <div className={styles.scale} data-slot="scale">
             {map && (
               <ScaleBarGraphic
@@ -213,7 +213,11 @@ function MapBox({
   );
 }
 
-/** Contours (intermediate under index), the route with its white halo, and the ○ markers. */
+/** Start and finish markers on the map, px at 720 wide: ring radius, and the finish's dot. */
+const MARKER_R = 8;
+const FINISH_DOT_R = 3;
+
+/** Contours (intermediate under index), the route with its white halo, and the ○ / ◉ markers. */
 function ContourMap({ map, k }: { map: SurveyQuadMap; k: number }) {
   return (
     <svg
@@ -237,25 +241,42 @@ function ContourMap({ map, k }: { map: SurveyQuadMap; k: number }) {
           />
         </g>
       )}
-      {map.markers.map((marker) => (
-        <circle
-          key={marker.kind}
-          cx={marker.x}
-          cy={marker.y}
-          r={sc(8, k)}
-          fill={PALETTE.halo}
-          stroke={PALETTE.ink}
-          strokeWidth={sc(3, k)}
-          data-marker={marker.kind}
-        />
+      {/* Finish first, so a start drawn close by sits on top. ○ start, ◉ finish: shape, not colour. */}
+      {[...map.markers].reverse().map((marker) => (
+        <g key={marker.kind} data-marker={marker.kind}>
+          <circle
+            cx={marker.x}
+            cy={marker.y}
+            r={sc(MARKER_R, k)}
+            fill={PALETTE.halo}
+            stroke={PALETTE.ink}
+            strokeWidth={sc(3, k)}
+          />
+          {marker.kind === 'finish' && (
+            <circle cx={marker.x} cy={marker.y} r={sc(FINISH_DOT_R, k)} fill={PALETTE.ink} />
+          )}
+        </g>
       ))}
     </svg>
   );
 }
 
 /** The legend, as the canvas draws it: 48 px samples (scaled to the layout), labels in sentence case. */
-function Legend({ k }: { k: number }) {
+function Legend({ k, pointToPoint }: { k: number; pointToPoint: boolean }) {
   const w = sc(40, k);
+  const ring = (cx: number, finish: boolean) => (
+    <>
+      <circle
+        cx={cx}
+        cy={sc(9, k)}
+        r={sc(6.5, k)}
+        fill={PALETTE.halo}
+        stroke={PALETTE.ink}
+        strokeWidth={sc(2.5, k)}
+      />
+      {finish && <circle cx={cx} cy={sc(9, k)} r={sc(2.5, k)} fill={PALETTE.ink} />}
+    </>
+  );
   return (
     <div className={styles.legend} data-slot="legend">
       <div className={styles.legendItem}>
@@ -298,18 +319,23 @@ function Legend({ k }: { k: number }) {
         </svg>
         Intermediate contour
       </div>
-      <div className={styles.legendItem}>
+      {/* A loop has one ○ for start and finish; a point-to-point run ○ start and ◉ finish (as the
+          View, Trail Sign and Night Ridge draw them), named in one row: "○ Start · ◉ Finish". */}
+      <div className={styles.legendItem} data-legend="ends">
         <svg width={w} height={sc(18, k)}>
-          <circle
-            cx={w / 2}
-            cy={sc(9, k)}
-            r={sc(6.5, k)}
-            fill={PALETTE.halo}
-            stroke={PALETTE.ink}
-            strokeWidth={sc(2.5, k)}
-          />
+          {ring(w / 2, false)}
         </svg>
-        Start and finish
+        {pointToPoint ? (
+          <>
+            Start ·
+            <svg width={sc(16, k)} height={sc(18, k)}>
+              {ring(sc(8, k), true)}
+            </svg>
+            Finish
+          </>
+        ) : (
+          'Start / finish'
+        )}
       </div>
     </div>
   );

@@ -66,6 +66,11 @@
   color: var(--muted);
 }
 
+/* The sub-line's two parts ("print ·", "5400 × 7200") never break inside. */
+.nowrap {
+  white-space: nowrap;
+}
+
 .input:not(:checked) + .card:hover {
   background: var(--surface);
 }

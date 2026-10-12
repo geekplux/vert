@@ -1,0 +1,53 @@
+/* StatTile and StatGrid. Source: canvas Main.html (aside stat grid) and Tokens.html (STAT TILE). */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px var(--space-4);
+  margin: 0;
+}
+
+.tile {
+  min-width: 0;
+}
+
+/* DECISIONS: stat labels are 11px mono, uppercase, letter-spacing 0.08em, --muted. */
+.label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Stat type: 34 / 700 / 75% width, tabular figures. DECISIONS: line-height normal (Main frame); never wraps. */
+.value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  font-stretch: 75%;
+  line-height: normal;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Vert only. 34px bold is large text, so --route's 3.97:1 on --bg passes the 3:1 minimum. */
+.tile[data-emphasis='true'] .value {
+  color: var(--route);
+}
+
+/* Unit follows the value after a space, 16/500, and inherits the value's colour. */
+.unit {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* DECISIONS: the emphasised 16px unit is small text, so it needs --route-text (5.09:1 on --bg). */
+.tile[data-emphasis='true'] .unit {
+  color: var(--route-text);
+}

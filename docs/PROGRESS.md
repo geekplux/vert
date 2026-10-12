@@ -65,3 +65,13 @@ Started early where a module has no UI dependency (sample data, `src/lib`, parse
 | [ ]  | 6. Tiled export (PNG, PDF)                                       |        |                                                                                                                                                                             |
 | [ ]  | 7. Styles B and E                                                |        |                                                                                                                                                                             |
 | [ ]  | 8. Worker tile proxy + R2, deploy                                | 1      | Proxy implemented and verified locally (edge → R2 → upstream, byte-identical, header-clean). One-Worker deploy config ready in `wrangler.deploy.jsonc`; activation pending. |
+
+## Needs Sean
+
+- **Activate the tile proxy in production** (blocked for the agent: production deploys need your
+  approval). Until then the deployed site's terrain shows its error state; local dev works via the
+  Vite proxy. Steps (also in `worker/README.md`):
+  1. `pnpm exec wrangler r2 bucket create vert-tiles`
+  2. `git mv wrangler.deploy.jsonc wrangler.jsonc` and push (Workers Builds then deploys the app and
+     the `/tiles/*` proxy as one Worker named `vert`), or run `pnpm build && pnpm exec wrangler deploy`.
+  3. Check: `curl -sI https://vert.fum.workers.dev/tiles/12/655/1582.png` → `200 image/png`.

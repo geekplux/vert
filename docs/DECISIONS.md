@@ -115,6 +115,9 @@ everything.
 - The poster subtitle defaults to empty: the date already sits in the header and Vert has no place
   data, so the canvas's "[Place] · [Date]" would be invented. Social sizes show a short note where
   the PDF button would be (PDF is for print sizes).
+- Clock times (Night Ridge start and sunrise) are shown in the viewer's time zone: most people
+  upload their own local runs, and a longitude-based offset would show 05:32 for a 07:32 Georgia
+  sunrise. The date line keeps the longitude rule, because it must survive any viewer time zone.
 - Style A at the social sizes (4:5, 9:16) uses the share-card layout (frame "Style A · share card
   4:5"); print sizes use the Trail Sign layout.
 - No invented data: poster A's "VERT № 014" becomes "VERT"; footer URL is VERT.GEEKPLUX.COM.

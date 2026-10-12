@@ -13,12 +13,19 @@
  *    and marker sprites scale with it), from the grid the poster reports through
  *    `onFigureStatus`. The renderer and its WebGL context are released when the export ends,
  *    however it ends.
- * 3. `exportPoster` (`src/poster/export/export.ts`, loaded on first use) does the rest; its tile
+ * 3. The terrain is waited for at most {@link TERRAIN_TIMEOUT_MS} (from Download until the figure
+ *    is ready; the tiles are drawn after it without a limit). When it fails, Night Ridge and Survey
+ *    Quad are exported as the preview shows them then: the figure box says "The terrain couldn’t
+ *    be drawn." and the footer leaves out what describes the relief. Style A, whose poster is its
+ *    terrain, fails with {@link TERRAIN_UNAVAILABLE_MESSAGE} ({@link TERRAIN_TOO_LARGE_MESSAGE}
+ *    when the area is too large to fetch tiles for, which B and E also draw as the note); a terrain still loading at the limit
+ *    (tiles never answered) fails every style with {@link TERRAIN_TIMEOUT_MESSAGE}.
+ * 4. `exportPoster` (`src/poster/export/export.ts`, loaded on first use) does the rest; its tile
  *    reports are passed through (poster tiles plus figure tiles), and the Blob is saved with
  *    `downloadBlob` unless the export was cancelled meanwhile.
  *
  * Failures the user can act on are `ExportError`s: too large for this browser (from the engine),
- * the terrain could not be loaded, the browser has no WebGL at all (style A cannot be exported
+ * the terrain could not be loaded (style A) or took too long (every style), the browser has no WebGL at all (style A cannot be exported
  * here; B and E can), or it has WebGL but could not draw the figure at this size. Only the last
  * two are told apart after the fact (`hasWebGL`), and "Try a smaller size" is advised only when a
  * smaller size exists.
@@ -32,6 +39,7 @@ import type { PosterSize } from '../../poster/sizes';
 import type { TerrainFigureScene } from '../../poster/terrainFigure';
 import { loadTerrainFigure } from '../../poster/terrainFigureChunk';
 import { trimTrack } from '../../gpx/trim';
+import { HeightfieldTooLargeError } from '../../terrain/heightfield';
 import type { Heightfield } from '../../terrain/heightfield';
 import { realLoadFigureTerrain, realLoadTerrain } from '../hooks';
 import type { LoadFigureTerrain, LoadTerrain } from '../hooks';
@@ -43,6 +51,12 @@ import type { PosterFigureStatus } from './LivePoster';
 /** When the figure's terrain cannot be built (offline, tile server down). */
 export const TERRAIN_UNAVAILABLE_MESSAGE =
   'The terrain for this poster couldn’t be loaded. Check your connection and try again.';
+/** When style A's terrain covers more ground than the tiles can be fetched for (as the View says). */
+export const TERRAIN_TOO_LARGE_MESSAGE =
+  'This route covers too much ground to draw its terrain, so Trail Sign posters can’t be made from it.';
+/** When the figure's terrain is still loading after {@link TERRAIN_TIMEOUT_MS} (tiles hanging). */
+export const TERRAIN_TIMEOUT_MESSAGE =
+  'The terrain for this poster is taking too long to load. Check your connection and try again.';
 /** When the browser has WebGL but could not draw style A's terrain at this size. */
 export const TERRAIN_DRAW_MESSAGE =
   'This browser couldn’t draw the terrain for this poster. Try a smaller size.';
@@ -77,6 +91,13 @@ export function browserHasWebGL(): boolean {
 /** A figure counts as ready once its state has not changed for this long, ms. */
 export const FIGURE_STABLE_MS = 50;
 
+/**
+ * The longest an export waits for its figure's terrain, ms, counted from Download: long enough
+ * for a cold grid of 32 tiles on a slow connection, short enough that hanging tiles end in a
+ * message rather than an export that never finishes.
+ */
+export const TERRAIN_TIMEOUT_MS = 20_000;
+
 /** What the export engine provides (`src/poster/export/export.ts`). */
 export interface ExportEngine {
   exportPoster: typeof import('../../poster/export/export').exportPoster;
@@ -104,6 +125,8 @@ export interface PosterExporterDeps {
   readonly loadFigureTerrain: LoadFigureTerrain;
   /** Whether WebGL works at all; asked only after the figure failed to draw. */
   readonly hasWebGL: () => boolean;
+  /** How long to wait for the figure's terrain, ms (default {@link TERRAIN_TIMEOUT_MS}). */
+  readonly terrainTimeoutMs?: number;
 }
 
 export const defaultPosterExporterDeps: PosterExporterDeps = {
@@ -188,14 +211,20 @@ export class FigureTracker {
   /**
    * Resolves once the figure is ready and has stayed so for {@link FIGURE_STABLE_MS} (a late
    * relayout, say a title re-measured in its loaded face, lays the figure out again); rejects
-   * with an `ExportError` when its terrain fails, or when `signal` aborts.
+   * when `signal` aborts. When its terrain fails it rejects with an `ExportError`, or, with
+   * `failureIsFinal` (B and E, which draw a "couldn't be drawn" note in its place), resolves with
+   * the error once that has stayed for {@link FIGURE_STABLE_MS} too.
    */
-  async ready(signal: AbortSignal): Promise<PosterFigureStatus> {
+  async ready(signal: AbortSignal, failureIsFinal = false): Promise<PosterFigureStatus> {
     for (;;) {
       signal.throwIfAborted();
       const status = this.current;
-      if (status.status === 'error') throw new ExportError(TERRAIN_UNAVAILABLE_MESSAGE);
-      if (status.status === 'ready') {
+      if (status.status === 'error' && !failureIsFinal) {
+        throw new ExportError(
+          status.tooLarge ? TERRAIN_TOO_LARGE_MESSAGE : TERRAIN_UNAVAILABLE_MESSAGE,
+        );
+      }
+      if (status.status !== 'loading') {
         const version = this.version;
         await delay(FIGURE_STABLE_MS, signal);
         if (this.version === version) return status;
@@ -203,6 +232,54 @@ export class FigureTracker {
         await this.changed(signal);
       }
     }
+  }
+}
+
+/**
+ * The time limit on the terrain: `signal` aborts when the export is cancelled or the limit
+ * passes; {@link TerrainDeadline.run} turns the latter into {@link TERRAIN_TIMEOUT_MESSAGE}.
+ */
+class TerrainDeadline {
+  private readonly controller = new AbortController();
+  private readonly timer: ReturnType<typeof setTimeout>;
+  private expired = false;
+  private readonly onAbort: () => void;
+  private readonly parent: AbortSignal;
+
+  constructor(parent: AbortSignal, ms: number) {
+    this.parent = parent;
+    this.onAbort = () => {
+      this.controller.abort(parent.reason);
+    };
+    this.timer = setTimeout(() => {
+      this.expired = true;
+      this.controller.abort(new DOMException('The terrain took too long.', 'TimeoutError'));
+    }, ms);
+    if (parent.aborted) this.onAbort();
+    else parent.addEventListener('abort', this.onAbort, { once: true });
+  }
+
+  /** Aborts on Cancel or at the limit. */
+  get signal(): AbortSignal {
+    return this.controller.signal;
+  }
+
+  /** `work(signal)`, its failure at the limit (not on Cancel) as the timeout message. */
+  async run<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    try {
+      return await work(this.signal);
+    } catch (error) {
+      if (this.expired && !this.parent.aborted) {
+        throw new ExportError(TERRAIN_TIMEOUT_MESSAGE, { cause: error });
+      }
+      throw error;
+    }
+  }
+
+  /** The terrain is in: no limit from here on. */
+  clear(): void {
+    clearTimeout(this.timer);
+    this.parent.removeEventListener('abort', this.onAbort);
   }
 }
 
@@ -219,7 +296,10 @@ async function readyTerrain(
     heightfield = await deps.loadTerrain(job.run, signal);
   } catch (error) {
     if (isAbort(error, signal)) throw abortReason(signal);
-    throw new ExportError(TERRAIN_UNAVAILABLE_MESSAGE, { cause: error });
+    const tooLarge = error instanceof HeightfieldTooLargeError;
+    throw new ExportError(tooLarge ? TERRAIN_TOO_LARGE_MESSAGE : TERRAIN_UNAVAILABLE_MESSAGE, {
+      cause: error,
+    });
   }
   return { status: 'ready', heightfield, failedTiles: [], totalTiles: 0 };
 }
@@ -261,6 +341,7 @@ export function createPosterExporter(
     const layout = posterLayout(size);
     const loadFigureTerrain = job.sources?.loadFigureTerrain ?? deps.loadFigureTerrain;
     const tracker = new FigureTracker();
+    const deadline = new TerrainDeadline(signal, deps.terrainTimeoutMs ?? TERRAIN_TIMEOUT_MS);
     let renderer: FigureRenderer | null = null;
     let canvas: HTMLCanvasElement | null = null;
     try {
@@ -274,7 +355,7 @@ export function createPosterExporter(
         // The View's grid is drawn from unless the ends are hidden (LivePoster: its own grid).
         const drawnTrack = trimTrack(run.track, prefs.poster.hideEnds);
         if (!trailSignOwnBounds(drawnTrack, prefs.poster.hideEnds)) {
-          terrain = await readyTerrain(job, deps, signal);
+          terrain = await deadline.run((limited) => readyTerrain(job, deps, limited));
         }
         try {
           renderer = await deps.createFigureRenderer();
@@ -307,7 +388,9 @@ export function createPosterExporter(
         title: content.title,
         ...(figure ? { figure } : {}),
         waitFor: async () => {
-          await tracker.ready(signal);
+          // B and E draw a failed figure as the preview does; A's poster is its terrain.
+          await deadline.run((limited) => tracker.ready(limited, style !== 'A'));
+          deadline.clear();
         },
         signal,
         onProgress,
@@ -322,6 +405,7 @@ export function createPosterExporter(
       }
       throw error;
     } finally {
+      deadline.clear();
       renderer?.dispose();
       if (canvas) {
         canvas.width = 0;

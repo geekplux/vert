@@ -55,11 +55,13 @@ function renderPoster(
     prefs = {},
     data = DATA,
     figure,
+    figureFailed,
   }: {
     poster?: Partial<PosterPrefs>;
     prefs?: Partial<typeof INITIAL_PREFS>;
     data?: NightRidgeFigureData | null;
     figure?: ReactNode;
+    figureFailed?: boolean;
   } = {},
 ) {
   const content = posterContentFromRun(SAMPLE_RUN, {
@@ -73,6 +75,7 @@ function renderPoster(
       size={posterSizeById(size)}
       figureData={data}
       figure={figure}
+      figureFailed={figureFailed}
     />,
   );
   const root = screen.getByRole('img', { name: /^Poster: / });
@@ -314,6 +317,18 @@ describe('NightRidgePoster', () => {
     expect(ridgeExaggeration(2)).toBe(3);
     expect(slot('footer')?.textContent).toBe('ELEVATION ×3.0VERT.GEEKPLUX.COM');
     expect(root.getAttribute('aria-label')).toMatch(/ Elevation ×3\.0\.$/);
+  });
+
+  it('leaves the exaggeration out of the footer and the name when the ridges could not be drawn', () => {
+    const { root, slot } = renderPoster('18x24', {
+      data: { ...DATA, ridges: null },
+      figure: <span>The terrain couldn’t be drawn.</span>,
+      figureFailed: true,
+      poster: { subtitle: 'Vogel SP' },
+    });
+    expect(slot('footer')?.textContent).toBe('Vogel SPVERT.GEEKPLUX.COM');
+    expect(root.getAttribute('aria-label')).not.toMatch(/Elevation ×/);
+    expect(slot('figure')?.textContent).toBe('The terrain couldn’t be drawn.');
   });
 
   it('names the start time and sunrise only when they were computed', () => {

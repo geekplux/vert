@@ -121,6 +121,18 @@
   object-position: center;
 }
 
+/* The loading / failure note sits low in the stage, where the ridges rise, clear of the text
+   column over its top (centred, it ran into the hero number). */
+.figure > [data-figure='placeholder'] {
+  box-sizing: border-box;
+  align-items: flex-end;
+  padding-bottom: 48px;
+}
+
+.social .figure > [data-figure='placeholder'] {
+  padding-bottom: 72px;
+}
+
 .profileBlock {
   display: flex;
   flex: none;

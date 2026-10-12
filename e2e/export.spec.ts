@@ -434,3 +434,41 @@ test('a one-time canvas failure can be retried, and every progress label is pain
     'Saving the file…',
   ]);
 });
+
+test('with the tiles refused, Night Ridge exports without its terrain and Trail Sign says why it cannot', async ({
+  page,
+}) => {
+  // Registered after the synthetic tiles, so it wins: every tile request fails.
+  await page.route('**/tiles/**', (route) => route.abort());
+  await page.goto('/');
+  await tabUntil(page, page.getByRole('button', { name: 'try a sample run' }), 5);
+  await page.keyboard.press('Enter');
+  await tabUntil(page, page.getByRole('button', { name: 'Make a poster' }));
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeFocused();
+  const note = poster(page).locator('[data-figure="placeholder"]');
+
+  await chooseStyle(page, 'Night Ridge');
+  await expect(note).toHaveText('The terrain couldn’t be drawn.', { timeout: 30_000 });
+  // No relief, so no exaggeration either.
+  await expect(poster(page).locator('[data-slot="footer"]')).not.toContainText('ELEVATION ×');
+  const started = Date.now();
+  const file = await download(page, pngButton(page));
+  expect(Date.now() - started).toBeLessThan(30_000);
+  expect(file.name).toBe('vert-coosa-backcountry-trail-night-ridge-18x24.png');
+  expect(pngInfo(file.bytes)).toMatchObject({ width: 5400, height: 7200 });
+
+  await chooseStyle(page, 'Trail Sign');
+  await expect(note).toHaveText('The terrain couldn’t be drawn.', { timeout: 30_000 });
+  await tabUntil(page, pngButton(page));
+  await page.keyboard.press('Enter');
+  // Shown under the button (and also read out by the live region).
+  await expect(
+    page
+      .getByText(
+        'The terrain for this poster couldn’t be loaded. Check your connection and try again.',
+        { exact: true },
+      )
+      .first(),
+  ).toBeVisible({ timeout: 30_000 });
+});

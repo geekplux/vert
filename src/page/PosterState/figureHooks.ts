@@ -178,11 +178,12 @@ function figureHeightfield(load: LoadFigureTerrain, bounds: Bounds): Promise<Hei
 export type FigureHeightfieldState =
   | { readonly status: 'loading'; readonly heightfield: Heightfield | null }
   | { readonly status: 'ready'; readonly heightfield: Heightfield }
-  | { readonly status: 'error'; readonly heightfield: null };
+  | { readonly status: 'error'; readonly heightfield: null; readonly error: unknown };
 
 /**
  * The height grid for a poster figure's `bounds` (null until the poster has reported its box).
- * While a new one builds, the last grid stays (so the figure does not blink between boxes).
+ * While a new one builds, the last grid stays (so the figure does not blink between boxes). A
+ * failure carries the loader's error (`HeightfieldTooLargeError` for an area too large to fetch).
  */
 export function useFigureHeightfield(
   bounds: Bounds | null,
@@ -192,6 +193,7 @@ export function useFigureHeightfield(
     key: string;
     heightfield: Heightfield | null;
     failed: boolean;
+    error?: unknown;
   }>({ key: '', heightfield: null, failed: false });
   const key = bounds ? boundsKey(bounds) : '';
 
@@ -204,7 +206,7 @@ export function useFigureHeightfield(
       },
       (error: unknown) => {
         if (!live || isAbortError(error)) return;
-        setState((previous) => ({ key, heightfield: previous.heightfield, failed: true }));
+        setState((previous) => ({ key, heightfield: previous.heightfield, failed: true, error }));
       },
     );
     return () => {
@@ -216,7 +218,9 @@ export function useFigureHeightfield(
   if (state.key === key && state.heightfield && !state.failed) {
     return { status: 'ready', heightfield: state.heightfield };
   }
-  if (state.key === key && state.failed) return { status: 'error', heightfield: null };
+  if (state.key === key && state.failed) {
+    return { status: 'error', heightfield: null, error: state.error };
+  }
   return { status: 'loading', heightfield: state.heightfield };
 }
 

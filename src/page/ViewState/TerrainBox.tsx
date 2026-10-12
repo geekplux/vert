@@ -13,6 +13,7 @@ import type { ViewCamera } from '../../terrain/camera';
 import type { Heightfield } from '../../terrain/heightfield';
 import type { ScreenRect } from '../../terrain/stage';
 import type { TerrainViewHandle } from '../../terrain/TerrainView';
+import { TERRAIN_TOO_LARGE_ERROR } from '../hooks';
 import { PERF_MARKS, perfMark } from '../perfMarks';
 import { TerrainChunkError, createLazyTerrainView } from '../terrainChunk';
 import type { RunTrack, Terrain } from '../types';
@@ -133,6 +134,8 @@ export function TerrainBox({
   const heightfield = terrain.status === 'ready' ? terrain.heightfield : null;
   const error = viewError ?? (terrain.status === 'error' ? terrain.error : null);
   const loading = !error && (heightfield === null || drawn !== heightfield);
+  // A route too large to fetch tiles for fails the same way every time: no Try again.
+  const retryable = viewError !== null || error !== TERRAIN_TOO_LARGE_ERROR;
   const ready = !error && !loading;
 
   // After Try again, focus follows the terrain instead of dropping to the page (the button goes):
@@ -300,7 +303,7 @@ export function TerrainBox({
               {error ?? (loading ? TERRAIN_LOADING_TEXT : '')}
               {announcement ? <span className={styles.visuallyHidden}>{announcement}</span> : null}
             </p>
-            {error ? (
+            {error && retryable ? (
               <Button ref={retryRef} variant="quiet" className={styles.retry} onClick={retry}>
                 Try again
               </Button>

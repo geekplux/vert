@@ -222,6 +222,24 @@ describe('SurveyQuadPoster', () => {
     expect(slot('coordinates')?.textContent).toBe('SAMPLE DATA');
   });
 
+  it('leaves the contour interval out when the contours could not be drawn', () => {
+    const content = posterContentFromRun(SAMPLE_RUN, INITIAL_PREFS);
+    render(
+      <SurveyQuadPoster
+        content={content}
+        size={posterSizeById('18x24')}
+        figureData={{ map: null, coordinates: null }}
+        figure={<span>The terrain couldn’t be drawn.</span>}
+        figureFailed
+      />,
+    );
+    const root = screen.getByRole('img', { name: /^Poster: / });
+    expect(root.querySelector('[data-slot="scale"]')?.textContent).toBe('');
+    expect(root.querySelector('[data-slot="figure"]')?.textContent).toBe(
+      'The terrain couldn’t be drawn.',
+    );
+  });
+
   it('shows the subtitle in italic under the title; drops stats switched off', () => {
     const { slot } = renderPoster('18x24', {
       poster: {

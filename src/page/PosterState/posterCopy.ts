@@ -139,6 +139,8 @@ export function slugify(text: string, maxBytes = Infinity): string {
     .replace(IGNORABLE, '')
     .replace(FORMAT, '')
     .replace(STRAY_MARKS, '')
+    // Stripping can leave a decomposed sequence (a CGJ removed between Hangul jamo): recompose.
+    .normalize('NFC')
     .replace(SEPARATOR, '-')
     .replace(/^-+/, '');
   return capSlug(slug, SLUG_MAX, maxBytes);

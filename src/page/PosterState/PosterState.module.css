@@ -1,0 +1,141 @@
+/*
+ * Poster mode, canvas PosterMode frame (docs/design/canvas/PosterMode.html). The aside and main
+ * boxes (380px aside, padding 28 / 32 / 0 / 40, column gap 24, the grey stage) come from
+ * PageShell's `poster` layout; this file styles what fills them.
+ */
+
+/* Canvas has no visible heading; the h1 names the screen for AT and takes focus on entry. */
+.heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Canvas: each block is a column, label then control(s), gap 10 (TEXT: gap 12). */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* canvas, no token */
+  min-width: 0;
+}
+
+.textSection {
+  gap: var(--space-3);
+}
+
+/*
+ * Focus must not hide under the sticky Download block (WCAG 2.4.11): a control scrolled into view
+ * by Tab stops this far above the aside's bottom edge (the block is ≈180px tall).
+ */
+.section input {
+  scroll-margin-bottom: 196px; /* the Download block + 16, no token */
+}
+
+/* Canvas: 11px mono, letter-spacing 0.08em, --muted. */
+.label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Canvas: the checkboxes in a wrapping row, gap 8. */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/*
+ * Canvas: pushed to the bottom (margin-top auto), padding-top 8, 1px --rule top border, gap 8.
+ * Spec: sticky. It sticks to the bottom of the scrolling aside and carries the aside's bottom
+ * padding (28px) itself, so the note keeps its 28px from the edge while stuck.
+ */
+.downloads {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: var(--space-2) 0 28px; /* canvas: 28px aside padding, no token */
+  border-top: 1px solid var(--rule);
+  background: var(--bg);
+}
+
+/* Canvas: 11px mono, --muted, line-height 1.6. */
+.note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* PHASE 2 PLACEHOLDER (task f replaces it): the export status and Cancel. */
+.exporting {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/* The stage fills main (the grey box, padding 32 from PageShell); the preview centres in it. */
+.stage {
+  display: flex;
+  flex: 1 1 auto;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Below 900px the page scrolls as one column; the Download block sits in the flow. */
+@media (max-width: 899.98px) {
+  .downloads {
+    position: static;
+  }
+}
+
+/* PHASE 2 PLACEHOLDER card for styles B and E (PendingStylePoster). */
+.pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(48 * var(--pending-unit));
+}
+
+.pendingText {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(16 * var(--pending-unit));
+  text-align: center;
+}
+
+.pendingTitle {
+  font-size: calc(56 * var(--pending-unit));
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pendingNote {
+  font-family: var(--font-mono);
+  font-size: calc(18 * var(--pending-unit));
+  letter-spacing: 0.08em;
+}

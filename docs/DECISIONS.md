@@ -112,6 +112,9 @@ everything.
 
 - Fonts per the canvas, all self-hosted and loaded only in poster mode: B = Big Shoulders Display
   800 + JetBrains Mono 400/500; E = Libre Caslon Text 400 (roman + italic) + Archivo Narrow 700.
+- The poster subtitle defaults to empty: the date already sits in the header and Vert has no place
+  data, so the canvas's "[Place] · [Date]" would be invented. Social sizes show a short note where
+  the PDF button would be (PDF is for print sizes).
 - Style A at the social sizes (4:5, 9:16) uses the share-card layout (frame "Style A · share card
   4:5"); print sizes use the Trail Sign layout.
 - No invented data: poster A's "VERT № 014" becomes "VERT"; footer URL is VERT.GEEKPLUX.COM.

@@ -28,7 +28,6 @@
  */
 import { useReducer } from 'react';
 import type { Dispatch } from 'react';
-import { runDateLine } from './runCopy';
 import type { Units } from '../lib/format';
 import type { PosterSizeId } from '../poster/sizes';
 import type { PosterStyleId } from '../poster/styles';
@@ -352,11 +351,12 @@ export function pageReducer(state: PageState, action: PageAction): PageState {
 }
 
 /**
- * The poster's default title and subtitle for a run: its name, and "SAT · 2026-10-03" (empty when
- * the file has no time at all).
+ * The poster's default title and subtitle for a run: its name, and no subtitle. The subtitle is
+ * free text (a place, an event); the poster always shows the run's date on its own (DECISIONS
+ * "Posters"), so seeding the subtitle with the date would print it twice.
  */
 export function posterTextFor(run: Run): PosterText {
-  return { title: run.name, subtitle: runDateLine(run) };
+  return { title: run.name, subtitle: '' };
 }
 
 /**

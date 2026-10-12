@@ -291,12 +291,12 @@ describe('preferences', () => {
 
   it('RUN_LOADED seeds the poster title and subtitle when given', () => {
     const posterText = posterTextFor(SAMPLE_RUN);
-    expect(posterText).toEqual({ title: 'Coosa Backcountry Trail', subtitle: 'SAT · 2026-10-03' });
+    expect(posterText).toEqual({ title: 'Coosa Backcountry Trail', subtitle: '' });
     const state = send(at(loadingSample), { type: 'RUN_LOADED', runId: RUN_ID, posterText });
     expect(state.prefs.poster).toMatchObject(posterText);
   });
 
-  it('a run without any time gets an empty poster subtitle', () => {
+  it('the poster subtitle starts empty with or without a date (the poster shows the date itself)', () => {
     expect(posterTextFor({ ...SAMPLE_RUN, startTime: NaN })).toEqual({
       title: 'Coosa Backcountry Trail',
       subtitle: '',

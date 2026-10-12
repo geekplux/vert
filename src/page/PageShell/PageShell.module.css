@@ -39,11 +39,15 @@
   padding: var(--space-6) var(--space-10) var(--space-8);
 }
 
-/* PosterMode frame: aside fixed 380px and scrollable; main is the grey stage for the preview. */
+/*
+ * PosterMode frame: aside fixed 380px and scrollable; main is the grey stage for the preview. The
+ * canvas's 28px bottom padding is carried by Poster mode's sticky Download block, so that block
+ * can stick flush to the aside's bottom edge and still keep its 28px.
+ */
 .poster .aside {
   flex: 0 0 380px;
   gap: var(--space-6);
-  padding: 28px var(--space-8) 28px var(--space-10); /* canvas: 28px, no token */
+  padding: 28px var(--space-8) 0 var(--space-10); /* canvas: 28px, no token */
   overflow: auto;
 }
 

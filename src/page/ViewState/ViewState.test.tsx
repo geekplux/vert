@@ -254,10 +254,10 @@ describe('ViewState', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('goes to the poster placeholder with Make a poster, and focuses its h1', () => {
+  it('goes to Poster mode with Make a poster, and focuses its h1', () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
-    const heading = screen.getByRole('heading', { level: 1, name: 'Poster mode' });
+    const heading = screen.getByRole('heading', { level: 1, name: 'Make a poster' });
     expect(document.activeElement).toBe(heading);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));

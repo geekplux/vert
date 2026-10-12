@@ -19,6 +19,21 @@ export interface PosterStyleTerrain {
   route: string;
 }
 
+/**
+ * The dark palette of a style's share-card layout (the social sizes 4:5 and 9:16). Contrast on
+ * `bg` (WCAG 2): text 13.47:1, accent 6.26:1 (used at 220px), muted 9.46:1 (22px footer).
+ */
+export interface PosterSharePalette {
+  bg: string;
+  text: string;
+  /** The big vert number. */
+  accent: string;
+  /** Footer text. */
+  muted: string;
+  /** The figure box behind the terrain. */
+  figure: string;
+}
+
 export interface PosterStyleOption<Id extends string = PosterStyleId> {
   id: Id;
   /** Visible name; also the radio's accessible name. */
@@ -27,6 +42,8 @@ export interface PosterStyleOption<Id extends string = PosterStyleId> {
   ink: string;
   accent: string;
   terrain: PosterStyleTerrain;
+  /** Style A only: the share-card palette (canvas frame "Style A · share card 4:5"). */
+  share?: PosterSharePalette;
 }
 
 /** The poster styles, in display order. */
@@ -38,6 +55,13 @@ export const POSTER_STYLES: readonly PosterStyleOption[] = [
     ink: '#1B2A3A',
     accent: '#C2410C',
     terrain: { kind: 'rows', line: '#1B2A3A', route: '#C2410C' },
+    share: {
+      bg: '#1B2A3A',
+      text: '#F4F6F8',
+      accent: '#FF8A50',
+      muted: '#C9D1D9',
+      figure: '#E6EAEE',
+    },
   },
   {
     id: 'B',

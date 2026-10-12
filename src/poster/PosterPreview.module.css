@@ -1,0 +1,27 @@
+.preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+/* Sized by CSS alone (inline width + aspect-ratio), so scaling never shifts the layout. */
+.frame {
+  position: relative;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-poster);
+  /* Canvas frame "Poster mode": the preview's shadow, ink at 18% (no shadow token). */
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 18%, transparent),
+    0 12px 32px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.poster {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  transform-origin: 0 0;
+}

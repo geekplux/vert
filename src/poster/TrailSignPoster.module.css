@@ -1,0 +1,293 @@
+/*
+ * Poster style A, Trail Sign. Every length is the canvas frame's px at the logical width (720 for
+ * print, 1080 for the share card); the parent scales the whole poster. Colours come from
+ * POSTER_STYLES (set as custom properties on the root), never from app tokens.
+ *
+ * Contrast (WCAG 2): print ink on paper 12.07:1; the accent #C2410C on paper is 4.28:1, so it is
+ * used only for the 30px bold Vert value (large text, ≥ 3:1). Share card: text 13.47:1, accent
+ * 6.26:1 (220px), muted footer 9.46:1.
+ */
+
+.poster {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  border-radius: var(--radius-poster);
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: normal;
+  text-align: left;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+/* The terrain figure box. Grow, minimum and maximum height come inline from figureBoxRule
+   (layout.ts). The figure covers it: the terrain renderer draws at the box's aspect
+   (onFigureBox), and a static placeholder image is cropped, centred. */
+.figure {
+  position: relative;
+  flex-shrink: 1;
+}
+
+.figure > * {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* ---- Print: 18×24 and A3 (canvas "Style A · Trail Sign 18×24", 720 × 960) ---- */
+
+.print .inner {
+  gap: 20px;
+  padding: 48px;
+  background: var(--poster-paper);
+  color: var(--poster-ink);
+}
+
+.header,
+.footer {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  gap: 24px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header {
+  font-size: 12px;
+}
+
+.footer {
+  /* The figure takes the free height, so the footer's place is fixed: the canvas frame (2-line
+     title) has it 31.66px below the profile strip, i.e. the 20px gap plus this. */
+  margin-top: 11.65625px;
+  font-size: 10px;
+}
+
+.title {
+  flex: none;
+  margin: 0;
+  /* font-size comes from the fit rule (titleFit.ts): 104px, smaller for a title over 3 lines. */
+  line-height: 0.88;
+  font-weight: 800;
+  font-stretch: 62%;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.print .figure {
+  margin: -8px 0;
+}
+
+.stats {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(var(--stat-columns), minmax(0, 1fr));
+  gap: 12px;
+  border-top: 2px solid var(--poster-ink);
+  padding-top: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.value {
+  font-size: 30px;
+  font-weight: 700;
+  font-stretch: 75%;
+}
+
+.accent {
+  color: var(--poster-accent);
+}
+
+.profile {
+  display: block;
+  flex: none;
+  width: 100%;
+  height: 72px;
+}
+
+/* ---- Social: 4:5 and 9:16 (canvas "Style A · share card 4:5", 1080 × 1350) ---- */
+
+.social .inner {
+  gap: 36px;
+  padding: 72px;
+  background: var(--share-bg);
+  color: var(--share-text);
+}
+
+.shareHeader {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  font-stretch: 62%;
+  letter-spacing: 0.04em;
+}
+
+.wordmark {
+  flex: none;
+}
+
+/* The signature keeps at most half the row and truncates, so it never meets the left block. */
+.footerSign {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The date (+ subtitle) gives way to the wordmark; footers stay on one line. Both truncate with
+   an ellipsis rather than wrap. */
+.shareDate,
+.footerNote {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shareDate {
+  text-transform: uppercase;
+}
+
+.footerLeft {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.keep {
+  flex: none;
+  white-space: pre;
+}
+
+.headline {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.big {
+  font-size: 220px;
+  line-height: 0.85;
+  font-weight: 800;
+  font-stretch: 62%;
+  color: var(--share-accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.line {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 48px;
+  font-weight: 600;
+  font-stretch: 75%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.shareBody {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.shareFigure {
+  aspect-ratio: var(--figure-aspect);
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--share-figure);
+}
+
+.shareFooter {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  row-gap: 8px;
+  column-gap: 24px;
+  margin-top: auto;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  color: var(--share-muted);
+}
+
+/* 9:16, and any share card whose big slot holds the title: whatever height is left is spread
+   evenly between header, headline, figure block and footer (on 9:16 after the figure has grown
+   to square and the elevation strip is placed). */
+.spread .inner {
+  justify-content: space-between;
+}
+
+.spread .shareFooter {
+  margin-top: 0;
+}
+
+/* The title in the big number's slot (no vert or distance shown): display type, uppercase, fitted
+   by SHARE_TITLE; line-height 0.88 as the print title, 1 for wide scripts (set inline). */
+.bigTitle {
+  line-height: 0.88;
+  color: var(--share-text);
+  font-variant-numeric: normal;
+  text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Stats win over the signature: the stats never truncate; when both do not fit on one row the
+   signature wraps to a second row, right-aligned. */
+.shareStats {
+  white-space: nowrap;
+}
+
+.shareSign {
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shareProfile {
+  display: block;
+  flex: none;
+  width: 100%;
+  color: var(--share-accent);
+  opacity: 0.35;
+}

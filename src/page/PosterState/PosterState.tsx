@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, Ref } from 'react';
 import {
   Button,
@@ -10,7 +10,9 @@ import {
   TextField,
 } from '../../components';
 import { PosterPreview } from '../../poster/PosterPreview';
+import { posterLayout } from '../../poster/layout';
 import { posterSizeById } from '../../poster/sizes';
+import type { PosterSize } from '../../poster/sizes';
 import { POSTER_STYLES } from '../../poster/styles';
 import { posterContentFromRun } from '../../poster/types';
 import { HIDE_ENDS } from '../state';
@@ -32,7 +34,9 @@ import { buildExportJob, defaultExporter } from './exporter';
 import type { ExportFormat, Exporter } from './exporter';
 import { ExportNotice, ExportProgress } from './ExportProgress';
 import { useReleaseTerrainFigure } from './figureHooks';
-import { LivePoster } from './LivePoster';
+import { FigureRetryRow, RETRY_ROW_PX, RETRY_SIDE_MIN_PX, useFigureRetry } from './FigureRetry';
+import type { RetrySide } from './FigureRetry';
+import { LivePoster, usesViewTerrain } from './LivePoster';
 import { exportAnnouncement, offersPdf, pngButtonLabel } from './posterCopy';
 import { useExport } from './useExport';
 import styles from './PosterState.module.css';
@@ -57,6 +61,11 @@ export interface PosterStateProps {
   terrain?: Terrain;
   /** Builds the Night Ridge and Survey Quad figures' height grids (`useFigureTerrainLoader()`). */
   loadFigureTerrain?: LoadFigureTerrain;
+  /**
+   * Builds the run's terrain again (`useRetryTerrain()`): Try again and Download use it when style
+   * A's figure is drawn from that grid and it failed. Without it that figure offers no Try again.
+   */
+  onRetryTerrain?: () => void;
 }
 
 const IDLE_TERRAIN: Terrain = { status: 'idle' };
@@ -103,14 +112,28 @@ export function PosterState({
   exporter = defaultExporter,
   terrain = IDLE_TERRAIN,
   loadFigureTerrain = realLoadFigureTerrain,
+  onRetryTerrain,
 }: PosterStateProps) {
   const { poster } = prefs;
   const size = posterSizeById(poster.size);
   const content = posterContentFromRun(run, prefs);
-  const [stageRef, stageHeight] = useStageHeight();
+  const [stageRef, stage] = useStageSize();
   const exporting = screen.name === 'exporting';
   const { start, cancel, cancelled, slow } = useExport(exporter, dispatch);
   const { labelRef, pngRef, pdfRef, rememberStarter } = useExportFocus(screen.name);
+  const fromViewTerrain = useMemo(
+    () => usesViewTerrain(run.track, poster.style, poster.hideEnds),
+    [run.track, poster.style, poster.hideEnds],
+  );
+  const figureRetry = useFigureRetry(poster.style, fromViewTerrain, onRetryTerrain);
+  // When the Try again row goes with focus in it: Download PNG, or while it is disabled (an
+  // export runs) the export's progress label, where Download put focus.
+  const focusAfterRetry = useCallback(() => {
+    const png = pngRef.current;
+    if (png && !png.disabled) png.focus();
+    else labelRef.current?.focus();
+  }, [pngRef, labelRef]);
+  const retryPlace = retryPlacement(size, stage, figureRetry.row !== null);
   const busyNoteId = useId();
   const [previewScale, setPreviewScale] = useState(1);
   const pixelScale = figurePixelScale(previewScale);
@@ -119,6 +142,9 @@ export function PosterState({
   const download = (format: ExportFormat) => {
     rememberStarter(format);
     start(buildExportJob(run, prefs, format, { terrain, loadFigureTerrain }));
+    // A failed preview figure asks again too, through the same loader, so that it shows what the
+    // file shows; free when the export's grid is cached, never waited for by the export.
+    figureRetry.retryQuietly();
   };
 
   const aside = (
@@ -252,7 +278,7 @@ export function PosterState({
         <PosterPreview
           size={size}
           maxWidth={PREVIEW_MAX.width}
-          maxHeight={Math.min(PREVIEW_MAX.height, stageHeight ?? PREVIEW_MAX.height)}
+          maxHeight={retryPlace.maxHeight}
           onScale={setPreviewScale}
         >
           <LivePoster
@@ -263,8 +289,11 @@ export function PosterState({
             terrain={terrain}
             loadFigureTerrain={loadFigureTerrain}
             pixelScale={pixelScale}
+            onFigureStatus={figureRetry.onFigureStatus}
+            figureAttempt={figureRetry.attempt}
           />
         </PosterPreview>
+        <FigureRetryRow retry={figureRetry} focusAfter={focusAfterRetry} side={retryPlace.side} />
       </div>
     </PageShell>
   );
@@ -327,20 +356,64 @@ function useExportFocus(screenName: 'poster' | 'exporting') {
 }
 
 /**
- * The stage's height at desktop widths, where the page is one viewport tall and the preview must
+ * Where the Try again row goes so the preview keeps its size (and the poster its layout): under the
+ * preview when the stage has the room (always below 900px, where the page scrolls); beside the
+ * poster's bottom edge when the poster fills the stage's height and leaves enough width on its
+ * side; otherwise under it, the preview giving up the row's height.
+ */
+function retryPlacement(
+  size: PosterSize,
+  stage: StageSize | null,
+  shown: boolean,
+): { maxHeight: number; side: RetrySide | null } {
+  const maxHeight = Math.min(PREVIEW_MAX.height, stage?.height ?? PREVIEW_MAX.height);
+  if (!shown || !stage) return { maxHeight, side: null };
+  const layout = posterLayout(size);
+  const width = Math.min(
+    PREVIEW_MAX.width,
+    (maxHeight * layout.width) / layout.height,
+    stage.width,
+  );
+  const height = (width * layout.height) / layout.width;
+  if (stage.height - height >= RETRY_ROW_PX) return { maxHeight, side: null };
+  const room = (stage.width - width) / 2;
+  if (room >= RETRY_SIDE_MIN_PX) {
+    return {
+      maxHeight,
+      side: { right: room + width + RETRY_SIDE_GAP_PX, width: room - RETRY_SIDE_GAP_PX },
+    };
+  }
+  return { maxHeight: maxHeight - RETRY_ROW_PX, side: null };
+}
+
+/** Between the poster and the Try again row beside it, px. */
+const RETRY_SIDE_GAP_PX = 16;
+
+interface StageSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * The stage's size at desktop widths, where the page is one viewport tall and the preview must
  * fit it (1440 × 900 leaves less than 800px). `null` below 900px, where the stage is as tall as
  * the preview and only its width limits it (PosterPreview fits the container's width itself).
  */
-function useStageHeight(): [Ref<HTMLDivElement>, number | null] {
+function useStageSize(): [Ref<HTMLDivElement>, StageSize | null] {
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const ref = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number | null>(null);
+  const [size, setSize] = useState<StageSize | null>(null);
 
   useLayoutEffect(() => {
     const stage = ref.current;
     if (!desktop || !stage || typeof ResizeObserver === 'undefined') return;
     const measure = () => {
-      if (stage.clientHeight > 0) setHeight(stage.clientHeight);
+      const { clientWidth: width, clientHeight: height } = stage;
+      if (height > 0) {
+        setSize((previous) =>
+          previous?.width === width && previous.height === height ? previous : { width, height },
+        );
+      }
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -350,5 +423,5 @@ function useStageHeight(): [Ref<HTMLDivElement>, number | null] {
     };
   }, [desktop]);
 
-  return [ref, desktop ? height : null];
+  return [ref, desktop ? size : null];
 }

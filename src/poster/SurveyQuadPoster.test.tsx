@@ -222,7 +222,7 @@ describe('SurveyQuadPoster', () => {
     expect(slot('coordinates')?.textContent).toBe('SAMPLE DATA');
   });
 
-  it('leaves the contour interval out when the contours could not be drawn', () => {
+  it('leaves the contour interval, contour legend and credit out when the contours could not be drawn', () => {
     const content = posterContentFromRun(SAMPLE_RUN, INITIAL_PREFS);
     render(
       <SurveyQuadPoster
@@ -234,10 +234,76 @@ describe('SurveyQuadPoster', () => {
       />,
     );
     const root = screen.getByRole('img', { name: /^Poster: / });
-    expect(root.querySelector('[data-slot="scale"]')?.textContent).toBe('');
+    // The interval's line stays, empty (a no-break space), so the layout does not move.
+    expect(root.querySelector('[data-slot="scale"]')?.textContent).toBe('\u00a0');
+    // No contours drawn: no contour rows in the legend and no elevation-data credit.
+    const legend = root.querySelector('[data-slot="legend"]');
+    expect(legend?.textContent).not.toMatch(/contour/i);
+    expect(legend?.textContent).toMatch(/Route run/);
+    expect(legend?.textContent).toMatch(/Start \/ finish/);
+    expect(root.querySelector('[data-slot="credit"]')?.textContent).not.toMatch(/MAPPED|ELEVATION/);
     expect(root.querySelector('[data-slot="figure"]')?.textContent).toBe(
       'The terrain couldn’t be drawn.',
     );
+  });
+
+  it('draws the route flat with the note when the terrain failed; a point-to-point key keeps ◉ Finish', () => {
+    const content = posterContentFromRun(SAMPLE_RUN, INITIAL_PREFS);
+    const base = DATA.map;
+    if (!base) throw new Error('no map');
+    const flat = {
+      ...base,
+      contours: { index: '', intermediate: '' },
+      markers: [
+        { x: 100, y: 100, kind: 'start' as const },
+        { x: 500, y: 150, kind: 'finish' as const },
+      ],
+    };
+    render(
+      <SurveyQuadPoster
+        content={content}
+        size={posterSizeById('18x24')}
+        figureData={{ map: flat, coordinates: DATA.coordinates }}
+        figure={<span data-figure="placeholder">The terrain couldn’t be drawn.</span>}
+        figureFailed
+      />,
+    );
+    const root = screen.getByRole('img', { name: /^Poster: / });
+    const figure = root.querySelector('[data-slot="figure"]');
+    expect(figure?.querySelector('[data-route="line"]')?.getAttribute('d')).toMatch(/^M/);
+    expect(figure?.querySelectorAll('[data-marker]')).toHaveLength(2);
+    expect(figure?.textContent).toBe('The terrain couldn’t be drawn.');
+    const rows = Array.from(root.querySelectorAll('[data-slot="legend"] > *'), (row) =>
+      row.textContent.trim(),
+    );
+    // The two contour rows keep their place, empty.
+    expect(rows).toEqual(['Route run', '', '', 'Start ·Finish']);
+    expect(root.querySelectorAll('[data-legend="reserved"]')).toHaveLength(2);
+    expect(root.querySelector('[data-slot="scale"] [data-scale-bar]')).not.toBeNull();
+    expect(root.querySelector('[data-slot="scale"]')?.textContent).not.toMatch(/CONTOUR/);
+  });
+
+  it('keeps every row of the layout at its height when the terrain failed, the credit and key included', () => {
+    const content = posterContentFromRun(SAMPLE_RUN, INITIAL_PREFS);
+    const failed = render(
+      <SurveyQuadPoster
+        content={{ ...content, date: '' }}
+        size={posterSizeById('18x24')}
+        figureData={DATA}
+        figureFailed
+      />,
+    );
+    const root = failed.container;
+    // A dateless run's credit row still has a line in it.
+    expect(root.querySelector('[data-slot="credit"]')?.textContent).toBe('\u00a0');
+    const legend = root.querySelector('[data-slot="legend"]');
+    expect(legend?.children).toHaveLength(4);
+    for (const row of root.querySelectorAll('[data-legend="reserved"]')) {
+      expect(row.textContent).toBe('\u00a0');
+      expect(row.querySelector('svg')?.getAttribute('height')).toBe(
+        legend?.querySelector('[data-legend="index"] svg, svg')?.getAttribute('height'),
+      );
+    }
   });
 
   it('shows the subtitle in italic under the title; drops stats switched off', () => {

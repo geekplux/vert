@@ -4,13 +4,20 @@
  * Pure: the page computes these and passes them as `figureData`.
  */
 import type { Units } from '../lib/format';
-import { normalizeLon, type Bounds } from '../lib/geo';
+import {
+  MERCATOR_RADIUS_M,
+  lonLatToWorld,
+  normalizeLon,
+  worldToLonLat,
+  type Bounds,
+} from '../lib/geo';
 import { formatClock, sunriseAlongRun } from '../lib/sun';
 import type { Run, RunTrack } from '../page/types';
 import type { Heightfield } from '../terrain/heightfield';
 import {
   chooseContourInterval,
   contourPaths,
+  defaultContourInterval,
   extractContours,
   mapProjection,
   lineDetail,
@@ -178,7 +185,7 @@ export interface SurveyQuadMap {
 }
 
 export interface SurveyQuadFigureData {
-  /** `null` until there is terrain and a box. */
+  /** `null` until there is terrain (or its failure: `flatBounds`) and a box. */
   readonly map: SurveyQuadMap | null;
   /** The run's centre, "34°46′ N" and "83°56′ W". */
   readonly coordinates: { readonly lat: string; readonly lon: string } | null;
@@ -309,6 +316,45 @@ export interface SurveyQuadOptions {
    * drawn route's when the ends are hidden). Default `run.bounds`.
    */
   frame?: Bounds;
+  /**
+   * The bounds the figure's grid was asked for (`quadBounds`), when it could not be built (tiles
+   * refused, area too large): the map is then drawn flat from them, as it would have been
+   * projected, with the route, its markers and the scale bar but no contours. Without it a missing
+   * heightfield means no map yet (loading).
+   */
+  flatBounds?: Bounds | null;
+}
+
+/** Samples along the longer side of a {@link flatGrid} (as a built grid at most). */
+const FLAT_GRID_SIZE = 512;
+
+/**
+ * The shape of the grid `buildHeightfield(bounds, { padding: 0 })` would sample, without its
+ * elevations: what `mapProjection` needs to place the route as the built grid would (Web
+ * Mercator, true aspect at the centre latitude).
+ */
+export function flatGrid(
+  bounds: Bounds,
+): Pick<Heightfield, 'bounds' | 'width' | 'height' | 'metresPerSample'> {
+  const nw = lonLatToWorld(bounds.west, bounds.north);
+  const se = lonLatToWorld(bounds.east, bounds.south);
+  const spanX = Math.max(1e-12, se.x - nw.x);
+  const spanY = Math.max(1e-12, se.y - nw.y);
+  const shortest = (span: number) => Math.max(2, Math.round(1 + (FLAT_GRID_SIZE - 1) * span));
+  const width = spanX >= spanY ? FLAT_GRID_SIZE : shortest(spanX / spanY);
+  const height = spanX >= spanY ? shortest(spanY / spanX) : FLAT_GRID_SIZE;
+  const centreLat = worldToLonLat(0, (nw.y + se.y) / 2).lat;
+  const metresPerWorldUnit =
+    2 * Math.PI * MERCATOR_RADIUS_M * Math.cos((centreLat * Math.PI) / 180);
+  return {
+    bounds,
+    width,
+    height,
+    metresPerSample: {
+      x: (spanX / (width - 1)) * metresPerWorldUnit,
+      y: (spanY / (height - 1)) * metresPerWorldUnit,
+    },
+  };
 }
 
 /** Figure data for Survey Quad. `heightfield` and `box` may be missing while they load. */
@@ -322,6 +368,7 @@ export function surveyQuadFigureData(
     detailScale = 1,
     drawnTrack,
     frame,
+    flatBounds,
   }: SurveyQuadOptions = {},
 ): SurveyQuadFigureData {
   const bounds = frame ?? run.bounds;
@@ -329,14 +376,19 @@ export function surveyQuadFigureData(
   const coordinates = centred
     ? formatLatLon((bounds.north + bounds.south) / 2, (bounds.east + bounds.west) / 2)
     : null;
-  if (!heightfield || !box || box.width <= 0 || box.height <= 0) return { map: null, coordinates };
+  const grid = heightfield ?? (flatBounds ? flatGrid(flatBounds) : null);
+  if (!grid || !box || box.width <= 0 || box.height <= 0) return { map: null, coordinates };
 
-  const projection = mapProjection(heightfield, box, centred ? bounds : undefined);
-  // Smooth over ~2.5 px of map (at least a sample): tile noise would fray the 20 m lines.
-  const pxPerSample = projection.pxPerMetre * heightfield.metresPerSample.x;
-  const smoothed = smoothHeightfield(heightfield, Math.max(1, Math.round(2.5 / pxPerSample)));
-  const interval = chooseContourInterval(smoothed, projection.pxPerMetre, { units });
-  const contours = contourPaths(extractContours(smoothed, { interval }), projection, detailScale);
+  const projection = mapProjection(grid, box, centred ? bounds : undefined);
+  let interval = defaultContourInterval(units);
+  let contours: ContourPaths = { index: '', intermediate: '' };
+  if (heightfield) {
+    // Smooth over ~2.5 px of map (at least a sample): tile noise would fray the 20 m lines.
+    const pxPerSample = projection.pxPerMetre * heightfield.metresPerSample.x;
+    const smoothed = smoothHeightfield(heightfield, Math.max(1, Math.round(2.5 / pxPerSample)));
+    interval = chooseContourInterval(smoothed, projection.pxPerMetre, { units });
+    contours = contourPaths(extractContours(smoothed, { interval }), projection, detailScale);
+  }
   const { tolerance, decimals } = lineDetail(detailScale);
 
   const route = drawnTrack === undefined ? run.track : drawnTrack;

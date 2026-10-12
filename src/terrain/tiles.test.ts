@@ -4,6 +4,8 @@ import {
   TileDecodeError,
   TileHttpError,
   TileLoader,
+  TILE_TIMEOUT_MS,
+  TileTimeoutError,
   fetchTile,
   isAbortError,
   tileLoader,
@@ -70,6 +72,47 @@ describe('tileUrl', () => {
 });
 
 describe('TileLoader', () => {
+  it('fails a tile that never answers after its timeout, aborting its request, and asks afresh next time', async () => {
+    vi.useFakeTimers();
+    try {
+      const { fetchImpl, pending } = deferredFetch();
+      const loader = new TileLoader({ fetchImpl, decode: flat });
+      const first = loader.load(COORD);
+      const failed = expect(first).rejects.toBeInstanceOf(TileTimeoutError);
+      await vi.advanceTimersByTimeAsync(TILE_TIMEOUT_MS - 1);
+      expect(pending[0]?.init.signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await failed;
+      // Aborted, not retried (a retry would double the wait), and not cached.
+      expect(pending[0]?.init.signal?.aborted).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      const second = loader.load(COORD);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      pending[1]?.resolve();
+      await expect(second).resolves.toHaveLength(TILE_SIZE * TILE_SIZE);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out even a fetch that ignores its signal, and leaves a normal load alone', async () => {
+    vi.useFakeTimers();
+    try {
+      const never = vi.fn<FetchLike>(() => new Promise(() => undefined));
+      const hung = new TileLoader({ fetchImpl: never, decode: flat, timeoutMs: 1000 }).load(COORD);
+      const failed = expect(hung).rejects.toBeInstanceOf(TileTimeoutError);
+      await vi.advanceTimersByTimeAsync(1000);
+      await failed;
+
+      // A tile that answers in time: no timer left behind, the same result as before.
+      const loader = new TileLoader({ fetchImpl: vi.fn<FetchLike>(ok), decode: flat });
+      await expect(loader.load(COORD)).resolves.toHaveLength(TILE_SIZE * TILE_SIZE);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('fetches without credentials or referrer, from the HTTP cache when possible', async () => {
     const fetchImpl = vi.fn<FetchLike>(ok);
     const loader = new TileLoader({ fetchImpl, decode: flat });

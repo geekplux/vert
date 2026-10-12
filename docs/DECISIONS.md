@@ -311,8 +311,42 @@ everything.
 - **No relief, no relief labels.** When the terrain figure could not be drawn, the poster leaves
   out what describes it, in the preview and the file alike: Night Ridge's "ELEVATION ×2.4" (footer
   and accessible name), Trail Sign's "ELEVATION ×1.6" (print footer) and Survey Quad's "CONTOUR
-  INTERVAL …". Night Ridge's "couldn’t be drawn" / "Drawing the terrain…" note sits at the bottom
+  INTERVAL …", the labels of its "Index contour" and "Intermediate contour" legend rows and the
+  credit under the map ("MAPPED FROM GPX + PUBLIC ELEVATION DATA"). Those lines keep their place,
+  empty (a no-break space each: same height, nothing to see or read), so the layout does not move:
+  the map box keeps its size and the route its place (measured: 0 px apart from the normal poster
+  at all four sizes for the sample, Lavaredo, Eiger and the CCC). Survey Quad is a top-down map, so it still draws what needs no terrain, flat on the empty
+  quad: the route, ○ start (and ◉ finish for a point-to-point run), and the scale bar, projected
+  exactly as the grid it asked for would have placed them (`flatGrid(quadBounds(…))`: same frame,
+  same true scale; checked against a real `buildHeightfield` grid), with the printed coordinates
+  unchanged. Its legend keeps "Route run" and
+  "○ Start · ◉ Finish" (or "Start / finish" for a loop), which stay true; the "couldn’t be drawn"
+  note sits low in the map box, haloed in the map's paper, clear of the route. Night Ridge's "couldn’t be drawn" / "Drawing the terrain…" note sits at the bottom
   of its stage, where the ridges rise, instead of centred over the hero number.
+- **The preview follows the export.** When Download starts and the preview's figure has failed
+  (not "too large"), the preview asks again through the same loader: the B / E figure grids and
+  Trail Sign's own grid share the export's build by bounds (free once it is cached), and Trail
+  Sign drawn from the View's grid rebuilds the run's terrain (`retryTerrain`, which shares tile
+  requests with the export's own build). The export never waits on the preview. So after an export
+  that drew the terrain, the preview shows what the file shows ("ELEVATION ×2.4" included).
+- **Try again by the preview.** A failed figure (not "too large", and not a renderer without
+  WebGL) shows "The terrain couldn’t be drawn." and a quiet Try again (44 px) on the stage, not in
+  the figure's note: the poster is one image (`role="img"`, its drawing `aria-hidden`), scaled
+  down, and exported as drawn. The preview never changes size for it: the row goes under the
+  preview when the stage has the room, else beside the poster's bottom edge (1440 × 900: the poster
+  fills the stage's height), and only when neither fits does the preview give up 56 px. Once a
+  figure has failed the row stays until it is drawn, saying what the poster's note says: "The
+  terrain couldn’t be drawn." with Try again, or "Drawing the terrain…" while it is asked for again
+  (Try again, Download, a relayout). Focus never drops to the page: while it is in the row (or went
+  with what the row removed) it moves to the note while loading, back to Try again on a failure,
+  and when the row goes to Download PNG (or, while an export runs and that is disabled, to the
+  export's progress). "Terrain loaded." is read out whenever a failed figure is drawn.
+- **No tile waits for ever.** Each tile request (fetch and body) has 15 s (`TILE_TIMEOUT_MS`),
+  then is aborted and fails as `TileTimeoutError` (not retried), like an unreachable tile; a grid
+  whose tiles all fail rejects, and a failed figure grid is evicted from the loader's cache. So a
+  shared figure build the preview started cannot hang the export (it ends at ≈ 15 s, inside the
+  export's 20 s limit, and B / E export with the note) and Try again always builds afresh. A tile
+  that answers in time is unaffected.
 - No WebGL at all is told apart from a draw failure: "This browser can’t draw 3D terrain, so Trail
   Sign posters can’t be exported here. Night Ridge and Survey Quad still work."
 - Progress: the engine waits for a paint after every report, so each "Rendering tile k of N" is

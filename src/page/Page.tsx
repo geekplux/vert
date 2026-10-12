@@ -152,6 +152,7 @@ function PageContent({
           exporter={exporter}
           terrain={terrain}
           loadFigureTerrain={loadFigureTerrain}
+          onRetryTerrain={retryTerrain}
         />
       ) : null}
 

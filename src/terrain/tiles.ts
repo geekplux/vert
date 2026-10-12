@@ -56,6 +56,21 @@ export class TileDecodeError extends Error {
   }
 }
 
+/**
+ * A tile request (fetch and body) that took longer than its timeout ({@link TILE_TIMEOUT_MS}): a
+ * tile that never answers fails like an unreachable one, so no grid waits on it for ever. Not
+ * retried (a retry would double the wait).
+ */
+export class TileTimeoutError extends Error {
+  constructor(coord: TileCoord, ms: number) {
+    super(`Tile ${tileKey(coord)} did not arrive within ${String(ms)} ms`);
+    this.name = 'TileTimeoutError';
+  }
+}
+
+/** The longest one tile request may take (fetch and body), ms. */
+export const TILE_TIMEOUT_MS = 15_000;
+
 /** `z/x/y`, the cache key. */
 export function tileKey({ z, x, y }: TileCoord): string {
   return `${String(z)}/${String(x)}/${String(y)}`;
@@ -136,24 +151,35 @@ export interface TileLoaderOptions {
   capacity?: number;
   fetchImpl?: FetchLike;
   decode?: TileDecoder;
+  /** Longest one request may take, ms ({@link TILE_TIMEOUT_MS}). */
+  timeoutMs?: number;
 }
 
 /**
  * Fetches and decodes tiles with an LRU cache and request sharing: concurrent calls for one tile
  * share one request, which is aborted only when every caller has aborted. A network error (or a
- * 5xx) is retried once; an HTTP 4xx is not, nor a {@link TileDecodeError}.
+ * 5xx) is retried once; an HTTP 4xx is not, nor a {@link TileDecodeError}. Each attempt has its
+ * own time limit (`timeoutMs`): past it the request is aborted and fails with a
+ * {@link TileTimeoutError}, not retried.
  */
 export class TileLoader {
   readonly capacity: number;
   private readonly fetchImpl: FetchLike | undefined;
   private readonly decode: TileDecoder;
+  private readonly timeoutMs: number;
   private readonly cache = new Map<string, TileElevations>();
   private readonly inFlight = new Map<string, InFlight>();
 
-  constructor({ capacity = 64, fetchImpl, decode = decodeTerrariumPng }: TileLoaderOptions = {}) {
+  constructor({
+    capacity = 64,
+    fetchImpl,
+    decode = decodeTerrariumPng,
+    timeoutMs = TILE_TIMEOUT_MS,
+  }: TileLoaderOptions = {}) {
     this.capacity = capacity;
     this.fetchImpl = fetchImpl;
     this.decode = decode;
+    this.timeoutMs = timeoutMs;
   }
 
   /** Number of cached tiles. */
@@ -237,19 +263,43 @@ export class TileLoader {
     fetchImpl: FetchLike,
     decode: TileDecoder,
   ): Promise<TileElevations> {
-    const init: RequestInit = {
-      method: 'GET',
-      credentials: 'omit',
-      referrerPolicy: 'no-referrer',
-      cache: 'force-cache',
-      signal,
-    };
     for (let attempt = 0; ; attempt++) {
-      try {
+      // This attempt's own signal: aborted with the request, or when its time is up. The race
+      // ends the wait even if the fetch ignores its signal.
+      const limit = new AbortController();
+      const onAbort = () => {
+        limit.abort(signal.reason);
+      };
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          limit.abort(new DOMException('The tile request timed out.', 'TimeoutError'));
+          reject(new TileTimeoutError(coord, this.timeoutMs));
+        }, this.timeoutMs);
+      });
+      const init: RequestInit = {
+        method: 'GET',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        cache: 'force-cache',
+        signal: limit.signal,
+      };
+      const download = async () => {
         const response = await fetchImpl(url, init);
         if (!response.ok) throw new TileHttpError(coord, response.status);
         // Reading the body can still fail on the network (a TypeError, retried below).
-        const png = await response.arrayBuffer();
+        return response.arrayBuffer();
+      };
+      try {
+        let png: ArrayBuffer;
+        try {
+          png = await Promise.race([download(), timeout]);
+        } finally {
+          clearTimeout(timer);
+          signal.removeEventListener('abort', onAbort);
+        }
         let elevations: TileElevations;
         try {
           elevations = await decode(png);

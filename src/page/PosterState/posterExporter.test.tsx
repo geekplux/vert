@@ -405,14 +405,17 @@ describe('posterExporter', () => {
     async (style, relief, cause) => {
       const failure = cause === 'offline' ? new Error('offline') : new HeightfieldTooLargeError(40);
       const failing = vi.fn<LoadFigureTerrain>(() => Promise.reject(failure));
-      const seen: { figure: string; text: string; drawn: boolean }[] = [];
+      const seen: { figure: string; text: string; relief: boolean; route: boolean }[] = [];
       const engine = fakeEngine({
         afterReady: () => {
           const root = document.querySelector('[role="img"]');
           seen.push({
             figure: root?.querySelector('[data-slot="figure"]')?.textContent ?? '',
             text: root?.textContent ?? '',
-            drawn: root?.querySelector('[data-figure="ridges"], [data-figure="contours"]') != null,
+            relief:
+              root?.querySelector('[data-figure="ridges"]') != null ||
+              Boolean(root?.querySelector('[data-contour="index"]')?.getAttribute('d')),
+            route: Boolean(root?.querySelector('[data-route="line"]')?.getAttribute('d')),
           });
         },
       });
@@ -423,7 +426,12 @@ describe('posterExporter', () => {
       );
       expect(failing).toHaveBeenCalled();
       expect(seen).toHaveLength(1);
-      expect(seen[0]).toMatchObject({ figure: 'The terrain couldn’t be drawn.', drawn: false });
+      // Survey Quad, a top-down map, still draws the route flat; Night Ridge has nothing to draw.
+      expect(seen[0]).toMatchObject({
+        figure: 'The terrain couldn’t be drawn.',
+        relief: false,
+        route: style === 'E',
+      });
       expect(seen[0]?.text).not.toContain(relief);
       expect(t.engine.downloads).toHaveLength(1);
     },

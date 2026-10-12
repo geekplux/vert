@@ -6,7 +6,7 @@
 import type { Units } from '../lib/format';
 import type { Bounds } from '../lib/geo';
 import { formatClock, sunriseAlongRun } from '../lib/sun';
-import type { Run } from '../page/types';
+import type { Run, RunTrack } from '../page/types';
 import type { Heightfield } from '../terrain/heightfield';
 import {
   chooseContourInterval,
@@ -52,6 +52,12 @@ export interface NightRidgeOptions {
   detailScale?: number;
   /** IANA zone for the clock times; the browser's zone by default (see `formatClock`). */
   timeZone?: string;
+  /**
+   * The route to draw, with its start and finish where it begins and ends: the run's track with
+   * the hidden ends cut off (`trimTrack`, "Hide start and end"), or null to draw no route.
+   * Default `run.track`. Sunrise and the start time always come from the whole run.
+   */
+  drawnTrack?: RunTrack | null;
 }
 
 /** Ridge rows per layout: more rows on the wider share card. */
@@ -68,11 +74,12 @@ export function nightRidgeFigureData(
   run: Pick<Run, 'track' | 'hasTime' | 'startTime'>,
   heightfield: Heightfield | null,
   box: (BoxSize & { readonly keepOut?: readonly Rect[] }) | null,
-  { exaggeration, rows, timeZone, detailScale }: NightRidgeOptions = {},
+  { exaggeration, rows, timeZone, detailScale, drawnTrack }: NightRidgeOptions = {},
 ): NightRidgeFigureData {
+  const route = drawnTrack === undefined ? run.track : drawnTrack;
   const ridges =
     heightfield && box && box.width > 0 && box.height > 0
-      ? ridgeFigure(heightfield, box, run.track, {
+      ? ridgeFigure(heightfield, box, route, {
           ...(exaggeration !== undefined ? { exaggeration } : {}),
           ...(rows !== undefined ? { rows } : {}),
           ...(box.keepOut ? { keepOut: box.keepOut } : {}),
@@ -192,6 +199,12 @@ export interface SurveyQuadOptions {
   layout?: PosterLayoutKind;
   /** Output px per logical px (the export scale); 1 for the preview. See `lineDetail`. */
   detailScale?: number;
+  /**
+   * The route to draw, its start and finish markers at its ends: the run's track with the hidden
+   * ends cut off (`trimTrack`), or null to draw no route. Default `run.track`. The map's centre
+   * and coordinates always come from the whole run's bounds.
+   */
+  drawnTrack?: RunTrack | null;
 }
 
 /** Figure data for Survey Quad. `heightfield` and `box` may be missing while they load. */
@@ -199,7 +212,7 @@ export function surveyQuadFigureData(
   run: Pick<Run, 'track' | 'bounds'>,
   heightfield: Heightfield | null,
   box: BoxSize | null,
-  { units = 'metric', layout = 'print', detailScale = 1 }: SurveyQuadOptions = {},
+  { units = 'metric', layout = 'print', detailScale = 1, drawnTrack }: SurveyQuadOptions = {},
 ): SurveyQuadFigureData {
   const { bounds } = run;
   const centred = [bounds.north, bounds.south, bounds.east, bounds.west].every(Number.isFinite);
@@ -216,7 +229,9 @@ export function surveyQuadFigureData(
   const contours = contourPaths(extractContours(smoothed, { interval }), projection, detailScale);
   const { tolerance, decimals } = lineDetail(detailScale);
 
-  const { lat, lon } = run.track;
+  const route = drawnTrack === undefined ? run.track : drawnTrack;
+  const lat = route?.lat ?? new Float64Array(0);
+  const lon = route?.lon ?? new Float64Array(0);
   const n = Math.min(lat.length, lon.length);
   const flat: number[] = [];
   for (let i = 0; i < n; i++) {

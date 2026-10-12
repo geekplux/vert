@@ -80,5 +80,28 @@ social layout is the print design at 1.5×, strokes included, except that no soc
   polylines, smoothed input, 20 m interval, 50 ft in imperial units (coarser only when lines would
   pack under 2.5 px; the label states the interval drawn), index every 5th (100 m, 250 ft), top-down true-aspect projection, RDP
   simplification, scale bar of four round segments.
+- Hide start and end: both figure-data functions take `drawnTrack` (the run's track with the
+  hidden ends cut off by `trimTrack`, or null for no route); sunrise, the start time, the map's
+  centre and coordinates still come from the whole run.
 - Palettes: `NIGHT_RIDGE_PALETTE` and `SURVEY_QUAD_PALETTE` in `styles.ts`. B's small text is
   `#B9D3DE` (10.36:1); `#8EC5DA` is for strokes only.
+
+## Style A's terrain figure
+
+`terrainFigure.ts` (three.js; load it with `loadTerrainFigure()` from `terrainFigureChunk.ts`):
+`renderTerrainFigure({ heightfield, track, camera, exaggeration, width, height, pixelScale })`
+draws the terrain, the route (#C2410C core 4 px, white halo 9 px) and ○ / ▲ markers into a canvas
+of `round(width × pixelScale) × round(height × pixelScale)` px. `width × height` is the figure box
+in logical px; every line width and marker size is logical px × `pixelScale`, so the preview
+(preview scale) and the export (export scale) show the same picture. The camera is the View's
+(`ViewCamera`: azimuth, polar, zoom factor, flat or oblique); the model is framed for the box at
+that azimuth (no zoom band: a figure never turns). One off-screen `TerrainStage` (`interactive:
+false`) is reused; `releaseTerrainFigure()` frees it and loses its WebGL context.
+
+For the export, `renderTerrainFigureTile(scene, tile)` takes the engine's `FigureTile` (`x, y,
+width, height` in output px of the figure box, `scale`, `boxWidth`, `boxHeight`) and draws that
+part with the whole figure's camera plus a view offset (`figureViewOffset` in `stage.ts`), with a
+24 logical px bleed on inner edges so the route's per-point visibility and strokes match across
+seams. Tests check that tiles reproduce the whole frame's camera matrices exactly. Marker textures
+are drawn at 4× (`markers.ts` `TEXTURE_SCALE`); at 18 × 24 (scale 7.5) they would be upscaled, so
+the exporter may want a larger texture scale.

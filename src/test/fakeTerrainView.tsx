@@ -10,11 +10,14 @@
  */
 import { useEffect, useImperativeHandle } from 'react';
 import { vi } from 'vitest';
+import type { ViewCamera } from '../terrain/camera';
 import type { TerrainViewProps } from '../terrain/TerrainView';
 
 export const fakeTerrainView = {
   props: [] as TerrainViewProps[],
   rotateBy: vi.fn<(radians: number) => void>(),
+  /** What the handle's `camera()` returns (the pose "Make a poster" hands to Poster mode). */
+  camera: null as ViewCamera | null,
   /** The focusable wrapper of the latest render. */
   element: null as HTMLDivElement | null,
   ready: true,
@@ -24,6 +27,7 @@ export const fakeTerrainView = {
   reset() {
     this.props.length = 0;
     this.rotateBy.mockClear();
+    this.camera = null;
     this.element = null;
     this.ready = true;
     this.fail = false;
@@ -47,6 +51,7 @@ export function TerrainView(props: TerrainViewProps) {
       resetView: () => undefined,
       requestRender: () => undefined,
       focus: () => fakeTerrainView.element?.focus(),
+      camera: () => fakeTerrainView.camera,
       stage: null,
     }),
     [],

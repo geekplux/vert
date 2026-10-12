@@ -1,5 +1,6 @@
 import { useEffect, useId, useImperativeHandle, useRef, type Ref } from 'react';
 import type { RunTrack } from '../page/types';
+import type { ViewCamera } from './camera';
 import type { Heightfield } from './heightfield';
 import { readPalette, type TerrainPalette } from './mesh';
 import { readRoutePalette, type RoutePalette } from './route';
@@ -23,6 +24,11 @@ export interface TerrainViewHandle {
   requestRender: () => void;
   /** Moves keyboard focus to the view (the focusable wrapper whose arrow keys orbit). */
   focus: () => void;
+  /**
+   * The camera as the user left it (angles, zoom factor, flat or oblique), for "Make a poster"; null
+   * before the stage exists.
+   */
+  camera: () => ViewCamera | null;
   /** The three.js stage (scene and camera) while mounted. */
   readonly stage: TerrainStage | null;
 }
@@ -201,6 +207,7 @@ export function TerrainView({
       resetView: () => stageRef.current?.resetView(),
       requestRender: () => stageRef.current?.requestRender(),
       focus: () => containerRef.current?.focus(),
+      camera: () => stageRef.current?.viewCamera() ?? null,
       get stage() {
         return stageRef.current;
       },

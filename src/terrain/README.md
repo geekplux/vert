@@ -75,11 +75,20 @@ scrub marker. No map library, no basemap.
   (mid-tween or mid-damping as it is) framed for a `w × h` image into a 2D canvas, the start of
   the poster export: it never steps the controls, and puts the camera, controls and fit back
   exactly, so exports in a row match and the visible view does not move.
+- `camera.ts` (no three.js): the camera angle constants and `ViewCamera` (azimuth, polar, zoom
+  factor, flat / oblique), the pose "Make a poster" hands to Poster mode. `stage.viewCamera()`
+  reads it (a running Rotate / Flat map move counts as finished; the flat view is top-down, north
+  up).
+- Figures: `new TerrainStage(canvas, { interactive: false })` has no pointer handling, no render
+  loop and no zoom band; `renderFigure(camera, { width, height, scale, tile })` draws `camera` for
+  a `width × height` output px figure, framed in logical px (`width / scale`), line widths and
+  markers × `scale`, synchronously into its canvas sized to `tile` (the camera's view offset is
+  `figureViewOffset`: the lens shift moved by the tile's corner). Used by `src/poster/terrainFigure.ts`.
 - `TerrainView.tsx`: the React wrapper. Canvas is `role="img"` with the page's `aria-label`; the
   wrapper is focusable (arrow keys orbit, Shift for larger steps, + / − zoom; a visually hidden hint
   says so). Reduced motion: no camera move, the canvas fades in. Props `track`, `scrub`
   (metres), `overlays`, `insets` and `routePalette` drive the route layer. A ref handle exposes
-  `rotateBy`, `resetView`, `requestRender`, `focus` and the stage.
+  `rotateBy`, `resetView`, `requestRender`, `focus`, `camera()` and the stage.
 - three.js is ~150 kB gzipped: the page loads `TerrainView` with `React.lazy` (`src/page/terrainChunk.ts`)
   so the Upload state stays light.
 - Decoding and tile maths are pure and live in `src/lib`, so they test without WebGL.

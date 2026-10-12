@@ -8,8 +8,9 @@
  * dispatch so that the two cross-cutting rules happen atomically in the same update:
  *
  * - `RUN_LOADED` may carry `posterText` (title and subtitle from the run) to seed the poster.
- * - `NEW_FILE` resets the poster's title and subtitle, which describe the old run. Everything
- *   else persists until reload: units, exaggeration, poster style, size, which stats show, hide
+ * - `MAKE_POSTER` may carry the View's terrain camera, which the poster's figure then uses.
+ * - `NEW_FILE` resets the poster's title, subtitle and camera, which belong to the old run.
+ *   Everything else persists until reload: units, exaggeration, poster style, size, which stats show, hide
  *   ends, and the signature (it describes the author, not the run).
  *
  * Screens and transitions:
@@ -31,6 +32,8 @@
 import { useReducer } from 'react';
 import type { Dispatch } from 'react';
 import type { Units } from '../lib/format';
+import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
+import type { ViewCamera } from '../terrain/camera';
 import type { PosterSizeId } from '../poster/sizes';
 import type { PosterStyleId } from '../poster/styles';
 import type { Run } from './types';
@@ -121,6 +124,12 @@ export interface NewFile {
 }
 export interface MakePoster {
   readonly type: 'MAKE_POSTER';
+  /**
+   * The View's terrain camera as the user left it (`TerrainViewHandle.camera()`): the poster's
+   * terrain figure uses it (BRIEF "Make a poster uses the current camera"). Missing (no terrain
+   * drawn yet) keeps the poster's camera as it was.
+   */
+  readonly camera?: ViewCamera;
 }
 export interface BackToRun {
   readonly type: 'BACK_TO_RUN';
@@ -175,6 +184,11 @@ export interface PosterPrefs {
   readonly stats: Readonly<Record<PosterStat, boolean>>;
   /** Metres of route hidden at the start and the end, 0–500 in steps of 100. */
   readonly hideEnds: number;
+  /**
+   * The terrain camera of style A's figure: the View's camera when "Make a poster" was pressed
+   * (`MAKE_POSTER`), the View's default oblique view until then and after New file.
+   */
+  readonly camera: ViewCamera;
 }
 
 export interface Prefs {
@@ -198,6 +212,7 @@ export const INITIAL_PREFS: Prefs = {
     signature: '',
     stats: { distance: true, vert: true, time: true, highPoint: false },
     hideEnds: HIDE_ENDS.initial,
+    camera: DEFAULT_VIEW_CAMERA,
   },
 };
 
@@ -370,7 +385,9 @@ export function pageReducer(state: PageState, action: PageAction): PageState {
 
   let { prefs } = state;
   if (action.type === 'NEW_FILE') {
-    prefs = withPoster(prefs, { title: '', subtitle: '' });
+    prefs = withPoster(prefs, { title: '', subtitle: '', camera: DEFAULT_VIEW_CAMERA });
+  } else if (action.type === 'MAKE_POSTER' && action.camera) {
+    prefs = withPoster(prefs, { camera: action.camera });
   } else if (action.type === 'RUN_LOADED' && action.posterText) {
     prefs = withPoster(prefs, action.posterText);
   }

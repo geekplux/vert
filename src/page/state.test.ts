@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
+import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import { describe, expect, it } from 'vitest';
 import { SAMPLE_RUN } from './sample';
 import {
@@ -80,6 +81,7 @@ describe('initial state', () => {
         signature: '',
         stats: { distance: true, vert: true, time: true, highPoint: false },
         hideEnds: 200,
+        camera: DEFAULT_VIEW_CAMERA,
       },
     });
   });
@@ -281,6 +283,7 @@ describe('preferences', () => {
         signature: '@sean',
         stats: { distance: true, vert: true, time: false, highPoint: true },
         hideEnds: 400,
+        camera: DEFAULT_VIEW_CAMERA,
       },
     });
   });
@@ -332,9 +335,24 @@ describe('preferences', () => {
     expect(send(state, { type: 'RUN_LOADED', runId: RUN_ID, posterText })).toBe(state);
   });
 
-  it('NEW_FILE keeps units, exaggeration, poster settings and signature; resets title and subtitle', () => {
+  it('MAKE_POSTER hands the View’s camera to the poster', () => {
+    const camera = { azimuth: -1.2, polar: 0.9, zoom: 0.8, view: 'oblique' } as const;
+    const state = send(at(view), { type: 'MAKE_POSTER', camera });
+    expect(state.screen.name).toBe('poster');
+    expect(state.prefs.poster.camera).toEqual(camera);
+    // Without one (no terrain drawn yet) the poster keeps the camera it had.
+    const again = send(state, { type: 'BACK_TO_RUN' }, { type: 'MAKE_POSTER' });
+    expect(again.prefs.poster.camera).toEqual(camera);
+    // Ignored in other screens: no camera change either.
+    const ignored = at(poster);
+    expect(send(ignored, { type: 'MAKE_POSTER', camera })).toBe(ignored);
+  });
+
+  it('NEW_FILE keeps units, exaggeration, poster settings and signature; resets title, subtitle and camera', () => {
     const configured = send(
       at(view),
+      { type: 'MAKE_POSTER', camera: { azimuth: 2, polar: 1, zoom: 1.5, view: 'flat' } },
+      { type: 'BACK_TO_RUN' },
       { type: 'SET_UNITS', units: 'imperial' },
       { type: 'SET_EXAGGERATION', value: 2.5 },
       { type: 'SET_POSTER_STYLE', style: 'B' },
@@ -349,7 +367,12 @@ describe('preferences', () => {
     expect(screen).toEqual(INITIAL_SCREEN);
     expect(prefs).toEqual({
       ...configured.prefs,
-      poster: { ...configured.prefs.poster, title: '', subtitle: '' },
+      poster: {
+        ...configured.prefs.poster,
+        title: '',
+        subtitle: '',
+        camera: DEFAULT_VIEW_CAMERA,
+      },
     });
   });
 

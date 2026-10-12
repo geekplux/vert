@@ -5,13 +5,21 @@ import { AppHeader } from './AppHeader/AppHeader';
 import { PosterNav } from './AppHeader/PosterNav';
 import { UploadNav } from './AppHeader/UploadNav';
 import { ViewNav } from './AppHeader/ViewNav';
-import { RunProvider, useRetryTerrain, useRun, useRunChooser, useTerrain } from './hooks';
+import {
+  RunProvider,
+  useFigureTerrainLoader,
+  useRetryTerrain,
+  useRun,
+  useRunChooser,
+  useTerrain,
+} from './hooks';
 import type { RunProviderProps } from './hooks';
 import type { Exporter } from './PosterState/exporter';
 import { PosterState } from './PosterState/PosterState';
 import { isPosterMode, usePageState } from './state';
 import type { PageState } from './state';
 import { UploadState } from './UploadState/UploadState';
+import type { TerrainCameraSource } from './ViewState/TerrainBox';
 import { ViewState } from './ViewState/ViewState';
 import styles from './Page.module.css';
 
@@ -55,10 +63,12 @@ function PageContent({
   const run = useRun();
   const terrain = useTerrain();
   const retryTerrain = useRetryTerrain();
+  const loadFigureTerrain = useFigureTerrainLoader();
   const [aboutOpen, setAboutOpen] = useState(initialAboutOpen);
   const aboutRef = useRef<HTMLButtonElement>(null);
   const { screen, prefs } = state;
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const cameraRef = useRef<TerrainCameraSource>(null);
   // Exporting is an overlay on poster mode, not a new screen: PosterState moves focus for it.
   useFocusOnScreenChange(isPosterMode(screen) ? 'poster' : screen.name, headingRef);
 
@@ -84,7 +94,9 @@ function PageContent({
             }}
             onNewFile={newFile}
             onMakePoster={() => {
-              dispatch({ type: 'MAKE_POSTER' });
+              // "Make a poster" uses the current camera (BRIEF): the View's, as the user left it.
+              const camera = cameraRef.current?.camera() ?? undefined;
+              dispatch(camera ? { type: 'MAKE_POSTER', camera } : { type: 'MAKE_POSTER' });
             }}
           />
         </AppHeader>
@@ -121,6 +133,7 @@ function PageContent({
           onExaggerationChange={(value) => {
             dispatch({ type: 'SET_EXAGGERATION', value });
           }}
+          cameraRef={cameraRef}
         />
       ) : isPosterMode(screen) && run ? (
         // Exporting is poster mode with the export progress under the Download button.
@@ -131,6 +144,8 @@ function PageContent({
           dispatch={dispatch}
           headingRef={headingRef}
           exporter={exporter}
+          terrain={terrain}
+          loadFigureTerrain={loadFigureTerrain}
         />
       ) : null}
 

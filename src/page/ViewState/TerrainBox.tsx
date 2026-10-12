@@ -1,6 +1,15 @@
-import { Component, Suspense, useEffect, useId, useRef, useState } from 'react';
-import type { ReactNode, RefObject } from 'react';
+import {
+  Component,
+  Suspense,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
+import type { ReactNode, Ref, RefObject } from 'react';
 import { Button, Marker } from '../../components';
+import type { ViewCamera } from '../../terrain/camera';
 import type { Heightfield } from '../../terrain/heightfield';
 import type { ScreenRect } from '../../terrain/stage';
 import type { TerrainViewHandle } from '../../terrain/TerrainView';
@@ -55,6 +64,16 @@ export interface TerrainBoxProps {
    * into a row under it, so nothing covers the model on a phone.
    */
   overlaysBelow: boolean;
+  /**
+   * Reads the terrain's camera as the user left it, for "Make a poster" (null until the terrain
+   * view has loaded).
+   */
+  cameraRef?: Ref<TerrainCameraSource>;
+}
+
+/** What the page reads from the View's terrain when it opens Poster mode. */
+export interface TerrainCameraSource {
+  camera(): ViewCamera | null;
 }
 
 /**
@@ -86,8 +105,10 @@ export function TerrainBox({
   flat,
   onToggleFlat,
   overlaysBelow,
+  cameraRef,
 }: TerrainBoxProps) {
   const viewRef = useRef<TerrainViewHandle>(null);
+  useImperativeHandle(cameraRef, () => ({ camera: () => viewRef.current?.camera() ?? null }), []);
   const boxRef = useRef<HTMLDivElement>(null);
   const legendRef = useRef<HTMLParagraphElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);

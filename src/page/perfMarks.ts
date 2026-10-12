@@ -28,3 +28,20 @@ export function perfMark(name: PerfMark): void {
     // No Performance API here: nothing to record.
   }
 }
+
+/**
+ * `performance.measure` names: `vert:poster-figure` is one render of style A's terrain figure in
+ * Poster mode (its `detail` holds the output size in px).
+ */
+export const PERF_MEASURES = { posterFigure: 'vert:poster-figure' } as const;
+
+export type PerfMeasure = (typeof PERF_MEASURES)[keyof typeof PERF_MEASURES];
+
+/** Records a measure from `start` (a `performance.now()` time) to now; never throws. */
+export function perfMeasure(name: PerfMeasure, start: number, detail?: unknown): void {
+  try {
+    performance.measure(name, { start, end: performance.now(), detail });
+  } catch {
+    // No Performance API here: nothing to record.
+  }
+}

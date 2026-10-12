@@ -1,7 +1,6 @@
 # gpx
 
-GPX file → a typed track (lat, lon, ele, time). Stats (distance, vert, moving time, high point,
-climbs) are computed from it in a later task; nothing here computes them yet.
+GPX file → a typed track (lat, lon, ele, time) → run statistics → the page's `Run`.
 
 - Runs in a Web Worker. `DOMParser` does not exist in worker scope, so parse the XML without it.
 - Pure functions plus a thin worker entry. No React, no network: the file never leaves the browser.
@@ -19,3 +18,15 @@ Files:
   in document order wins. Every element is consumed whichever branch reads it.
 - `types.ts`: `TrackPoint`, `ParsedGpx`, and `GpxError` with a `code` (`not-gpx`, `no-points`,
   `malformed`, `too-large`) and a message written for the UI.
+- `stats.ts`: `computeStats(points)` → distance (haversine), moving time (steps over 30 s and
+  standing still excluded), ascent/descent (gaps filled, 3-point median, 2 m hysteresis), high and
+  low point, climbs (≥ 50 m at ≥ 4%, small dips merged, at most 8, one `steepest`), a 500-point
+  profile; `timeAtDistance` and `paceAt` for the scrub readout. The rules are in its header.
+- `trim.ts`: `trimEnds(points, cumulative, metres)` and `trimTrack(track, metres)` for "hide start
+  and end" (the drawn line only, never the stats).
+- `handler.ts`: the worker's message protocol (`ParseRequest`, `ParseResponse`) and
+  `handleMessage` (decode UTF-8/UTF-16/Latin-1, parse, compute, build the run; never throws),
+  testable without a Worker. `worker.ts` is the thin worker entry around it.
+- `client.ts`: `parseInWorker(input, signal)`: one reused module worker, 20 MB limit, abort,
+  20 s timeout. `loadRun.ts`: `realLoadRun`, the app's `LoadRun` (a user file is read locally;
+  only the sample is fetched, from the app's origin).

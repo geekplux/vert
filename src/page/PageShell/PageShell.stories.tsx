@@ -60,7 +60,7 @@ const stack: CSSProperties = { display: 'grid', gap: 'var(--space-2)', width: '1
  * with the poster state.
  */
 function PosterSettings() {
-  const [title, setTitle] = useState('Coosa Backcountry Loop');
+  const [title, setTitle] = useState('Coosa Backcountry Trail');
   const [subtitle, setSubtitle] = useState('Talladega National Forest');
   const [showStats, setShowStats] = useState(true);
   const [showClimbs, setShowClimbs] = useState(false);
@@ -124,7 +124,7 @@ const ViewPage = () => (
 
 const PosterPage = () => (
   <div style={{ ...page, height: '100dvh' }}>
-    <AppHeader state="poster" routeName="Coosa Backcountry Loop">
+    <AppHeader state="poster" routeName="Coosa Backcountry Trail">
       <PosterNav onBack={noop} />
     </AppHeader>
     <PageShell asideLabel="Poster settings" asideWidth="poster" aside={<PosterSettings />}>

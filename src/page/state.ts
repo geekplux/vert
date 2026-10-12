@@ -28,7 +28,7 @@
  */
 import { useReducer } from 'react';
 import type { Dispatch } from 'react';
-import { formatDateLine } from '../lib/format';
+import { runDateLine } from './runCopy';
 import type { Units } from '../lib/format';
 import type { PosterSizeId } from '../poster/sizes';
 import type { PosterStyleId } from '../poster/styles';
@@ -351,9 +351,12 @@ export function pageReducer(state: PageState, action: PageAction): PageState {
   return { screen, prefs };
 }
 
-/** The poster's default title and subtitle for a run: its name, and "SAT · 2026-10-03". */
+/**
+ * The poster's default title and subtitle for a run: its name, and "SAT · 2026-10-03" (empty when
+ * the file has no time at all).
+ */
 export function posterTextFor(run: Run): PosterText {
-  return { title: run.name, subtitle: formatDateLine(new Date(run.startTime), run.lonForOffset) };
+  return { title: run.name, subtitle: runDateLine(run) };
 }
 
 /**

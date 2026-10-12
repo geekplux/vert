@@ -1,15 +1,10 @@
 import { useId, useState } from 'react';
 import type { Ref } from 'react';
 import { ElevationProfile, Slider, StatGrid, StatTile } from '../../components';
-import {
-  formatDateLine,
-  formatDistance,
-  formatDuration,
-  formatElevation,
-  formatKmRange,
-} from '../../lib/format';
+import { formatDistance, formatDuration, formatElevation, formatKmRange } from '../../lib/format';
 import type { Units } from '../../lib/format';
 import { PageShell } from '../PageShell/PageShell';
+import { runDateLine, runPaceAt } from '../runCopy';
 import { EXAGGERATION } from '../state';
 import type { Run } from '../types';
 import sampleTerrain from '../UploadState/sample-terrain.svg';
@@ -35,11 +30,12 @@ export interface ViewStateProps {
   onExaggerationChange: (value: number) => void;
   /** The route-name h1; the page focuses it when the View opens (DECISIONS "Focus"). */
   headingRef?: Ref<HTMLHeadingElement>;
-  /** Pace at a distance, seconds per km. PHASE 3 supplies it from timestamps; omitted until then. */
+  /**
+   * Pace at a distance, seconds per km. Defaults to the run's own timestamps (`runPaceAt`), so a
+   * timed run shows "· 6:48 /km" in the readout and a timeless one leaves pace out.
+   */
   paceAt?: PaceAt;
 }
-
-const noPace: PaceAt = () => null;
 const formatExaggeration = (value: number) => `${value.toFixed(1)}×`;
 
 /**
@@ -53,8 +49,9 @@ export function ViewState({
   exaggeration,
   onExaggerationChange,
   headingRef,
-  paceAt = noPace,
+  paceAt: paceAtProp,
 }: ViewStateProps) {
+  const paceAt: PaceAt = paceAtProp ?? ((d) => runPaceAt(run, d));
   const climbsId = useId();
   const elevationId = useId();
   // Local to the View; the page keys this component by run, so a new run starts fresh.
@@ -65,23 +62,27 @@ export function ViewState({
   const distance = formatDistance(run.distance, units);
   const vert = formatElevation(run.vert, units, { signed: true });
   const highPoint = formatElevation(run.highPoint, units);
+  // Empty for a file without timestamps: the line then shows only the SAMPLE DATA tag, or nothing.
+  const dateLine = runDateLine(run);
 
   const aside = (
     <>
       <div className={styles.titleBlock}>
         {/* Wraps between its parts only, never inside the date or the tag. */}
-        <p className={styles.dateLine}>
-          <span className={styles.nowrap}>
-            {formatDateLine(new Date(run.startTime), run.lonForOffset)}
-            {run.isSample ? ' ·' : null}
-          </span>
-          {run.isSample ? (
-            <>
-              {' '}
+        {dateLine || run.isSample ? (
+          <p className={styles.dateLine}>
+            {dateLine ? (
+              <span className={styles.nowrap}>
+                {dateLine}
+                {run.isSample ? ' ·' : null}
+              </span>
+            ) : null}
+            {dateLine && run.isSample ? ' ' : null}
+            {run.isSample ? (
               <span className={[styles.nowrap, styles.sample].join(' ')}>SAMPLE DATA</span>
-            </>
-          ) : null}
-        </p>
+            ) : null}
+          </p>
+        ) : null}
         <h1 ref={headingRef} tabIndex={-1} className={styles.title}>
           {run.name}
         </h1>

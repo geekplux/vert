@@ -1,13 +1,13 @@
 /**
- * PLACEHOLDER DATA FOR PHASE 2. Phase 3 replaces this with the real parsed sample GPX
- * (`public/samples/coosa-backcountry.gpx`) and the user's own files, in the same `Run` shape.
+ * PLACEHOLDER DATA, for tests and stories that need a run without a worker or a fetch. The app
+ * itself loads the real sample (`public/samples/coosa-backcountry.gpx`) through `src/gpx/loadRun`.
  *
  * The totals are the real sample's (DECISIONS: the Coosa Backcountry Trail loop): 21,480 m,
  * +1,092 m, 3:04:53 moving, 616–1,267 m, starting 2026-10-03T11:10:00Z at lon −83.926. The profile
  * is synthetic: smooth, a loop (ends where it starts), with three climbs placed as in the canvas's
  * View frame and scaled so its range is exactly 616–1,267 m and its ascent exactly the run's vert.
  */
-import type { Climb, ProfilePoint, Run } from './types';
+import type { Climb, ProfilePoint, Run, RunTrack } from './types';
 
 /** Points in the placeholder profile. */
 export const SAMPLE_PROFILE_POINTS = 500;
@@ -76,20 +76,60 @@ function makeProfile(): ProfilePoint[] {
   return distances.map((d) => ({ d, ele: elevationAt(d) }));
 }
 
-/** The placeholder sample run. Phase 3: the parsed `coosa-backcountry.gpx` instead. */
+const START_TIME = Date.UTC(2026, 9, 3, 11, 10, 0);
+const MOVING_TIME = 11_093;
+const BOUNDS = { west: -83.9607, south: 34.7471, east: -83.9239, north: 34.7938 };
+
+/**
+ * A synthetic track, one point per profile point: a lobed loop inside the bounds starting and
+ * ending at the trailhead, `cumulative` = the profile's distances (so a distance on the profile
+ * finds its point), elevations from the profile and times at an even moving pace. The loop's own
+ * length is not the run's distance; it only has to look like a route.
+ */
+function makeTrack(profile: readonly ProfilePoint[]): RunTrack {
+  const n = profile.length;
+  const lat = new Float64Array(n);
+  const lon = new Float64Array(n);
+  const midLat = (BOUNDS.south + BOUNDS.north) / 2;
+  const midLon = (BOUNDS.west + BOUNDS.east) / 2;
+  const halfLat = ((BOUNDS.north - BOUNDS.south) / 2) * 0.8;
+  const halfLon = ((BOUNDS.east - BOUNDS.west) / 2) * 0.8;
+  profile.forEach(({ d }, i) => {
+    const angle = (d / DISTANCE) * 2 * Math.PI;
+    const r = 1 - 0.2 * Math.sin(3 * angle) ** 2;
+    lat[i] = midLat - halfLat * r * Math.cos(angle);
+    lon[i] = midLon + halfLon * r * Math.sin(angle);
+  });
+  return {
+    lat,
+    lon,
+    ele: Float64Array.from(profile, (p) => p.ele),
+    cumulative: Float64Array.from(profile, (p) => p.d),
+    time: Float64Array.from(profile, (p) => START_TIME + (p.d / DISTANCE) * MOVING_TIME * 1000),
+  };
+}
+
+const PROFILE = makeProfile();
+
+/** The placeholder sample run. The app loads the parsed `coosa-backcountry.gpx` instead. */
 export const SAMPLE_RUN: Run = {
   id: 'sample-coosa-backcountry',
-  name: 'Coosa Backcountry Loop',
-  startTime: Date.UTC(2026, 9, 3, 11, 10, 0),
+  name: 'Coosa Backcountry Trail',
+  startTime: START_TIME,
   lonForOffset: -83.926,
   isSample: true,
+  hasTime: true,
+  hasElevation: true,
   distance: DISTANCE,
   vert: 1_092,
-  movingTime: 11_093,
+  descent: 1_092,
+  movingTime: MOVING_TIME,
+  elapsedTime: 11_244,
   highPoint: 1_267,
   lowPoint: 616,
-  profile: makeProfile(),
+  profile: PROFILE,
   climbs: CLIMBS,
   // The GPX track's extremes rounded outward to 4 decimals, so every point is inside.
-  bounds: { west: -83.9607, south: 34.7471, east: -83.9239, north: 34.7938 },
+  bounds: BOUNDS,
+  track: makeTrack(PROFILE),
 };

@@ -96,6 +96,11 @@ everything.
 - "About" opens a short in-page dialog (what Vert is, privacy, credits); "GitHub" links to
   https://github.com/geekplux.
 
+- Focus on screen changes: when the screen changes (upload → view → poster and back), focus moves
+  to the new screen's h1 (`tabIndex={-1}`, no visible ring on programmatic focus) so keyboard and
+  screen-reader users start at the top of the new content. Opening/closing the export overlay moves
+  focus to its progress label / back to the Download button.
+
 ## Posters (phase 3)
 
 - Fonts per the canvas, all self-hosted and loaded only in poster mode: B = Big Shoulders Display

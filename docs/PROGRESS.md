@@ -41,7 +41,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | ---- | --------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
 | [x]  | a. State machine, sample run, `useRun`/`useTerrain` | 1      | Reducer for 4 screens + prefs; 180-case probe vs an oracle; typed per-screen dispatch.                            |
 | [x]  | b. AppHeader and responsive page shell              | 2      | Header pixel-identical to the canvas in all 3 states; aside 300/380; stacks under main < 900; no h-scroll at 390. |
-| [ ]  | c. UploadState                                      |        |                                                                                                                   |
+| [x]  | c. UploadState                                      | 2      | 0px from the Upload frame at 1440; About dialog with focus return; Page composition; axe clean incl. region.      |
 | [ ]  | d. ViewState                                        |        |                                                                                                                   |
 | [ ]  | e. PosterState with live poster preview box         |        |                                                                                                                   |
 | [ ]  | f. ExportingState overlay                           |        |                                                                                                                   |

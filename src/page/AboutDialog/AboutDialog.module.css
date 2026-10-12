@@ -1,0 +1,79 @@
+/* About dialog: page colours, radius 6, max-width 520, padding 32, ink backdrop at 40%. */
+.dialog {
+  width: calc(100% - 2 * var(--space-4));
+  max-width: 520px; /* no token */
+  max-height: calc(100dvh - 2 * var(--space-4));
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.dialog::backdrop {
+  background: rgb(27 42 58 / 40%); /* --ink at 40%, for browsers whose ::backdrop can't see vars */
+  background: color-mix(in srgb, var(--ink) 40%, transparent);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-8);
+}
+
+.title {
+  margin: 0;
+  font-size: 32px; /* no token */
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 0.95;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Section labels: 11px mono uppercase, 0.08em, --muted (DECISIONS.md "Type details"). */
+.label {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.text {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: break-word;
+}
+
+.link {
+  color: var(--ink);
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--route-text);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+}

@@ -13,3 +13,7 @@ This is the only place that owns application state and composes `components`, `t
   placeholder default for the GPX parser in a Web Worker. It rejects with `RunLoadError` for a
   message the user should see; anything else shows "Vert couldn't read this file."
 - Poster sizes and styles come from `src/poster/sizes.ts` and `src/poster/styles.ts`.
+- `Page.tsx`: the composition: `RunProvider`, the state machine, the header with the state's nav,
+  the current state, and the About dialog. `App` renders it.
+- `UploadState/`: the Upload state (h1, intro, Dropzone, note, sample preview and chip).
+- `AboutDialog/`: the native modal `<dialog>` the header's About opens.

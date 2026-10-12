@@ -111,7 +111,8 @@ everything.
 ## Posters (phase 3)
 
 - Fonts per the canvas, all self-hosted and loaded only in poster mode: B = Big Shoulders Display
-  800 + JetBrains Mono 400/500; E = Libre Caslon Text 400 (roman + italic) + Archivo Narrow 700.
+  800 + JetBrains Mono 400; E = Libre Caslon Text 400 (italic only when there is a subtitle) +
+  Archivo Narrow 400/600/700. Night Ridge prints its effective relief (setting × 1.5).
 - The poster subtitle defaults to empty: the date already sits in the header and Vert has no place
   data, so the canvas's "[Place] · [Date]" would be invented. Social sizes show a short note where
   the PDF button would be (PDF is for print sizes).

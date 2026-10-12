@@ -23,6 +23,11 @@
   overflow-wrap: break-word;
 }
 
+/* DECISIONS "Focus on screen changes": programmatic focus on the h1 draws no ring. */
+.title:focus {
+  outline: none;
+}
+
 /* Canvas: 18px, line-height 1.5 (base.css), --muted, max-width 44ch. */
 .lede {
   margin: 0;

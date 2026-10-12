@@ -1,0 +1,68 @@
+/*
+ * Main frame (docs/design/canvas/Main.html): relative, --surface, radius 6, overflow hidden. The
+ * frame's box is as tall as its 1000×680 terrain image at the column's width; below 600px the
+ * spec's 4:3 (DESIGN-SPEC §3).
+ */
+.box {
+  position: relative;
+  aspect-ratio: 1000 / 680;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+}
+
+/* Canvas: top 16, left 16, flex wrap, gap 16, 12px mono, --bg, padding 8×12, radius 4. */
+.legend {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  max-width: calc(100% - 2 * var(--space-4));
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: normal;
+}
+
+/* The canvas's "○ " glyph and space: a 12px marker, then the words. */
+.entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+/* Canvas: right 16, bottom 16, flex, gap 8. */
+.controls {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Pressed (Flat map on): filled, so the state reads by lightness, not hue. */
+.controls [aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--white);
+}
+
+.controls [aria-pressed='true']:hover:not(:disabled) {
+  background: var(--ink);
+}
+
+@media (max-width: 599.98px) {
+  .box {
+    aspect-ratio: 4 / 3;
+  }
+}

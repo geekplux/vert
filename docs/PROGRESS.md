@@ -37,15 +37,15 @@ verification sub-agent → merge on PASS. Max three rounds.
 
 ## 2 Layout
 
-| Done | Task                                                | Rounds | Notes                                                                                                             |
-| ---- | --------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| [x]  | a. State machine, sample run, `useRun`/`useTerrain` | 1      | Reducer for 4 screens + prefs; 180-case probe vs an oracle; typed per-screen dispatch.                            |
-| [x]  | b. AppHeader and responsive page shell              | 2      | Header pixel-identical to the canvas in all 3 states; aside 300/380; stacks under main < 900; no h-scroll at 390. |
-| [x]  | c. UploadState                                      | 2      | 0px from the Upload frame at 1440; About dialog with focus return; Page composition; axe clean incl. region.      |
-| [ ]  | d. ViewState                                        |        |                                                                                                                   |
-| [ ]  | e. PosterState with live poster preview box         |        |                                                                                                                   |
-| [ ]  | f. ExportingState overlay                           |        |                                                                                                                   |
-| [ ]  | g. Playwright e2e: all four states by keyboard      |        |                                                                                                                   |
+| Done | Task                                                | Rounds | Notes                                                                                                                                                    |
+| ---- | --------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x]  | a. State machine, sample run, `useRun`/`useTerrain` | 1      | Reducer for 4 screens + prefs; 180-case probe vs an oracle; typed per-screen dispatch.                                                                   |
+| [x]  | b. AppHeader and responsive page shell              | 2      | Header pixel-identical to the canvas in all 3 states; aside 300/380; stacks under main < 900; no h-scroll at 390.                                        |
+| [x]  | c. UploadState                                      | 2      | 0px from the Upload frame at 1440; About dialog with focus return; Page composition; axe clean incl. region.                                             |
+| [x]  | d. ViewState                                        | 1      | Aside (date, h1, stats, climbs, slider), terrain box + legend + Rotate/Flat, profile with readout; within 1–2px of the Main frame; focus to h1 on entry. |
+| [ ]  | e. PosterState with live poster preview box         |        |                                                                                                                                                          |
+| [ ]  | f. ExportingState overlay                           |        |                                                                                                                                                          |
+| [ ]  | g. Playwright e2e: all four states by keyboard      |        |                                                                                                                                                          |
 
 ## 3 Features
 

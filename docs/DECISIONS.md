@@ -96,6 +96,9 @@ everything.
 - "About" opens a short in-page dialog (what Vert is, privacy, credits); "GitHub" links to
   https://github.com/geekplux.
 
+- Below 900px the aside is drawn under main but stays first in DOM and Tab order (PageShell). Each
+  region is one labelled landmark, so focus never interleaves; desktop (the editing platform)
+  keeps reading order = Tab order. Accepted trade-off.
 - Focus on screen changes: when the screen changes (upload → view → poster and back), focus moves
   to the new screen's h1 (`tabIndex={-1}`, no visible ring on programmatic focus) so keyboard and
   screen-reader users start at the top of the new content. Opening/closing the export overlay moves

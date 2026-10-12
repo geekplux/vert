@@ -12,6 +12,8 @@ export { StatGrid } from './StatTile/StatGrid';
 export type { StatGridProps } from './StatTile/StatGrid';
 export { StatTile } from './StatTile/StatTile';
 export type { StatTileProps } from './StatTile/StatTile';
+export { StylePicker } from './StylePicker/StylePicker';
+export type { StylePickerProps } from './StylePicker/StylePicker';
 export { TextField } from './TextField/TextField';
 export type { TextFieldProps } from './TextField/TextField';
 export { Wordmark } from './Wordmark/Wordmark';

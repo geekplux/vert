@@ -2,6 +2,8 @@ export { Button } from './Button/Button';
 export type { ButtonProps } from './Button/Button';
 export { Checkbox } from './Checkbox/Checkbox';
 export type { CheckboxProps } from './Checkbox/Checkbox';
+export { Segmented } from './Segmented/Segmented';
+export type { SegmentedProps } from './Segmented/Segmented';
 export { StatGrid } from './StatTile/StatGrid';
 export type { StatGridProps } from './StatTile/StatGrid';
 export { StatTile } from './StatTile/StatTile';

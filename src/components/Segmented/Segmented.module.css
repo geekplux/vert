@@ -1,0 +1,88 @@
+/*
+ * Spec: inline-flex, 1px ink border, radius 4, selected = ink fill + white text, 14/600,
+ * drawn 40px tall, padding 0 14px. Hit area 44px tall via ::before, and min-width 44px so short
+ * labels ("mi") are still 44px wide (DECISIONS.md).
+ *
+ * The spec's `overflow: hidden` would also clip the ::before hit area and the focus outline, so the
+ * end segments round their own outer corners instead; the drawn result is the same.
+ */
+.group {
+  display: inline-flex;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-control);
+}
+
+.option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: var(--touch);
+  padding: 0 14px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Inner radius = outer radius minus the 1px border, so the fill meets the border cleanly. */
+.option:first-child {
+  border-start-start-radius: calc(var(--radius-control) - 1px);
+  border-end-start-radius: calc(var(--radius-control) - 1px);
+}
+
+.option:last-child {
+  border-start-end-radius: calc(var(--radius-control) - 1px);
+  border-end-end-radius: calc(var(--radius-control) - 1px);
+}
+
+/* 44px touch target: extend the hit area vertically without changing the drawn 40px. */
+.option::before {
+  content: '';
+  position: absolute;
+  inset: calc((40px - var(--touch)) / 2) 0;
+}
+
+.option:hover {
+  background: var(--surface);
+}
+
+.option:has(:checked) {
+  color: var(--white);
+  background: var(--ink);
+}
+
+.option:has(:focus-visible) {
+  z-index: 1;
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+/* Visually hidden but focusable: the label is what people see and press. */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  appearance: none;
+}
+
+/* Windows high contrast drops background colours; keep the selection visible with system colours. */
+@media (forced-colors: active) {
+  .option:has(:checked) {
+    color: HighlightText;
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+}

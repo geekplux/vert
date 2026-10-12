@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import sampleGpx from '../../public/samples/coosa-backcountry.gpx?raw';
+import { buildRun } from '../gpx/handler';
+import { parseGpx } from '../gpx/parse';
 import type { Heightfield } from '../terrain/heightfield';
 import { lonLatToWorld, worldToLonLat } from '../lib/geo';
+import type { Bounds } from '../lib/geo';
+import { ridgeBounds } from './figures';
 import { gridPosition } from '../terrain/heightfield';
 import { RIDGE_RELIEF_BOOST, ridgeExaggeration, ridgeFigure, smoothZigzags } from './ridges';
 
@@ -174,29 +179,153 @@ describe('detailScale', () => {
   });
 });
 
+/** How often y turns back by 0.5 px or more. */
+const turns = (values: readonly number[]) => {
+  let direction = 0;
+  let extreme = values[0] ?? 0;
+  let count = 0;
+  for (const y of values) {
+    if (direction === 0) {
+      if (Math.abs(y - extreme) >= 0.5) [direction, extreme] = [Math.sign(y - extreme), y];
+    } else if ((y - extreme) * direction > 0) {
+      extreme = y;
+    } else if ((extreme - y) * direction >= 0.5) {
+      [count, direction, extreme] = [count + 1, -direction, y];
+    }
+  }
+  return count;
+};
+const ysOf = (flat: readonly number[]) => flat.filter((_, i) => i % 2 === 1);
+const xsOf = (flat: readonly number[]) => flat.filter((_, i) => i % 2 === 0);
+
 describe('smoothZigzags', () => {
-  it('evens out a vertical zigzag and leaves smooth stretches and the ends alone', () => {
-    // x steps by 1; y climbs smoothly, then zigzags ±6 around 50, then climbs again.
-    const ys = [10, 20, 30, 40, 56, 44, 56, 44, 56, 60, 70, 80, 90];
-    const flat = ys.flatMap((y, i) => [i, y]);
-    smoothZigzags(flat, 60);
-    const out = flat.filter((_, i) => i % 2 === 1);
-    expect(out.slice(0, 3)).toEqual([10, 20, 30]);
-    expect(out.slice(-3)).toEqual([70, 80, 90]);
-    // The zigzag is gone: y no longer turns back anywhere (it climbs throughout).
-    const turns = (values: number[]) =>
-      values.slice(1, -1).filter((v, i) => (v - (values[i] ?? 0)) * ((values[i + 2] ?? 0) - v) < 0)
-        .length;
-    expect(turns(ys)).toBe(4);
+  it('takes the teeth out of a vertical zigzag, leaving x and the ends alone', () => {
+    // x steps by 0.5; y climbs 0.3 px a step, with teeth (±4 px, 4 steps a period) in the middle.
+    const teeth = [0, 4, 0, -4];
+    const ys = Array.from(
+      { length: 200 },
+      (_, i) => 100 - 0.3 * i + (i >= 60 && i < 140 ? (teeth[i % 4] ?? 0) : 0),
+    );
+    const flat = ys.flatMap((y, i) => [i * 0.5, y]);
+    smoothZigzags(flat, 16);
+    const out = ysOf(flat);
+    expect(turns(ys)).toBeGreaterThan(30);
     expect(turns(out)).toBe(0);
-    // x is untouched.
-    expect(flat.filter((_, i) => i % 2 === 0)).toEqual(ys.map((_, i) => i));
+    expect(out[0]).toBe(ys[0]);
+    expect(out.at(-1)).toBe(ys.at(-1));
+    // Away from the teeth the climb is untouched.
+    for (let i = 0; i < 30; i++) expect(out[i]).toBeCloseTo(ys[i] ?? NaN, 9);
+    expect(xsOf(flat)).toEqual(ys.map((_, i) => i * 0.5));
   });
 
   it('keeps a single bend (a summit) as it is', () => {
     const ys = [50, 40, 30, 20, 30, 40, 50];
     const flat = ys.flatMap((y, i) => [i, y]);
     smoothZigzags(flat, 60);
-    expect(flat.filter((_, i) => i % 2 === 1)).toEqual(ys);
+    expect(ysOf(flat)).toEqual(ys);
+  });
+
+  it('keeps a sharp summit standing out keepPx or more, and smooths the teeth beside it', () => {
+    // A 0.25 px-step route: a V summit 20 px high at x = 100, teeth (±1.5 px, 2 px period) on
+    // both flanks away from it.
+    const ys: number[] = [];
+    for (let i = 0; i <= 800; i++) {
+      const x = i * 0.25;
+      const teeth = Math.abs(x - 100) > 30 ? 1.5 * Math.sin((x * Math.PI) / 1) : 0;
+      ys.push(100 + 0.2 * Math.abs(x - 100) + teeth);
+    }
+    const flat = ys.flatMap((y, i) => [i * 0.25, y]);
+    smoothZigzags(flat, 16, { keepPx: 6 });
+    const out = ysOf(flat);
+    expect(Math.abs((out[400] ?? 0) - (ys[400] ?? 0))).toBeLessThanOrEqual(1.5);
+    expect(Math.min(...out)).toBeCloseTo(Math.min(...ys), 0);
+    // The teeth are gone from the flanks (well away from the ends and the summit).
+    const flank = (values: readonly number[]) => values.slice(40, 240);
+    expect(turns(flank(ys))).toBeGreaterThan(20);
+    expect(turns(flank(out))).toBe(0);
+  });
+
+  it('blends in without steps: no neighbour jump beyond the raw route’s, nowhere a lone spike', () => {
+    // Teeth that fade in and out along a gentle climb: the smoothing must not switch.
+    const ys: number[] = [];
+    for (let i = 0; i <= 2000; i++) {
+      const x = i * 0.3;
+      const envelope = Math.max(0, Math.sin((x / 600) * Math.PI * 3));
+      ys.push(400 - 0.1 * x + 2 * envelope * Math.sin(x * 2.2));
+    }
+    const flat = ys.flatMap((y, i) => [i * 0.3, y]);
+    smoothZigzags(flat, 16, { keepPx: 6 });
+    const out = ysOf(flat);
+    const maxJump = (v: readonly number[]) =>
+      Math.max(...v.slice(1).map((y, i) => Math.abs(y - (v[i] ?? 0))));
+    expect(maxJump(out)).toBeLessThanOrEqual(maxJump(ys) + 0.25);
+    expect(turns(out)).toBeLessThan(turns(ys) / 4);
+  });
+});
+
+describe('ridgeFigure route on the sample', () => {
+  const parsed = parseGpx(sampleGpx);
+  const { run, points: track } = buildRun(parsed, 'coosa-backcountry.gpx', true);
+
+  /** Rugged synthetic terrain over `bounds`: ridges and ravines 300–600 m apart. */
+  function rugged(bounds: Bounds): Heightfield {
+    const w = 220;
+    const h = 220;
+    const elevations = new Float32Array(w * h);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const value =
+          900 +
+          260 * Math.sin(x / 9) * Math.cos(y / 13) +
+          90 * Math.sin((x + 2 * y) / 4.5) +
+          40 * Math.cos((3 * x - y) / 3.1);
+        elevations[y * w + x] = value;
+        min = Math.min(min, value);
+        max = Math.max(max, value);
+      }
+    }
+    const lat = ((bounds.north + bounds.south) / 2) * (Math.PI / 180);
+    return {
+      bounds,
+      zoom: 14,
+      width: w,
+      height: h,
+      elevations,
+      min,
+      max,
+      metresPerSample: {
+        x: ((bounds.east - bounds.west) * Math.cos(lat) * 111_320) / (w - 1),
+        y: ((bounds.north - bounds.south) * 111_320) / (h - 1),
+      },
+      failedTiles: [],
+    };
+  }
+
+  // The stage boxes of the four sizes (the stories' Night Ridge stage, logical px).
+  const SIZES = [
+    { id: '18x24', box: { width: 624, height: 692 }, rows: 64 },
+    { id: 'a3', box: { width: 624, height: 750 }, rows: 64 },
+    { id: '4x5', box: { width: 936, height: 943 }, rows: 72 },
+    { id: '9x16', box: { width: 936, height: 1513 }, rows: 72 },
+  ];
+
+  it.each(SIZES)('adds no step the raw route does not have at $id', ({ box, rows }) => {
+    const heightfield = rugged(ridgeBounds(run.bounds, box));
+    // A huge detail scale keeps (practically) every point of the route.
+    const options = { rows, detailScale: 1e6 };
+    const raw = points(
+      ridgeFigure(heightfield, box, track, { ...options, smoothRoute: false }).route,
+    );
+    const smooth = points(ridgeFigure(heightfield, box, track, options).route);
+    const maxJump = (route: [number, number][]) =>
+      Math.max(...route.slice(1).map(([, y], i) => Math.abs(y - (route[i]?.[1] ?? 0))));
+    expect(raw.length).toBeGreaterThan(5000);
+    expect(maxJump(smooth)).toBeLessThanOrEqual(maxJump(raw) + 0.25);
+    // The smoothing did act on this route, and kept its ends.
+    expect(turns(smooth.map(([, y]) => y))).toBeLessThan(turns(raw.map(([, y]) => y)));
+    expect(smooth[0]).toEqual(raw[0]);
+    expect(smooth.at(-1)).toEqual(raw.at(-1));
   });
 });

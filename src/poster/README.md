@@ -62,7 +62,10 @@ social layout is the print design at 1.5×, strokes included, except that no soc
 - `SurveyQuadPoster.tsx` (E): title, map in its frame, stats band, legend and scale bar. The map box
   (inside the frame's padding) is reported through `onFigureBox`; build the heightfield from
   `quadBounds(run.bounds, box.width / box.height)` with `padding: 0`, then
-  `surveyQuadFigureData(run, heightfield, box, { units, layout })`.
+  `surveyQuadFigureData(run, heightfield, box, { units, layout })`. Scale labels sit on their ticks
+  (the first starts at the bar, the last centres its number and hangs the unit after it, in room
+  the block reserves, or ends flush with the bar when the key has no room for that); labels
+  are thinned by their measured widths (`scaleLabelsShown`).
 - Detail: pass `detailScale` (the export scale, `posterLayout(size).scale`) to the figure-data
   functions when exporting: lines are then sampled and simplified to 0.3 output px with finer
   coordinate rounding (`lineDetail`). The preview can use the default 1.
@@ -71,10 +74,11 @@ social layout is the print design at 1.5×, strokes included, except that no soc
   the factor the poster prints ("ELEVATION ×2.4") and states in its accessible name;
   paper-filled below each line, opacity 0.18 → 0.88; the depth compression is chosen to fill the
   free area; the route is draped on the same (lightly smoothed) surface, and vertical zigzags from
-  GPS jitter on steep slopes are evened out (`smoothZigzags`).
+  GPS jitter on steep slopes are evened out (`smoothZigzags`: blended in by a smoothed per-point
+  weight, so it adds no step or lone spike; summits and valleys of 25 m or more are kept).
 - `contours.ts`: marching squares (saddles resolved by the cell centre), segments joined into
-  polylines, smoothed input, 20 m interval (coarser only when lines would pack under 2.5 px; the
-  label states the interval drawn), index every 5th, top-down true-aspect projection, RDP
+  polylines, smoothed input, 20 m interval, 50 ft in imperial units (coarser only when lines would
+  pack under 2.5 px; the label states the interval drawn), index every 5th (100 m, 250 ft), top-down true-aspect projection, RDP
   simplification, scale bar of four round segments.
 - Palettes: `NIGHT_RIDGE_PALETTE` and `SURVEY_QUAD_PALETTE` in `styles.ts`. B's small text is
   `#B9D3DE` (10.36:1); `#8EC5DA` is for strokes only.

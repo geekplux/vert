@@ -102,7 +102,10 @@ export interface SurveyQuadMap {
   readonly width: number;
   readonly height: number;
   readonly contours: ContourPaths;
-  /** Contour interval actually drawn, metres (20 unless the relief is too dense; see contours). */
+  /**
+   * Contour interval actually drawn, metres: 20 m, or 50 ft (15.24 m) in imperial units, unless
+   * the relief is too dense (see `chooseContourInterval`).
+   */
   readonly interval: number;
   readonly route: string;
   /** Start ○, and a finish ○ when it is apart from the start. */
@@ -209,7 +212,7 @@ export function surveyQuadFigureData(
   // Smooth over ~2.5 px of map (at least a sample): tile noise would fray the 20 m lines.
   const pxPerSample = projection.pxPerMetre * heightfield.metresPerSample.x;
   const smoothed = smoothHeightfield(heightfield, Math.max(1, Math.round(2.5 / pxPerSample)));
-  const interval = chooseContourInterval(smoothed, projection.pxPerMetre);
+  const interval = chooseContourInterval(smoothed, projection.pxPerMetre, { units });
   const contours = contourPaths(extractContours(smoothed, { interval }), projection, detailScale);
   const { tolerance, decimals } = lineDetail(detailScale);
 

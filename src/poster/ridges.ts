@@ -49,6 +49,11 @@ export interface RidgeOptions {
    * falls inside one (with an 8 px margin), down to 40% of its full size.
    */
   keepOut?: readonly Rect[];
+  /**
+   * Even out GPS zigzags in the draped route (`smoothZigzags`); on by default. `false` draws the
+   * route exactly as projected (for comparisons).
+   */
+  smoothRoute?: boolean;
 }
 
 export interface RidgeRow {
@@ -326,7 +331,21 @@ export function ridgeFigure(
   let finish: Point | null = null;
   if (n > 0) {
     const flat = Array.from(routeModel, (value, i) => (i % 2 === 0 ? px(value) : py(value)));
-    smoothZigzags(flat, Math.max(16, box.width / 40));
+    if (options.smoothRoute !== false) {
+      // The track's ground length at the figure's scale: the windows' measure.
+      const along = new Float64Array(n);
+      for (let i = 1; i < n; i++) {
+        const ground = Math.hypot(
+          (routeX[i] ?? 0) - (routeX[i - 1] ?? 0),
+          (routeDepth[i] ?? 0) - (routeDepth[i - 1] ?? 0),
+        );
+        along[i] = (along[i - 1] ?? 0) + ground * scale;
+      }
+      smoothZigzags(flat, Math.max(16, box.width / 40), {
+        keepPx: KEEP_RELIEF_M * lift * scale,
+        along,
+      });
+    }
     route = n > 1 ? pathData(simplify(flat, tolerance), false, decimals) : '';
     start = { x: flat[0] ?? 0, y: flat[1] ?? 0 };
     const end = { x: flat[flat.length - 2] ?? 0, y: flat[flat.length - 1] ?? 0 };
@@ -336,57 +355,225 @@ export function ridgeFigure(
   return { width: box.width, height: box.height, rows: ridgeRows, route, start, finish };
 }
 
-/**
- * Evens out vertical zigzags in a projected route, in place. GPS jitter across a steep slope makes
- * the draped elevation (lifted ×2.4) flick up and down, which draws as spiky teeth. For each point
- * the stretch of route within `windowPx` (screen arc length) around it is examined; when y turns
- * back at least twice there (a zigzag, not a single summit or valley), and its vertical travel is
- * visible (≥ 1.5 px) and at least half its horizontal travel, y becomes the mean y of that
- * stretch. x and the two ends are left alone. Two passes; linear time (prefix sums, two pointers).
- */
-export function smoothZigzags(flat: number[], windowPx = 16): void {
-  smoothZigzagsOnce(flat, windowPx);
-  smoothZigzagsOnce(flat, windowPx);
+/** px: y must retrace this far from its last extreme for the route to count as turning back. */
+const TURN_PX = 0.5;
+/** Summits and valleys of the route standing out this much (metres) are never smoothed. */
+const KEEP_RELIEF_M = 25;
+
+export interface ZigzagOptions {
+  /** Summits and valleys of y standing out this much (px) on both sides are kept as they are. */
+  keepPx?: number;
+  /**
+   * Distance along the route at each point, px, increasing: windows are measured in it. Default:
+   * the route's horizontal travel (Σ|dx|). ridgeFigure passes the track's ground length at the
+   * figure's scale, which the vertical teeth do not lengthen.
+   */
+  along?: ArrayLike<number>;
 }
 
-function smoothZigzagsOnce(flat: number[], windowPx: number): void {
+/**
+ * Evens out vertical zigzags in a projected route, in place. GPS jitter across a steep slope makes
+ * the draped elevation (lifted ×2.4) flick up and down, which draws as spiky teeth.
+ *
+ * The smoothing is blended in, never switched on and off: each point gets a zigzag strength
+ * (0..1) from the stretch of route within `windowPx` (distance along the route, see `along`)
+ * around it, rising with how often y turns back there (at least twice: a zigzag, not a single
+ * summit or valley), how far it travels (from 1 px) and how steep that travel is against the
+ * horizontal. The strength is spread (a running max, then a running mean), so a point between
+ * smoothed neighbours is smoothed too and the weight ramps in and out without a step. The output
+ * is `raw + weight × (fit − raw)`, where `fit` is a local quadratic fit of y along the route
+ * (tricube kernel over ±`windowPx`): it averages the teeth out but follows the curve of a gentle
+ * summit or valley. A summit or valley that stands out at least `keepPx` on both sides
+ * (ridgeFigure: 25 m of relief) is kept: the weight is 0 within half a window of it and ramps back
+ * over the next half. x is left alone, and the weight ramps to 0 at the two ends, which stay put.
+ */
+export function smoothZigzags(
+  flat: number[],
+  windowPx = 16,
+  { keepPx = Infinity, along }: ZigzagOptions = {},
+): void {
   const n = Math.floor(flat.length / 2);
-  if (n < 5) return;
-  const xs = Array.from({ length: n }, (_, i) => flat[2 * i] ?? 0);
-  const ys = Array.from({ length: n }, (_, i) => flat[2 * i + 1] ?? 0);
+  if (n < 5 || !(windowPx > 0)) return;
+  const ys = Float64Array.from({ length: n }, (_, i) => flat[2 * i + 1] ?? 0);
   const arc = new Float64Array(n);
   const absDy = new Float64Array(n); // prefix Σ|dy| up to point i
   const absDx = new Float64Array(n);
-  const sumY = new Float64Array(n + 1);
-  const turns = new Float64Array(n); // prefix count of points where y turns back
-  const NOISE = 0.05; // px: smaller steps count as flat
-  let lastSign = 0;
-  sumY[1] = ys[0] ?? 0;
+  const turns = new Float64Array(n); // prefix count of turn-backs (with TURN_PX hysteresis)
+  let direction = 0;
+  let extreme = ys[0] ?? 0;
   for (let i = 1; i < n; i++) {
-    const dx = (xs[i] ?? 0) - (xs[i - 1] ?? 0);
-    const dy = (ys[i] ?? 0) - (ys[i - 1] ?? 0);
-    arc[i] = (arc[i - 1] ?? 0) + Math.hypot(dx, dy);
+    const y = ys[i] ?? 0;
+    const dx = (flat[2 * i] ?? 0) - (flat[2 * i - 2] ?? 0);
+    const dy = y - (ys[i - 1] ?? 0);
+    arc[i] = along ? (along[i] ?? 0) - (along[0] ?? 0) : (arc[i - 1] ?? 0) + Math.abs(dx);
     absDy[i] = (absDy[i - 1] ?? 0) + Math.abs(dy);
     absDx[i] = (absDx[i - 1] ?? 0) + Math.abs(dx);
-    sumY[i + 1] = (sumY[i] ?? 0) + (ys[i] ?? 0);
-    const sign = Math.abs(dy) < NOISE ? 0 : Math.sign(dy);
-    const turned = sign !== 0 && lastSign !== 0 && sign !== lastSign ? 1 : 0;
-    if (sign !== 0) lastSign = sign;
+    let turned = 0;
+    if (direction === 0) {
+      if (Math.abs(y - extreme) >= TURN_PX) {
+        direction = Math.sign(y - extreme);
+        extreme = y;
+      }
+    } else if ((y - extreme) * direction > 0) {
+      extreme = y;
+    } else if ((extreme - y) * direction >= TURN_PX) {
+      turned = 1;
+      direction = -direction;
+      extreme = y;
+    }
     turns[i] = (turns[i - 1] ?? 0) + turned;
   }
+  const total = arc[n - 1] ?? 0;
   const half = windowPx / 2;
-  let a = 0;
-  let b = 0;
-  for (let i = 1; i < n - 1; i++) {
-    const centre = arc[i] ?? 0;
-    while ((arc[a] ?? 0) < centre - half) a++;
-    while (b + 1 < n && (arc[b + 1] ?? 0) <= centre + half) b++;
-    if (b - a < 2) continue;
+  const quarter = windowPx / 4;
+
+  // Zigzag strength of the stretch around each point.
+  const strength = new Float64Array(n);
+  forWindows(arc, half, (i, a, b) => {
+    if (b - a < 2) return;
     const vertical = (absDy[b] ?? 0) - (absDy[a] ?? 0);
     const horizontal = (absDx[b] ?? 0) - (absDx[a] ?? 0);
     const reversals = (turns[b] ?? 0) - (turns[a] ?? 0);
-    if (reversals >= 2 && vertical > 0.5 * horizontal && vertical >= 1.5) {
-      flat[2 * i + 1] = ((sumY[b + 1] ?? 0) - (sumY[a] ?? 0)) / (b - a + 1);
+    const steep = horizontal > 0 ? clamp01((vertical / horizontal - 0.3) / 0.4) : 1;
+    strength[i] = clamp01(reversals - 1) * clamp01(vertical - 1) * steep;
+  });
+  // Spread it: a running max, then a triangular running mean, each over ±quarter window.
+  const spread = new Float64Array(n);
+  forWindows(arc, quarter, (i, a, b) => {
+    let max = 0;
+    for (let j = a; j <= b; j++) max = Math.max(max, strength[j] ?? 0);
+    spread[i] = max;
+  });
+  const weight = new Float64Array(n);
+  forWindows(arc, quarter, (i, a, b) => {
+    let sum = 0;
+    let norm = 0;
+    for (let j = a; j <= b; j++) {
+      const k = 1 - Math.abs((arc[j] ?? 0) - (arc[i] ?? 0)) / (quarter * 1.0001);
+      sum += k * (spread[j] ?? 0);
+      norm += k;
+    }
+    const ends = clamp01(Math.min(arc[i] ?? 0, total - (arc[i] ?? 0)) / half);
+    weight[i] = norm > 0 ? (sum / norm) * ends : 0;
+  });
+  // Keep the real summits and valleys.
+  for (const e of prominentExtremes(ys, keepPx)) {
+    const centre = arc[e] ?? 0;
+    for (const step of [-1, 1]) {
+      for (let j = e; j >= 0 && j < n && Math.abs((arc[j] ?? 0) - centre) < windowPx; j += step) {
+        const keep = clamp01((Math.abs((arc[j] ?? 0) - centre) - half) / half);
+        weight[j] = (weight[j] ?? 0) * keep;
+      }
     }
   }
+  // Blend towards the local quadratic fit as far as the weight says.
+  forWindows(arc, windowPx, (i, a, b) => {
+    const w = weight[i] ?? 0;
+    if (w <= 0 || i === 0 || i === n - 1) return;
+    const raw = ys[i] ?? 0;
+    flat[2 * i + 1] = raw + w * (localQuadratic(arc, ys, i, a, b, windowPx) - raw);
+  });
+}
+
+/**
+ * The points where y has a local minimum or maximum that stands out at least `keepPx` on both
+ * sides: walking either way, y moves `keepPx` away from it before it passes it (or the route ends
+ * after at least that much). Each walk stops as soon as that is decided.
+ */
+function prominentExtremes(ys: Float64Array, keepPx: number): number[] {
+  const n = ys.length;
+  const found: number[] = [];
+  if (!(keepPx < Infinity)) return found;
+  const standsOut = (i: number, sign: number, step: number) => {
+    const peak = (ys[i] ?? 0) * sign; // the extreme, as a maximum
+    for (let j = i + step; j >= 0 && j < n; j += step) {
+      const v = (ys[j] ?? 0) * sign;
+      if (v > peak) return false;
+      if (peak - v >= keepPx) return true;
+    }
+    return false;
+  };
+  for (let i = 1; i < n - 1; i++) {
+    const y = ys[i] ?? 0;
+    const before = ys[i - 1] ?? 0;
+    const after = ys[i + 1] ?? 0;
+    for (const sign of [1, -1]) {
+      // sign 1: a maximum of y (a valley on the page); -1: a minimum (a summit).
+      if (y * sign >= before * sign && y * sign > after * sign) {
+        if (standsOut(i, sign, -1) && standsOut(i, sign, 1)) found.push(i);
+      }
+    }
+  }
+  return found;
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * Calls `visit(i, a, b)` for each point, with a..b the points within `radius` of arc length of
+ * it (two pointers).
+ */
+function forWindows(
+  arc: Float64Array,
+  radius: number,
+  visit: (i: number, a: number, b: number) => void,
+): void {
+  const n = arc.length;
+  let a = 0;
+  let b = 0;
+  for (let i = 0; i < n; i++) {
+    const centre = arc[i] ?? 0;
+    while ((arc[a] ?? 0) < centre - radius) a++;
+    b = Math.max(b, i);
+    while (b + 1 < n && (arc[b + 1] ?? 0) <= centre + radius) b++;
+    visit(i, a, b);
+  }
+}
+
+/**
+ * The value at point `i` of the weighted least-squares quadratic of y against arc length over
+ * points a..b (tricube weights over ±`radius`); their weighted mean when that is degenerate.
+ */
+function localQuadratic(
+  arc: Float64Array,
+  ys: Float64Array,
+  i: number,
+  a: number,
+  b: number,
+  radius: number,
+): number {
+  // Σk·u^p for p = 0..4 and Σk·u^p·y for p = 0..2, with u = (arc − arc[i]) / radius.
+  let s0 = 0;
+  let s1 = 0;
+  let s2 = 0;
+  let s3 = 0;
+  let s4 = 0;
+  let t0 = 0;
+  let t1 = 0;
+  let t2 = 0;
+  const centre = arc[i] ?? 0;
+  for (let j = a; j <= b; j++) {
+    const u = ((arc[j] ?? 0) - centre) / radius;
+    const c = 1 - Math.abs(u) ** 3;
+    const k = c * c * c;
+    if (!(k > 0)) continue;
+    const y = ys[j] ?? 0;
+    const u2 = u * u;
+    s0 += k;
+    s1 += k * u;
+    s2 += k * u2;
+    s3 += k * u2 * u;
+    s4 += k * u2 * u2;
+    t0 += k * y;
+    t1 += k * u * y;
+    t2 += k * u2 * y;
+  }
+  if (!(s0 > 0)) return ys[i] ?? 0;
+  // Cramer's rule for the constant term of [s0 s1 s2; s1 s2 s3; s2 s3 s4] · c = [t0 t1 t2].
+  const det = s0 * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s3 * s2) + s2 * (s1 * s3 - s2 * s2);
+  if (Math.abs(det) < 1e-9 * s0 * s0 * s0) return t0 / s0;
+  const c0 = t0 * (s2 * s4 - s3 * s3) - s1 * (t1 * s4 - s3 * t2) + s2 * (t1 * s3 - s2 * t2);
+  return c0 / det;
 }

@@ -37,4 +37,31 @@ verification sub-agent → merge on PASS. Max three rounds.
 
 ## 2 Layout
 
+| Done | Task                                                | Rounds | Notes |
+| ---- | --------------------------------------------------- | ------ | ----- |
+| [ ]  | a. State machine, sample run, `useRun`/`useTerrain` |        |       |
+| [ ]  | b. AppHeader and responsive page shell              |        |       |
+| [ ]  | c. UploadState                                      |        |       |
+| [ ]  | d. ViewState                                        |        |       |
+| [ ]  | e. PosterState with live poster preview box         |        |       |
+| [ ]  | f. ExportingState overlay                           |        |       |
+| [ ]  | g. Playwright e2e: all four states by keyboard      |        |       |
+
 ## 3 Features
+
+Started early where a module has no UI dependency (sample data, `src/lib`, parser, tile data).
+
+| Done | Task                                                                 | Rounds | Notes                                                |
+| ---- | -------------------------------------------------------------------- | ------ | ---------------------------------------------------- |
+| [x]  | Sample run (Coosa Backcountry, OSM + Terrarium, synthetic times)     | 1      | 21.48 km, +1,092 m, 5,623 points.                    |
+| [x]  | `src/lib`: geo, tile maths, Terrarium decoding, formatting           | 1      | Verified against Vincenty and the OSM tile formulas. |
+| [ ]  | 0. Course fixtures (UTMB courses, git-ignored unless licence allows) |        |                                                      |
+| [ ]  | 1a. GPX parser (worker-safe tokenizer)                               |        |                                                      |
+| [ ]  | 1b. Stats (distance, moving time, gain, climbs) + Web Worker         |        |                                                      |
+| [ ]  | 2. Terrarium tiles → heightfield                                     |        |                                                      |
+| [ ]  | 3. Terrain mesh + TerrainView (three.js)                             |        |                                                      |
+| [ ]  | 4. Scrub: profile ↔ route marker                                     |        |                                                      |
+| [ ]  | 5. Poster layout + style A                                           |        |                                                      |
+| [ ]  | 6. Tiled export (PNG, PDF)                                           |        |                                                      |
+| [ ]  | 7. Styles B and E                                                    |        |                                                      |
+| [ ]  | 8. Worker tile proxy + R2, deploy                                    |        |                                                      |

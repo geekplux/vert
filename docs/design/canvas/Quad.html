@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert, Survey Quad</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;600;700&amp;family=Libre+Caslon+Text:ital@0;1&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E1B18}a:hover{color:#9A5B2E}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 48px 56px; background: #F2EFE6; color: #1E1B18; font-family: 'Archivo Narrow', 'Arial Narrow', sans-serif; display: flex; gap: 48px">
+<div style="flex: 0 0 900px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.1em"><span>34°N</span><span>SAMPLE TERRAIN</span><span>84°W</span></div>
+<div style="position: relative; border: 2px solid #1E1B18; padding: 6px; background: #F7F5EE">
+<img src="assets/e40347666d4850a6e9fc9fc114b745b5.svg" alt="Top-down contour map in brown with the route as a black dashed line" style="display: block; width: 100%; height: auto">
+<div style="position: absolute; left: 520px; top: 300px; font-family: 'Libre Caslon Text', Georgia, serif; font-style: italic; font-size: 18px">[Summit name]</div>
+<div style="position: absolute; left: 160px; top: 560px; font-family: 'Libre Caslon Text', Georgia, serif; font-style: italic; font-size: 15px; letter-spacing: 0.2em">[CREEK NAME]</div>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.1em"><span>MAPPED FROM GPX + PUBLIC ELEVATION DATA</span><span>[DATE]</span></div>
+</div>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 28px">
+<div style="font-size: 14px; letter-spacing: 0.18em; font-weight: 600">VERT · TRAIL QUADRANGLE</div>
+<h1 style="margin: 0; font-family: 'Libre Caslon Text', Georgia, serif; font-size: 64px; line-height: 1; font-weight: 400">[Route name] Loop</h1>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; border-top: 1px solid #1E1B18; border-bottom: 1px solid #1E1B18; padding: 18px 0; font-variant-numeric: tabular-nums">
+<div><div style="font-size: 12px; letter-spacing: 0.14em">DISTANCE</div><div style="font-size: 34px; font-weight: 700">21.4 km</div></div>
+<div><div style="font-size: 12px; letter-spacing: 0.14em">ASCENT</div><div style="font-size: 34px; font-weight: 700">1,070 m</div></div>
+<div><div style="font-size: 12px; letter-spacing: 0.14em">TIME</div><div style="font-size: 34px; font-weight: 700">3:12:40</div></div>
+<div><div style="font-size: 12px; letter-spacing: 0.14em">HIGH POINT</div><div style="font-size: 34px; font-weight: 700">820 m</div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 15px">
+<div style="display: flex; align-items: center; gap: 12px"><svg width="48" height="10" aria-hidden="true"><line x1="0" y1="5" x2="48" y2="5" stroke="#1E1B18" stroke-width="3.5" stroke-dasharray="10 6"/></svg>Route run</div>
+<div style="display: flex; align-items: center; gap: 12px"><svg width="48" height="10" aria-hidden="true"><line x1="0" y1="5" x2="48" y2="5" stroke="#9A5B2E" stroke-width="1.6"/></svg>Index contour</div>
+<div style="display: flex; align-items: center; gap: 12px"><svg width="48" height="10" aria-hidden="true"><line x1="0" y1="5" x2="48" y2="5" stroke="#9A5B2E" stroke-width="0.7"/></svg>Intermediate contour</div>
+<div style="display: flex; align-items: center; gap: 12px"><svg width="48" height="18" aria-hidden="true"><circle cx="24" cy="9" r="7" fill="#FFFFFF" stroke="#1E1B18" stroke-width="2.5"/></svg>Start and finish</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; margin-top: auto">
+<svg width="300" height="14" aria-hidden="true"><rect x="0" y="2" width="75" height="8" fill="#1E1B18"/><rect x="75" y="2" width="75" height="8" fill="#F2EFE6" stroke="#1E1B18"/><rect x="150" y="2" width="75" height="8" fill="#1E1B18"/><rect x="225" y="2" width="75" height="8" fill="#F2EFE6" stroke="#1E1B18"/></svg>
+<div style="display: flex; justify-content: space-between; width: 300px; font-size: 12px"><span>0</span><span>1</span><span>2</span><span>3</span><span>4 km</span></div>
+<div style="font-size: 12px; letter-spacing: 0.14em; margin-top: 8px">CONTOUR INTERVAL 20 METRES</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

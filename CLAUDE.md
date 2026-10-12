@@ -4,9 +4,11 @@ Vert turns one GPX file into a 3D terrain visualization on a web page, then into
 styles. Nothing else in v1.
 
 Read before working: `docs/PLAN.md` (decisions, phases, roles), `docs/DESIGN-SPEC.md` (tokens,
-components, page states, poster styles, accessibility), `docs/PROGRESS.md` (where the build is).
+components, page states, poster styles, accessibility), `docs/DECISIONS.md` (main-agent rulings where sources disagree; it outranks the canvas and the
+spec text), `docs/PROGRESS.md` (where the build is).
 The design canvas (https://claude.ai/artifact/NdsPXbrWdZh6Kujww7LFZm) wins over DESIGN-SPEC.md on
-visual detail when you can open it.
+visual detail when you can open it; local copies of every frame are in `docs/design/` (HTML source
+and PNG renders).
 
 ## Non-negotiables
 
@@ -37,7 +39,7 @@ Approved in PLAN.md: `react`, `react-dom`, `three`, `@react-three/fiber` (option
 Installed in phase 0 because the setup prompt's tooling needs them: `@vitejs/plugin-react`,
 `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, `jsdom`,
 `@testing-library/dom` (peer of Testing Library), `@types/react`, `@types/react-dom`,
-`@types/node`. Not yet installed: `three`, `axe-core`.
+`@types/node`. Not yet installed: `three`.
 
 Pinned on purpose:
 

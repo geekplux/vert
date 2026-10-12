@@ -17,6 +17,24 @@ Worker deploy.
 
 ## 1 Components
 
+One component per task, simplest first. Each: implementation sub-agent (own worktree) →
+verification sub-agent → merge on PASS. Max three rounds.
+
+| Done | Component        | Rounds | Notes |
+| ---- | ---------------- | ------ | ----- |
+| [ ]  | Button           |        |       |
+| [ ]  | Wordmark         |        |       |
+| [ ]  | StatTile         |        |       |
+| [ ]  | Segmented        |        |       |
+| [ ]  | Checkbox         |        |       |
+| [ ]  | TextField        |        |       |
+| [ ]  | Slider           |        |       |
+| [ ]  | Marker           |        |       |
+| [ ]  | SizePicker       |        |       |
+| [ ]  | StylePicker      |        |       |
+| [ ]  | Dropzone         |        |       |
+| [ ]  | ElevationProfile |        |       |
+
 ## 2 Layout
 
 ## 3 Features

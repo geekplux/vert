@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert share card</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#F4F6F8}a:hover{color:#FF8A50}
+</style>
+</helmet>
+<div style="width: 1080px; height: 1350px; box-sizing: border-box; padding: 72px; background: #1B2A3A; color: #F4F6F8; font-family: 'Archivo', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; font-family: 'IBM Plex Mono', monospace; font-size: 22px; letter-spacing: 0.1em">
+<span style="font-family: 'Archivo', sans-serif; font-size: 40px; font-weight: 800; font-stretch: 62%; letter-spacing: 0.04em">VERT</span><span>[DATE]</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 220px; line-height: 0.85; font-weight: 800; font-stretch: 62%; color: #FF8A50; font-variant-numeric: tabular-nums">+1,070 m</div>
+<div style="font-size: 48px; font-weight: 600; font-stretch: 75%">of climbing in 21.4 km on [Route name]</div>
+</div>
+<div style="background: #E6EAEE; border-radius: 8px; overflow: hidden">
+<img src="assets/b5be3a7237400030e92202bb0369ee89.svg" alt="Oblique 3D terrain with the route drawn as an orange loop" style="display: block; width: 100%; height: auto">
+</div>
+<div style="display: flex; justify-content: space-between; margin-top: auto; font-family: 'IBM Plex Mono', monospace; font-size: 22px; letter-spacing: 0.08em; color: #C9D1D9">
+<span>3:12:40 · HIGH POINT 820 m</span><span>@geekplux</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1080,"height":1350}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

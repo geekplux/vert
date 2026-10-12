@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert poster mode</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1B2A3A}a:hover{color:#D9480F}
+</style>
+</helmet>
+<div style="width: 1440px; height: 980px; box-sizing: border-box; background: #F4F6F8; color: #1B2A3A; font-family: 'Archivo', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column">
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid #C9D1D9">
+<div style="display: flex; align-items: baseline; gap: 14px">
+<div style="font-size: 30px; font-weight: 800; font-stretch: 62%; letter-spacing: 0.04em">VERT</div>
+<div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; color: #5B6B7A; letter-spacing: 0.06em">POSTER · [ROUTE NAME] LOOP</div>
+</div>
+<a href="Main.dc.html" style="font: 600 15px 'Archivo', sans-serif; color: #1B2A3A; border: 1px solid #1B2A3A; border-radius: 4px; padding: 12px 18px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; text-decoration: none">Back to the run</a>
+</header>
+<div style="flex: 1 1 auto; display: flex; min-height: 0">
+<aside style="flex: 0 0 380px; box-sizing: border-box; padding: 28px 32px 28px 40px; display: flex; flex-direction: column; gap: 24px; border-right: 1px solid #C9D1D9; overflow: auto">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">STYLE</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<a href="#style-a" style="display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: #1B2A3A"><span style="display: block; aspect-ratio: 3 / 4; background: #E6EAEE; border: 2px solid #1B2A3A; border-radius: 4px"></span><span style="font-size: 13px; font-weight: 600">A Trail Sign</span></a>
+<a href="#style-b" style="display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: #1B2A3A"><span style="display: block; aspect-ratio: 3 / 4; background: #0F2233; border: 1px solid #C9D1D9; border-radius: 4px"></span><span style="font-size: 13px">B Night Ridge</span></a>
+<a href="#style-e" style="display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: #1B2A3A"><span style="display: block; aspect-ratio: 3 / 4; background: #F2EFE6; border: 1px solid #C9D1D9; border-radius: 4px"></span><span style="font-size: 13px">E Survey Quad</span></a>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">SIZE</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #FFFFFF; background: #1B2A3A; border: 1px solid #1B2A3A; border-radius: 4px; padding: 10px 12px; min-height: 44px; text-align: left; cursor: pointer">18 × 24 in<br><span style="font: 11px 'IBM Plex Mono', monospace; opacity: .8">print · 5400 × 7200</span></button>
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; text-align: left; cursor: pointer">A3<br><span style="font: 11px 'IBM Plex Mono', monospace; color: #5B6B7A">print · 3508 × 4961</span></button>
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; text-align: left; cursor: pointer">4 : 5<br><span style="font: 11px 'IBM Plex Mono', monospace; color: #5B6B7A">social · 1080 × 1350</span></button>
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; text-align: left; cursor: pointer">9 : 16<br><span style="font: 11px 'IBM Plex Mono', monospace; color: #5B6B7A">story · 1080 × 1920</span></button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">TEXT</div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="p-title" style="font-size: 14px">Title</label><input id="p-title" type="text" value="[Route name] Loop" style="font: 16px 'Archivo', sans-serif; color: #1B2A3A; background: #FFFFFF; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; box-sizing: border-box"></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="p-sub" style="font-size: 14px">Subtitle</label><input id="p-sub" type="text" value="[Place] · [Date]" style="font: 16px 'Archivo', sans-serif; color: #1B2A3A; background: #FFFFFF; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; box-sizing: border-box"></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="p-sig" style="font-size: 14px">Signature</label><input id="p-sig" type="text" value="@geekplux" style="font: 16px 'Archivo', sans-serif; color: #1B2A3A; background: #FFFFFF; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; box-sizing: border-box"></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">STATS · PRIVACY</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px">
+<label style="display: flex; align-items: center; gap: 6px; min-height: 44px"><input type="checkbox" checked style="accent-color: #1B2A3A; width: 18px; height: 18px"> Distance</label>
+<label style="display: flex; align-items: center; gap: 6px; min-height: 44px"><input type="checkbox" checked style="accent-color: #1B2A3A; width: 18px; height: 18px"> Vert</label>
+<label style="display: flex; align-items: center; gap: 6px; min-height: 44px"><input type="checkbox" checked style="accent-color: #1B2A3A; width: 18px; height: 18px"> Time</label>
+<label style="display: flex; align-items: center; gap: 6px; min-height: 44px"><input type="checkbox" style="accent-color: #1B2A3A; width: 18px; height: 18px"> High point</label>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="p-priv" style="display: flex; justify-content: space-between; font-size: 14px"><span>Hide start and end</span><span style="font-family: 'IBM Plex Mono', monospace">200 m</span></label><input id="p-priv" type="range" min="0" max="500" step="100" value="200" style="width: 100%; accent-color: #1B2A3A"></div>
+</div>
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid #C9D1D9">
+<button type="button" style="font: 600 16px 'Archivo', sans-serif; color: #FFFFFF; background: #1B2A3A; border: 0; border-radius: 4px; padding: 14px 18px; min-height: 48px; cursor: pointer">Download PNG · 5400 × 7200</button>
+<button type="button" style="font: 600 15px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 1px solid #1B2A3A; border-radius: 4px; padding: 12px 18px; min-height: 44px; cursor: pointer">Download PDF for print</button>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5B6B7A; line-height: 1.6">Rendered in your browser in tiles. Large sizes take a few seconds.</div>
+</div>
+</aside>
+<main style="flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 32px; background: #E6EAEE">
+<div style="width: 600px; height: 800px; background: #E6EAEE; box-shadow: 0 1px 2px rgba(27,42,58,.18), 0 12px 32px rgba(27,42,58,.18); box-sizing: border-box; padding: 40px; display: flex; flex-direction: column; gap: 16px; color: #1B2A3A">
+<div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em"><span>VERT</span><span>[DATE]</span></div>
+<div style="font-size: 86px; line-height: 0.88; font-weight: 800; font-stretch: 62%; text-transform: uppercase">[Route name]<br>Loop</div>
+<img src="assets/b5be3a7237400030e92202bb0369ee89.svg" alt="Preview of the poster's terrain" style="display: block; width: 100%; height: auto">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; border-top: 2px solid #1B2A3A; padding-top: 12px; font-variant-numeric: tabular-nums">
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em">DISTANCE</div><div style="font-size: 26px; font-weight: 700; font-stretch: 75%">21.4 km</div></div>
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em">VERT</div><div style="font-size: 26px; font-weight: 700; font-stretch: 75%; color: #C2410C">+1,070 m</div></div>
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.1em">TIME</div><div style="font-size: 26px; font-weight: 700; font-stretch: 75%">3:12:40</div></div>
+</div>
+<div style="margin-top: auto; display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em"><span>[PLACE] · [DATE]</span><span>@GEEKPLUX</span></div>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":980}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

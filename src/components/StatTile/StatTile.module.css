@@ -23,11 +23,15 @@
   color: var(--muted);
 }
 
-/* Stat type: 34 / 700 / 75% width, tabular figures. DECISIONS: line-height normal (Main frame); never wraps. */
+/*
+ * Stat type: 34 / 700 / 75% width, tabular figures. DECISIONS: line-height normal (Main frame);
+ * never wraps. `--fit` (set by StatGrid, unset at normal values) steps the value and its unit down
+ * together when a CCC-scale value would overflow its column.
+ */
 .value {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 34px;
+  font-size: calc(34px * var(--fit, 1));
   font-weight: 700;
   font-stretch: 75%;
   line-height: normal;
@@ -43,7 +47,7 @@
 
 /* Unit follows the value after a space, 16/500, and inherits the value's colour. */
 .unit {
-  font-size: 16px;
+  font-size: calc(16px * var(--fit, 1));
   font-weight: 500;
 }
 

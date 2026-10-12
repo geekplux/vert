@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fontFaceSource } from './fontFaces';
+import { fontFaceSource, localFontFace } from './fontFaces';
 import type { FontFaceSource } from './fontFaces';
 import { posterSvg, serializePoster } from './serialize';
 import { fontRule } from './testFakes';
@@ -98,6 +98,43 @@ describe('serializePoster', () => {
     const fontUrls = load.mock.calls.map(([url]) => url).filter((url) => url.includes('/fonts/'));
     expect(fontUrls).toHaveLength(2);
     expect(fontUrls.some((url) => url.includes('big-shoulders'))).toBe(false);
+  });
+
+  it('copies the local() fallback rules that text outside the embedded subsets reaches', async () => {
+    const fallback = localFontFace(
+      fontRule({
+        'font-family': '"Archivo Fallback Arial"',
+        src: 'local("Arial")',
+        'size-adjust': '102.5%',
+      }),
+    );
+    const unused = localFontFace(
+      fontRule({ 'font-family': '"IBM Plex Mono Fallback Menlo"', src: 'local("Menlo")' }),
+    );
+    if (!fallback || !unused) throw new Error('no local face');
+    const title = root.querySelector<HTMLElement>('.title');
+    if (!title) throw new Error('no title');
+    title.style.fontFamily = 'Archivo, "Archivo Fallback Arial", sans-serif';
+    const options = {
+      load: loader(),
+      fontFaces: FACES,
+      localFontFaces: [fallback, unused],
+      pseudoElements: false,
+    };
+
+    // Latin only: Archivo covers it, nothing falls back.
+    expect((await serializePoster(root, options)).localFaces).toEqual([]);
+
+    title.textContent = 'Эльбрус Северный';
+    const poster = await serializePoster(root, options);
+    expect(poster.localFaces).toEqual([fallback]);
+    expect(poster.css).toContain(
+      '@font-face{font-family:"Archivo Fallback Arial";src:local("Arial");size-adjust:102.5%;}',
+    );
+    expect(poster.css).not.toContain('Menlo');
+    // Nothing to load for a local face; the title needs no Archivo file now, the mono line does.
+    expect(poster.faces.map((face) => face.family)).toEqual(['IBM Plex Mono']);
+    expect(poster.fontUrls).toHaveLength(1);
   });
 
   it('inlines images and SVG images as data URLs', async () => {

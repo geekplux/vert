@@ -66,3 +66,31 @@ export const Grid: Story = () => (
     </StatGrid>
   </div>
 );
+
+/**
+ * CCC-scale values (DECISIONS: values never wrap) in the asides they must fit: the View's at 1440
+ * (300px), its widest (360px), a 380px aside, and a 390px phone (16px gutters). When one value
+ * would overflow its column, StatGrid steps all four down together.
+ */
+const longAsides: [string, CSSProperties][] = [
+  ['300px aside', aside],
+  ['360px aside', { ...aside, width: 360 }],
+  ['380px aside', { ...aside, width: 380 }],
+  ['390px phone', { width: 390, padding: 'var(--space-8) var(--space-4) 0' }],
+];
+
+export const LongValues: Story = () => (
+  <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+    {longAsides.map(([name, style]) => (
+      <section key={name} aria-label={name} style={{ ...style, outline: '1px dashed var(--rule)' }}>
+        <StatGrid>
+          <StatTile label="Distance" value={171.4} unit="km" format={oneDecimal} />
+          <StatTile label="Vert" value={10070} unit="m" emphasis format={signedGrouped} />
+          <StatTile label="Moving time" value={96312} format={hms} />
+          <StatTile label="High point" value={2537} unit="m" />
+        </StatGrid>
+      </section>
+    ))}
+  </div>
+);
+LongValues.storyName = 'Long values';

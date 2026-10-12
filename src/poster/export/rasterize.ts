@@ -20,6 +20,8 @@ import {
   context2d,
   createProbeCanvas,
   knownCanvasResult,
+  recordAuxiliaryCanvasFailure,
+  recordCanvasResult,
   verifyCanvas,
 } from './canvasLimits';
 import type { ProbeCanvas } from './canvasLimits';
@@ -149,6 +151,31 @@ export interface SettleResult {
 /** Waits between settle attempts, ms. */
 export const SETTLE_DELAYS = [0, 100, 200, 400, 800] as const;
 
+/** The reason a signal was aborted with, as an Error (an AbortError unless it gave its own). */
+function abortReason(signal: AbortSignal): Error {
+  const reason: unknown = signal.reason;
+  return reason instanceof Error ? reason : new DOMException('Aborted', 'AbortError');
+}
+
+/** Resolves after `ms`, or rejects as soon as `signal` aborts. */
+export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortReason(signal));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      if (signal) reject(abortReason(signal));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** A preview no wider than this is enough to see every text run change. */
 const SETTLE_WIDTH = 720;
 
@@ -166,7 +193,8 @@ function pixelHash(data: Uint8ClampedArray): number {
  * Draws the whole poster small, each time in a fresh image (as every tile is), until two draws in
  * a row are pixel-identical (bounded by `SETTLE_DELAYS`). A face whose load an image triggered
  * late shows up as a difference, and once it is in the page's memory cache every later image draws
- * with it.
+ * with it. Aborting `signal` stops it at once: the wait between draws rejects, and every draw is
+ * followed by a check.
  */
 export async function settleFonts({
   svg,
@@ -176,9 +204,14 @@ export async function settleFonts({
   createCanvas: create = createProbeCanvas,
   loadImage = loadSvgImage,
   delays = SETTLE_DELAYS,
-}: Pick<RasterizeOptions, 'svg' | 'width' | 'height' | 'scale' | 'createCanvas' | 'loadImage'> & {
+  signal,
+}: Pick<
+  RasterizeOptions,
+  'svg' | 'width' | 'height' | 'scale' | 'createCanvas' | 'loadImage' | 'signal'
+> & {
   delays?: readonly number[];
 }): Promise<SettleResult> {
+  signal?.throwIfAborted();
   const logicalWidth = width / scale;
   const logicalHeight = height / scale;
   const k = Math.min(1, SETTLE_WIDTH / logicalWidth);
@@ -186,15 +219,20 @@ export async function settleFonts({
   const h = Math.max(1, Math.round(logicalHeight * k));
   const canvas = create(w, h);
   const context = context2d(canvas, { willReadFrequently: true });
-  if (!context) throw new CanvasLimitError('No 2D context for the settle canvas');
+  if (!context) {
+    recordAuxiliaryCanvasFailure(w, h);
+    throw new CanvasLimitError('No 2D context for the settle canvas');
+  }
   const source = svg({ x: 0, y: 0, width: logicalWidth, height: logicalHeight }, w, h);
   let previous: number | null = null;
   let attempts = 0;
   try {
     for (const delay of delays) {
-      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (delay > 0) await abortableDelay(delay, signal);
+      signal?.throwIfAborted();
       const loaded = await loadImage(source);
       try {
+        signal?.throwIfAborted();
         context.clearRect(0, 0, w, h);
         context.drawImage(loaded.image, 0, 0, w, h);
       } finally {
@@ -250,14 +288,25 @@ export async function rasterize({
       scale,
       createCanvas: create,
       loadImage,
+      signal,
     });
     onSettled?.(result);
     signal?.throwIfAborted();
   }
-  const canvas = create(width, height);
+  let canvas: ProbeCanvas;
+  try {
+    canvas = create(width, height);
+  } catch (error) {
+    // Some browsers throw instead of handing back a dead canvas: remember the size all the same.
+    recordCanvasResult(width, height, false);
+    throw new CanvasLimitError(`A ${String(width)} × ${String(height)} canvas could not be made`, {
+      cause: error,
+    });
+  }
   try {
     // The real output canvas is the probe: far-corner pixel drawn and read back.
     const context = context2d(canvas);
+    if (!context) recordCanvasResult(width, height, false);
     if (!context || !verifyCanvas(canvas, width, height)) {
       throw new CanvasLimitError(
         `A ${String(width)} × ${String(height)} canvas does not work here`,

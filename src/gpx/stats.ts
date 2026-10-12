@@ -9,7 +9,10 @@
  *   Horizontal only, like a watch. Repeated positions add nothing.
  * - **Moving time**: the sum of the time steps between consecutive points, except
  *   1. a step longer than {@link MAX_GAP_S} (30 s): the watch was paused, or lost the signal, and
- *      nobody knows what happened in between;
+ *      nobody knows what happened in between. Points without a `<time>` get one interpolated
+ *      along the route (below), but their steps are judged by the recorded span around them: a
+ *      gap of 9 minutes between two recorded times stays a gap however many untimed points
+ *      fill it, so it counts for elapsed time and never for moving time;
  *   2. a step where the runner was standing still: straight-line speed under
  *      {@link MIN_MOVING_SPEED} (0.5 m/s) across a window of at least {@link SPEED_WINDOW_S}
  *      (10 s) centred on the step (shorter only at a gap or an end of the track). Displacement
@@ -475,10 +478,12 @@ function filledTimes(points: readonly TrackPoint[], cumulative: Float64Array): F
 /** Moving time in seconds per the rules in the file header. */
 function movingTimeOf(time: Float64Array, points: readonly TrackPoint[]): number {
   const n = time.length;
+  const ok = continuousSteps(time, points);
+  const stepOk = (i: number) => ok[i] === 1;
   const window = SPEED_WINDOW_S * 1000;
   let moving = 0;
   for (let i = 1; i < n; i++) {
-    if (!stepOk(time, i)) continue;
+    if (!stepOk(i)) continue;
     const t0 = time[i - 1] ?? 0;
     const t1 = time[i] ?? 0;
     // Grow [a, b] around the step, one point at a time on the side nearer its middle, until it
@@ -487,8 +492,8 @@ function movingTimeOf(time: Float64Array, points: readonly TrackPoint[]): number
     let a = i - 1;
     let b = i;
     while ((time[b] ?? 0) - (time[a] ?? 0) < window) {
-      const back = a > 0 && stepOk(time, a);
-      const forward = b < n - 1 && stepOk(time, b + 1);
+      const back = a > 0 && stepOk(a);
+      const forward = b < n - 1 && stepOk(b + 1);
       if (!back && !forward) break;
       if (back && (!forward || mid - (time[a] ?? 0) <= (time[b] ?? 0) - mid)) a--;
       else b++;
@@ -502,10 +507,37 @@ function movingTimeOf(time: Float64Array, points: readonly TrackPoint[]): number
   return moving;
 }
 
-/** Whether the step into point `i` is part of continuous recording (not a gap). */
-function stepOk(time: Float64Array, i: number): boolean {
-  const dt = ((time[i] ?? 0) - (time[i - 1] ?? 0)) / 1000;
-  return dt > 0 && dt <= MAX_GAP_S;
+/**
+ * Per step (index `i` is the step into point `i`), 1 when it is part of continuous recording:
+ * it spans more than 0 s and at most {@link MAX_GAP_S}. A step touching a point whose time was
+ * filled in is judged by the whole span between the recorded times around it, so an
+ * interpolated gap stays a gap. Index 0 is always 0.
+ */
+function continuousSteps(time: Float64Array, points: readonly TrackPoint[]): Uint8Array {
+  const n = time.length;
+  const ok = new Uint8Array(n);
+  const recorded = (i: number) => (points[i]?.time ?? null) !== null;
+  // The first recorded point at or after each index (n when none), in one backward pass.
+  const nextRecorded = new Int32Array(n);
+  for (let i = n - 1, next = n; i >= 0; i--) {
+    if (recorded(i)) next = i;
+    nextRecorded[i] = next;
+  }
+  let previous = recorded(0) ? 0 : -1; // the last recorded point at or before i - 1
+  for (let i = 1; i < n; i++) {
+    let dt: number;
+    if (recorded(i - 1) && recorded(i)) {
+      dt = (time[i] ?? 0) - (time[i - 1] ?? 0);
+    } else {
+      const next = nextRecorded[i] ?? n;
+      // Before the first or after the last recorded time the filled times are held (dt 0).
+      dt = previous < 0 || next >= n ? 0 : (time[next] ?? 0) - (time[previous] ?? 0);
+      if ((time[i] ?? 0) - (time[i - 1] ?? 0) <= 0) dt = 0;
+    }
+    if (dt > 0 && dt <= MAX_GAP_S * 1000) ok[i] = 1;
+    if (recorded(i)) previous = i;
+  }
+  return ok;
 }
 
 /**

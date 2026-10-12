@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectFontFaces,
+  collectLocalFontFaces,
   embeddedFontFaceCss,
   fontFaceSource,
   fontMime,
+  localFontFace,
   parseFamilyList,
   parseUnicodeRange,
   usedFontFaces,
+  usedLocalFontFaces,
 } from './fontFaces';
 import type { FontFaceSource, TextRun } from './fontFaces';
 import { fontRule } from './testFakes';
@@ -194,5 +197,74 @@ describe('usedFontFaces', () => {
       '@font-face{font-family:"IBM Plex Mono";font-weight:400;unicode-range:' +
         `${LATIN};src:url("data:font/woff2;base64,AAAA") format("woff2");}`,
     );
+  });
+});
+
+describe('local() fallback faces', () => {
+  const helvetica = localFontFace(
+    fontRule({
+      'font-family': '"Archivo Fallback Helvetica Neue"',
+      'font-weight': '600 800',
+      src: 'local("Helvetica Neue Bold"), local("HelveticaNeue-Bold")',
+      'size-adjust': '101.19%',
+      'font-display': 'swap',
+    }),
+  );
+  const arial = localFontFace(
+    fontRule({
+      'font-family': '"Archivo Fallback Arial"',
+      src: 'local("Arial")',
+      'size-adjust': '102.5%',
+    }),
+  );
+  const menlo = localFontFace(
+    fontRule({ 'font-family': '"IBM Plex Mono Fallback Menlo"', src: 'local("Menlo Regular")' }),
+  );
+  const LOCAL = [helvetica, arial, menlo].filter((face) => face !== null);
+  const DISPLAY =
+    'Archivo, "Archivo Fallback Helvetica Neue", "Archivo Fallback Arial", sans-serif';
+
+  it('reads local()-only rules whole, without font-display', () => {
+    expect(helvetica).toEqual({
+      family: 'Archivo Fallback Helvetica Neue',
+      css:
+        '@font-face{font-family:"Archivo Fallback Helvetica Neue";font-weight:600 800;' +
+        'src:local("Helvetica Neue Bold"), local("HelveticaNeue-Bold");size-adjust:101.19%;}',
+    });
+    expect(
+      localFontFace(fontRule({ 'font-family': 'X', src: 'local(X), url(/x.woff2)' })),
+    ).toBeNull();
+    expect(localFontFace(fontRule({ 'font-family': 'X', src: 'url(/x.woff2)' }))).toBeNull();
+  });
+
+  it('collects them from the sheets', () => {
+    const doc = {
+      baseURI: BASE,
+      styleSheets: [
+        {
+          href: null,
+          cssRules: [
+            fontRule({ 'font-family': 'Web', src: 'url(/w.woff2)' }),
+            fontRule({ 'font-family': 'Local', src: 'local(Arial)' }),
+          ],
+        },
+      ],
+    } as unknown as Document;
+    expect(collectLocalFontFaces(doc).map((face) => face.family)).toEqual(['Local']);
+  });
+
+  it('copies the fallbacks a run reaches with characters no web font covers', () => {
+    // Cyrillic: Archivo's subsets cover none of it; the walk reaches both Archivo fallbacks.
+    expect(usedLocalFontFaces([run(DISPLAY, 'ЭЛЬБРУС')], ALL, LOCAL)).toEqual([helvetica, arial]);
+    // Vietnamese mixes covered and uncovered letters.
+    expect(usedLocalFontFaces([run(DISPLAY, 'Đường Mòn')], ALL, LOCAL)).toEqual([helvetica, arial]);
+    // Mono text in Greek reaches only the mono fallback.
+    const mono = '"IBM Plex Mono", "IBM Plex Mono Fallback Menlo", monospace';
+    expect(usedLocalFontFaces([run(mono, 'ΟΛΥΜΠΟΣ')], ALL, LOCAL)).toEqual([menlo]);
+  });
+
+  it('copies none when the web fonts cover the text', () => {
+    expect(usedLocalFontFaces([run(DISPLAY, 'COOSA Łódź')], ALL, LOCAL)).toEqual([]);
+    expect(usedLocalFontFaces([run(DISPLAY, '  ')], ALL, LOCAL)).toEqual([]);
   });
 });

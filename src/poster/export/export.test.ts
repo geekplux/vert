@@ -31,6 +31,7 @@ const SERIALIZED: SerializedPoster = {
   xhtml: '<div xmlns="http://www.w3.org/1999/xhtml"/>',
   css: '',
   faces: [],
+  localFaces: [],
   images: [],
   figureBox: { x: 48, y: 400, width: 624, height: 300 },
   fontUrls: ['data:font/woff2;base64,AAAA', 'data:font/woff2;base64,BBBB'],

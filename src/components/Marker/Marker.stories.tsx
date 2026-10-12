@@ -86,9 +86,16 @@ export const Sizes: Story = () => (
 
 /**
  * Night Ridge (poster style B) palette. Hard-coded on purpose: poster palettes are not tokens.
- * `paper` is the background here, so the scrub ring takes the ink (`ring`) or it would vanish.
+ * `paper` is the background here, so the scrub ring takes the ink (`ring`) or it would vanish, and
+ * the ink ring is only 1.16:1 from the pale route fill, so a paper `gap` separates the two.
  */
-const nightRidge = { ink: '#E8F1F5', paper: '#0F2233', accent: '#FFD9A0', ring: '#E8F1F5' };
+const nightRidge = {
+  ink: '#E8F1F5',
+  paper: '#0F2233',
+  accent: '#FFD9A0',
+  ring: '#E8F1F5',
+  gap: '#0F2233',
+};
 
 export const OnDark: Story = () => (
   <div

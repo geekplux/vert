@@ -7,7 +7,11 @@
  * for each run of text, walk the computed `font-family` list; in each family with web-font faces,
  * pick the face closest in style, then stretch, then weight (CSS Fonts §5.2), and take the
  * unicode-range subsets of that face that cover characters not yet covered. Characters no web font
- * covers fall to system fonts, which an SVG image can use as they are.
+ * covers fall to system fonts, which an SVG image can use as they are, but only through the same
+ * family list: the metric-matched fallback faces (`src: local(…)` rules with `size-adjust` in
+ * fonts.css) exist only in the page's style sheets, so the export copies those rules too
+ * (`usedLocalFontFaces`). Without them a Cyrillic, Greek or Vietnamese title skips to the next
+ * family in the list, draws in another face at another size, and wraps unlike the preview.
  */
 
 /** One `@font-face` rule that loads a file (rules with only `local()` sources are skipped). */
@@ -187,28 +191,76 @@ function rulesOf(sheet: CSSStyleSheet): CSSRule[] {
   }
 }
 
-/** Every loadable `@font-face` rule in the document's style sheets, `@import`s included. */
-export function collectFontFaces(doc: Document = document): FontFaceSource[] {
-  const faces: FontFaceSource[] = [];
-  const visit = (rules: readonly CSSRule[], baseUrl: string) => {
+/** Calls `visit` with every `@font-face` rule in the document's style sheets and its base URL. */
+function eachFontFaceRule(doc: Document, visit: (rule: CSSRule, baseUrl: string) => void): void {
+  const walk = (rules: readonly CSSRule[], baseUrl: string) => {
     for (const rule of rules) {
       if (rule.cssText.startsWith('@font-face')) {
-        const face = fontFaceSource(rule, baseUrl);
-        if (face) faces.push(face);
+        visit(rule, baseUrl);
         continue;
       }
       const imported = (rule as CSSRule & { styleSheet?: CSSStyleSheet | null }).styleSheet;
       if (imported) {
-        visit(rulesOf(imported), imported.href ?? baseUrl);
+        walk(rulesOf(imported), imported.href ?? baseUrl);
         continue;
       }
       const nested = (rule as CSSRule & { cssRules?: CSSRuleList }).cssRules;
-      if (nested) visit(Array.from(nested), baseUrl);
+      if (nested) walk(Array.from(nested), baseUrl);
     }
   };
   for (const sheet of Array.from(doc.styleSheets)) {
-    visit(rulesOf(sheet), sheet.href ?? doc.baseURI);
+    walk(rulesOf(sheet), sheet.href ?? doc.baseURI);
   }
+}
+
+/** Every loadable `@font-face` rule in the document's style sheets, `@import`s included. */
+export function collectFontFaces(doc: Document = document): FontFaceSource[] {
+  const faces: FontFaceSource[] = [];
+  eachFontFaceRule(doc, (rule, baseUrl) => {
+    const face = fontFaceSource(rule, baseUrl);
+    if (face) faces.push(face);
+  });
+  return faces;
+}
+
+/**
+ * An `@font-face` rule whose sources are all `local()`: a system font under another name, usually
+ * with metric overrides (fonts.css's "Archivo Fallback Helvetica Neue"). Nothing to embed, so the
+ * rule travels as it is.
+ */
+export interface LocalFontFace {
+  /** Family name, unquoted. */
+  readonly family: string;
+  /** The whole rule without `font-display` (`@font-face{…}`). */
+  readonly css: string;
+}
+
+const LOCAL_SOURCE = /\blocal\(/i;
+const URL_PRESENT = /\burl\(/i;
+
+/** Reads one `@font-face` rule as a {@link LocalFontFace}; null unless its sources are `local()`. */
+export function localFontFace(rule: CSSRule): LocalFontFace | null {
+  const declaration = (rule as CSSRule & { style?: CSSStyleDeclaration }).style;
+  if (!declaration) return null;
+  const family = parseFamilyList(declaration.getPropertyValue('font-family'))[0];
+  const src = declaration.getPropertyValue('src');
+  if (!family || !LOCAL_SOURCE.test(src) || URL_PRESENT.test(src)) return null;
+  let css = '';
+  for (let i = 0; i < declaration.length; i += 1) {
+    const name = declaration.item(i);
+    if (!name || name === 'font-display') continue;
+    css += `${name}:${declaration.getPropertyValue(name)};`;
+  }
+  return { family, css: `@font-face{${css}}` };
+}
+
+/** Every `local()`-only `@font-face` rule in the document's style sheets. */
+export function collectLocalFontFaces(doc: Document = document): LocalFontFace[] {
+  const faces: LocalFontFace[] = [];
+  eachFontFaceRule(doc, (rule) => {
+    const face = localFontFace(rule);
+    if (face) faces.push(face);
+  });
   return faces;
 }
 
@@ -257,17 +309,48 @@ function closestFace(
 const covers = (face: FontFaceSource, codePoint: number) =>
   face.ranges.some(([lo, hi]) => codePoint >= lo && codePoint <= hi);
 
+function groupByFamily<T extends { readonly family: string }>(faces: readonly T[]) {
+  const byFamily = new Map<string, T[]>();
+  for (const face of faces) {
+    const key = face.family.toLowerCase();
+    byFamily.set(key, [...(byFamily.get(key) ?? []), face]);
+  }
+  return byFamily;
+}
+
 /** The faces (unicode-range subsets included) that `runs` draw with, in `faces` order. */
 export function usedFontFaces(
   runs: readonly TextRun[],
   faces: readonly FontFaceSource[],
 ): FontFaceSource[] {
+  const { used } = resolveRuns(runs, faces, []);
+  return faces.filter((face) => used.has(face));
+}
+
+/**
+ * The `local()`-only faces `runs` may draw with, in `localFaces` order: a family counts when the
+ * walk down a run's family list reaches it with characters no earlier web font covers (and so
+ * does every later one, as the system font may lack some of them).
+ */
+export function usedLocalFontFaces(
+  runs: readonly TextRun[],
+  faces: readonly FontFaceSource[],
+  localFaces: readonly LocalFontFace[],
+): LocalFontFace[] {
+  const { usedLocal } = resolveRuns(runs, faces, localFaces);
+  return localFaces.filter((face) => usedLocal.has(face));
+}
+
+/** Walks each run's family list as the browser does (see the file header). */
+function resolveRuns(
+  runs: readonly TextRun[],
+  faces: readonly FontFaceSource[],
+  localFaces: readonly LocalFontFace[],
+): { used: Set<FontFaceSource>; usedLocal: Set<LocalFontFace> } {
   const used = new Set<FontFaceSource>();
-  const byFamily = new Map<string, FontFaceSource[]>();
-  for (const face of faces) {
-    const key = face.family.toLowerCase();
-    byFamily.set(key, [...(byFamily.get(key) ?? []), face]);
-  }
+  const usedLocal = new Set<LocalFontFace>();
+  const byFamily = groupByFamily(faces);
+  const localByFamily = groupByFamily(localFaces);
   for (const run of runs) {
     const remaining = new Set<number>();
     for (const char of run.text) {
@@ -279,9 +362,8 @@ export function usedFontFaces(
     const weight = parseNumberRange(run.weight, WEIGHT_KEYWORDS, 400)[0];
     const stretch = parseNumberRange(run.stretch, STRETCH_KEYWORDS, 100)[0];
     for (const family of parseFamilyList(run.family)) {
-      const candidates = byFamily.get(family.toLowerCase());
-      if (!candidates) continue;
-      for (const face of closestFace(candidates, style, weight, stretch)) {
+      const key = family.toLowerCase();
+      for (const face of closestFace(byFamily.get(key) ?? [], style, weight, stretch)) {
         let hit = false;
         for (const codePoint of remaining) {
           if (covers(face, codePoint)) {
@@ -292,9 +374,10 @@ export function usedFontFaces(
         if (hit) used.add(face);
       }
       if (remaining.size === 0) break;
+      for (const face of localByFamily.get(key) ?? []) usedLocal.add(face);
     }
   }
-  return faces.filter((face) => used.has(face));
+  return { used, usedLocal };
 }
 
 /** The `@font-face` rule for `face` with its file inlined as `dataUrl`. */

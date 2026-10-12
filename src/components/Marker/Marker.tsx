@@ -9,12 +9,17 @@ export type MarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
  * - `ring`: scrub ring only (default `paper`). On a dark palette `paper` is the background, so the
  *   ring vanishes into it; pass the palette's ink (Night Ridge: `ring={ink}`) so the scrub keeps
  *   its ring, the cue that tells it apart from a plain dot without colour.
+ * - `gap`: a band of this colour between the scrub's fill and its ring (default: none). Use it when
+ *   the ring and the fill are close in lightness (Night Ridge's ink ring on its pale route fill is
+ *   1.16:1): with `gap={paper}` the ring meets the dark band on both sides, so it reads at full
+ *   contrast against the fill inside and the background outside.
  */
 export interface MarkerColors {
   ink?: string;
   paper?: string;
   accent?: string;
   ring?: string;
+  gap?: string;
 }
 
 export interface MarkerShapeProps extends MarkerColors {
@@ -33,6 +38,14 @@ const BOX = 18;
  * `FINISH_DOT_PX` / `START_DIAMETER_PX`), at this ring's 14.5-unit outer diameter.
  */
 const FINISH_DOT_R = 2.3;
+/**
+ * With a `gap`: the ring (centre radius and width; outer edge 6.25, as without) and the dot. The dot
+ * stays large and the gap thin, so the scrub still reads as a solid dot with a ring, unlike the
+ * finish (a small dot in a wide hollow ring).
+ */
+const GAP_RING_R = 5.25;
+const GAP_RING_W = 2;
+const GAP_DOT_R = 3.5;
 
 /**
  * Just the marker's `<g>`, for drawing inside an existing `<svg>` (elevation profile, posters).
@@ -50,6 +63,7 @@ export function MarkerShape({
   paper = 'var(--white)',
   accent = 'var(--route)',
   ring = paper,
+  gap,
 }: MarkerShapeProps) {
   const scale = size / BOX;
   const half = size / 2;
@@ -60,8 +74,20 @@ export function MarkerShape({
       )}
       {kind === 'finish' && <circle cx={9} cy={9} r={FINISH_DOT_R} style={{ fill: ink }} />}
       {kind === 'summit' && <path d="M9 2 L16 15 L2 15 Z" style={{ fill: ink }} />}
-      {kind === 'scrub' && (
+      {kind === 'scrub' && !gap && (
         <circle cx={9} cy={9} r={5} strokeWidth={2.5} style={{ fill: accent, stroke: ring }} />
+      )}
+      {kind === 'scrub' && gap && (
+        <>
+          <circle
+            cx={9}
+            cy={9}
+            r={GAP_RING_R}
+            strokeWidth={GAP_RING_W}
+            style={{ fill: gap, stroke: ring }}
+          />
+          <circle cx={9} cy={9} r={GAP_DOT_R} style={{ fill: accent }} data-part="dot" />
+        </>
       )}
     </g>
   );

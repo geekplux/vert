@@ -94,3 +94,14 @@ Imperial.storyName = 'Imperial units';
 
 export const ExportDetail: Story = () => <Poster size="18x24" exportDetail />;
 ExportDetail.storyName = '18 x 24 at export detail';
+
+export const Imperial18x24: Story = () => <Poster size="18x24" units="imperial" />;
+Imperial18x24.storyName = 'Imperial 18 x 24';
+
+export const ImperialA3: Story = () => <Poster size="a3" units="imperial" />;
+ImperialA3.storyName = 'Imperial A3';
+
+export const Imperial9x16: Story = () => (
+  <Poster size="9x16" units="imperial" poster={{ signature: '@geekplux' }} />
+);
+Imperial9x16.storyName = 'Imperial 9 : 16';

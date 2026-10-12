@@ -8,13 +8,22 @@
  *   the element's default in a blank document). Computed values are absolute (px, rgb), so the
  *   copy lays out exactly like the original at the same size, whatever the cascade was.
  *   `::before` / `::after` boxes with content become rules in the SVG's `<style>`.
- * - Fonts: the `@font-face` files the text actually uses (`usedFontFaces`), as base64 data URLs.
+ * - Fonts: the `@font-face` files the text actually uses (`usedFontFaces`), as base64 data URLs,
+ *   and the `local()` fallback rules that text outside those files reaches (`usedLocalFontFaces`),
+ *   so a Cyrillic or Greek title draws in the same metric-adjusted system face as in the preview.
  * - Images: `<img>`, SVG `<image>` and CSS `url()`s as data URLs; `<canvas>` becomes an `<img>`
  *   of its pixels.
  * - Inline SVG figures are kept as they are (attributes untouched; their CSS is inlined).
  */
-import { collectFontFaces, embeddedFontFaceCss, fontMime, usedFontFaces } from './fontFaces';
-import type { FontFaceSource, TextRun } from './fontFaces';
+import {
+  collectFontFaces,
+  collectLocalFontFaces,
+  embeddedFontFaceCss,
+  fontMime,
+  usedFontFaces,
+  usedLocalFontFaces,
+} from './fontFaces';
+import type { FontFaceSource, LocalFontFace, TextRun } from './fontFaces';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -38,6 +47,8 @@ export interface SerializedPoster {
   readonly css: string;
   /** The faces embedded (for diagnostics and tests). */
   readonly faces: readonly FontFaceSource[];
+  /** The `local()` fallback rules copied (for diagnostics and tests). */
+  readonly localFaces: readonly LocalFontFace[];
   /**
    * The faces' files as data URLs (same order as `faces`), exactly as the CSS embeds them, so the
    * page can load them first (`preloadFonts`).
@@ -57,6 +68,8 @@ export interface SerializeOptions {
   readonly signal?: AbortSignal;
   /** The `@font-face` rules to choose from (default: the document's, `collectFontFaces`). */
   readonly fontFaces?: readonly FontFaceSource[];
+  /** The `local()`-only rules to choose from (default: the document's, `collectLocalFontFaces`). */
+  readonly localFontFaces?: readonly LocalFontFace[];
   /**
    * Copy `::before` / `::after` boxes (default true). Off where `getComputedStyle` cannot read
    * pseudo-elements (jsdom).
@@ -301,6 +314,7 @@ export async function serializePoster(
     hideFigure = false,
     signal,
     fontFaces,
+    localFontFaces,
     pseudoElements = true,
   }: SerializeOptions = {},
 ): Promise<SerializedPoster> {
@@ -439,7 +453,13 @@ export async function serializePoster(
     }
   }
 
-  const faces = usedFontFaces(runs, fontFaces ?? collectFontFaces(doc));
+  const allFaces = fontFaces ?? collectFontFaces(doc);
+  const faces = usedFontFaces(runs, allFaces);
+  const localFaces = usedLocalFontFaces(
+    runs,
+    allFaces,
+    localFontFaces ?? collectLocalFontFaces(doc),
+  );
   const [fontUrls, ...imageResults] = await Promise.all([
     Promise.all(
       faces.map(async (face) =>
@@ -465,9 +485,11 @@ export async function serializePoster(
     xhtml: new XMLSerializer().serializeToString(rootClone),
     css: [
       ...faces.map((face, i) => embeddedFontFaceCss(face, fontUrls[i] ?? '')),
+      ...localFaces.map((face) => face.css),
       ...pseudoRules,
     ].join('\n'),
     faces,
+    localFaces,
     fontUrls,
     images: Array.from(urlTargets.keys()),
     figureBox,

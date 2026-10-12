@@ -73,12 +73,21 @@ Download runs `posterExporter` (`src/page/PosterState/posterExporter.ts`, the ap
   rasterize in tiles of ≤ 4096 px into one canvas, encode PNG (300 dpi pHYs for print) or a
   one-page PDF holding a JPEG (q 1.0). Progress: `{ done: 0, total }` once the tiles are planned
   (poster tiles plus one figure tile per poster tile the figure overlaps: 18 × 24 style A is 4 + 4),
-  then one report per tile; "Preparing…" until then.
+  then one report per tile, then `{ done: total, total, stage: 'encode' }` ("Saving the file…");
+  "Preparing…" until the first. After every report the engine waits for the next paint
+  (`nextPaint`: a frame, then a task; at once in a hidden tab; ≤ 100 ms), so each "Rendering tile
+  k of N" is on screen; each wait is a User Timing measure `vert:export-paint-wait`.
 - Cancel: the signal is checked between every step; waits (grids, font settling, the encode)
   reject at once; nothing is downloaded after an abort; canvases and the renderer are released.
-- Errors shown to the user (`ExportError`): too large for this browser (`TOO_LARGE_MESSAGE`), the
-  terrain could not be loaded (`TERRAIN_UNAVAILABLE_MESSAGE`), the browser could not draw it
-  (`TERRAIN_DRAW_MESSAGE`); anything else is the generic message.
+- Errors shown to the user (`ExportError`): too large for this browser (`tooLargeMessage`), the
+  terrain could not be loaded (`TERRAIN_UNAVAILABLE_MESSAGE`), no WebGL at all (`NO_WEBGL_MESSAGE`:
+  Trail Sign cannot be exported here, Night Ridge and Survey Quad can; asked with
+  `browserHasWebGL` only after the figure failed), or WebGL but the figure could not be drawn
+  (`terrainDrawMessage`); anything else is the generic message. "Try a smaller size" is said only
+  when a smaller size exists (`hasSmallerSize`: not at 4 : 5).
+- Canvas sizes (`canvasLimits.ts`): a size that failed once is tried again on the next Download
+  (the failure may have been transient); after two failures in a row it fails at once for the
+  session, as does any size at least as large. A size that works clears its failures.
 - Measured (M4 Mac mini, Chromium, Metal; download event after the click): 18 × 24 PNG A 0.8 s,
   B 0.8 s, E 0.7 s; PDF A 0.7 s, E 0.8 s; A3 A 0.5 s; 4 : 5 and 9 : 16 A 0.4 s; CCC (99 km)
   18 × 24 A 0.8 s, B 0.7 s, E 0.7 s. Peak: 8 tiles (18 × 24 A). `e2e/export.spec.ts` checks the

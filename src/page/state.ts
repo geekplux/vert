@@ -80,9 +80,14 @@ export interface ExportingScreen {
   readonly fileName: string;
   /**
    * Tiles rendered so far out of the total ("Rendering tile 4 of 12"); 0 ≤ done ≤ total. `total`
-   * is null until the exporter reports it ("Preparing…").
+   * is null until the exporter reports it ("Preparing…"). `stage: 'encode'` once every tile is
+   * drawn and the file is being written ("Saving the file…").
    */
-  readonly progress: { readonly done: number; readonly total: number | null };
+  readonly progress: {
+    readonly done: number;
+    readonly total: number | null;
+    readonly stage?: 'encode';
+  };
 }
 
 export type Screen = UploadScreen | ViewScreen | PosterScreen | ExportingScreen;
@@ -138,11 +143,15 @@ export interface ExportStarted {
   readonly type: 'EXPORT_STARTED';
   readonly fileName: string;
 }
-/** From the exporter: tiles done out of `total` (an integer ≥ 1; it may change between reports). */
+/**
+ * From the exporter: tiles done out of `total` (an integer ≥ 1; it may change between reports);
+ * `stage: 'encode'` while the file is written (every tile done).
+ */
 export interface ExportProgress {
   readonly type: 'EXPORT_PROGRESS';
   readonly done: number;
   readonly total: number;
+  readonly stage?: 'encode';
 }
 export interface ExportCancelled {
   readonly type: 'EXPORT_CANCELLED';
@@ -318,11 +327,18 @@ function exporting(screen: ExportingScreen, event: ScreenEvent): Screen {
     case 'EXPORT_PROGRESS': {
       const { total } = event;
       if (Number.isNaN(event.done) || !Number.isInteger(total) || total < 1) return screen;
-      const done = Math.min(total, Math.max(0, Math.floor(event.done)));
+      const encode = event.stage === 'encode';
+      // Encoding comes after every tile.
+      const done = encode ? total : Math.min(total, Math.max(0, Math.floor(event.done)));
       const current = screen.progress;
-      return done === current.done && total === current.total
-        ? screen
-        : { ...screen, progress: { done, total } };
+      if (
+        done === current.done &&
+        total === current.total &&
+        encode === (current.stage === 'encode')
+      ) {
+        return screen;
+      }
+      return { ...screen, progress: encode ? { done, total, stage: 'encode' } : { done, total } };
     }
     case 'EXPORT_CANCELLED':
       return { name: 'poster', runId: screen.runId, notice: null };

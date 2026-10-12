@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch } from 'react';
+import { flushSync } from 'react-dom';
 import type { ScreenEvent } from '../state';
 import { exportErrorMessage } from './exporter';
 import type { ExportJob, Exporter } from './exporter';
 
 /**
  * Runs exports with `exporter` and drives the state machine: `start` sends EXPORT_STARTED, then
- * forwards the exporter's `{ done, total }` reports as EXPORT_PROGRESS and ends with EXPORT_DONE
+ * forwards the exporter's `{ done, total, stage? }` reports as EXPORT_PROGRESS and ends with EXPORT_DONE
  * or EXPORT_FAILED; `cancel` aborts the exporter and sends EXPORT_CANCELLED. Nothing the exporter
  * does after an abort reaches the state machine. Unmounting aborts a running export.
  *
@@ -44,8 +45,14 @@ export function useExport(
       try {
         run = exporter(
           job,
-          ({ done, total }) => {
-            if (!signal.aborted) dispatch({ type: 'EXPORT_PROGRESS', done, total });
+          ({ done, total, stage }) => {
+            if (signal.aborted) return;
+            // Committed at once, so the label is in the DOM before the exporter waits for the
+            // next paint (otherwise React may commit it after that frame, and a long tile that
+            // follows hides it: "tile 5 of 8" was skipped).
+            flushSync(() => {
+              dispatch({ type: 'EXPORT_PROGRESS', done, total, ...(stage ? { stage } : {}) });
+            });
           },
           signal,
         );

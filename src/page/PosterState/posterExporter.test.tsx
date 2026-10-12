@@ -6,6 +6,7 @@ import { padBounds, trackBounds } from '../../poster/figures';
 import { ExportError, TOO_LARGE_MESSAGE } from '../../poster/export/errors';
 import type { ExportPosterOptions } from '../../poster/export/export';
 import type { FigureTile } from '../../poster/export/rasterize';
+import { POSTER_SIZES } from '../../poster/sizes';
 import type { TerrainFigureScene } from '../../poster/terrainFigure';
 import type { Heightfield } from '../../terrain/heightfield';
 import { DEFAULT_VIEW_CAMERA } from '../../terrain/camera';
@@ -21,9 +22,12 @@ import type { ExportFormat, ExportProgressReport } from './exporter';
 import { LivePoster } from './LivePoster';
 import type { LivePosterProps } from './LivePoster';
 import {
+  NO_WEBGL_MESSAGE,
   TERRAIN_DRAW_MESSAGE,
+  TERRAIN_DRAW_SMALLEST_MESSAGE,
   TERRAIN_UNAVAILABLE_MESSAGE,
   createPosterExporter,
+  terrainDrawMessage,
 } from './posterExporter';
 import type { ExportEngine, FigureRenderer, PosterExporterDeps } from './posterExporter';
 
@@ -187,18 +191,21 @@ function setup({
   loadTerrain = vi.fn<LoadTerrain>(() => Promise.resolve(hills())),
   loadFigureTerrain = vi.fn<LoadFigureTerrain>(() => Promise.resolve(hills())),
   createFigureRenderer,
+  hasWebGL = () => true,
 }: {
   engine?: ReturnType<typeof fakeEngine>;
   renderer?: ReturnType<typeof fakeRenderer>;
   loadTerrain?: LoadTerrain;
   loadFigureTerrain?: LoadFigureTerrain;
   createFigureRenderer?: PosterExporterDeps['createFigureRenderer'];
+  hasWebGL?: () => boolean;
 } = {}) {
   const deps: PosterExporterDeps = {
     loadEngine: () => Promise.resolve(engine.engine),
     createFigureRenderer: createFigureRenderer ?? (() => Promise.resolve(renderer.renderer)),
     loadTerrain,
     loadFigureTerrain: vi.fn<LoadFigureTerrain>(() => Promise.reject(new Error('unused'))),
+    hasWebGL,
   };
   const exporter = createPosterExporter(deps);
   return { exporter, engine, renderer, loadTerrain, loadFigureTerrain };
@@ -404,8 +411,8 @@ describe('posterExporter', () => {
     expect(t.engine.calls).toEqual([]);
   });
 
-  it('says the browser could not draw the terrain when WebGL fails, and still releases the renderer', async () => {
-    const renderer = fakeRenderer(new Error('Error creating WebGL context.'));
+  it('says the browser could not draw the terrain at this size, and still releases the renderer', async () => {
+    const renderer = fakeRenderer(new Error('Context lost'));
     const t = setup({ renderer });
     const job = jobFor(prefsWith({ style: 'A', hideEnds: 0 }), 'png', READY(hills()), vi.fn());
     const error = await t
@@ -421,6 +428,51 @@ describe('posterExporter', () => {
     await expect(
       noRenderer.exporter(job, () => undefined, new AbortController().signal),
     ).rejects.toThrow(TERRAIN_DRAW_MESSAGE);
+
+    // At the smallest size there is no smaller one to suggest.
+    const smallest = jobFor(
+      prefsWith({ style: 'A', size: '4x5', hideEnds: 0 }),
+      'png',
+      READY(hills()),
+      vi.fn(),
+    );
+    await expect(
+      setup({ renderer }).exporter(smallest, () => undefined, new AbortController().signal),
+    ).rejects.toThrow(TERRAIN_DRAW_SMALLEST_MESSAGE);
+  });
+
+  it('says Trail Sign cannot be exported here when the browser has no WebGL at all', async () => {
+    const hasWebGL = vi.fn(() => false);
+    const t = setup({
+      renderer: fakeRenderer(new Error('Error creating WebGL context.')),
+      hasWebGL,
+    });
+    const job = jobFor(prefsWith({ style: 'A', hideEnds: 0 }), 'png', READY(hills()), vi.fn());
+    await expect(t.exporter(job, () => undefined, new AbortController().signal)).rejects.toThrow(
+      NO_WEBGL_MESSAGE,
+    );
+    expect(hasWebGL).toHaveBeenCalledTimes(1);
+    expect(NO_WEBGL_MESSAGE).toBe(
+      'This browser can’t draw 3D terrain, so Trail Sign posters can’t be exported here. Night Ridge and Survey Quad still work.',
+    );
+    // The other styles draw no WebGL figure and never ask.
+    const b = setup({ hasWebGL });
+    const jobB = jobFor(prefsWith({ style: 'B' }), 'png', READY(hills()), b.loadFigureTerrain);
+    await expect(
+      b.exporter(jobB, () => undefined, new AbortController().signal),
+    ).resolves.toMatchObject({ fileName: jobB.fileName });
+    expect(hasWebGL).toHaveBeenCalledTimes(1);
+  });
+
+  it('chooses the terrain message from WebGL and the size', () => {
+    const [print, a3, social, story] = POSTER_SIZES;
+    expect(terrainDrawMessage(print, false)).toBe(NO_WEBGL_MESSAGE);
+    expect(terrainDrawMessage(social, false)).toBe(NO_WEBGL_MESSAGE);
+    expect(terrainDrawMessage(print, true)).toBe(TERRAIN_DRAW_MESSAGE);
+    expect(terrainDrawMessage(a3, true)).toBe(TERRAIN_DRAW_MESSAGE);
+    expect(terrainDrawMessage(story, true)).toBe(TERRAIN_DRAW_MESSAGE);
+    expect(terrainDrawMessage(social, true)).toBe(TERRAIN_DRAW_SMALLEST_MESSAGE);
+    expect(TERRAIN_DRAW_SMALLEST_MESSAGE).not.toMatch(/smaller/);
   });
 
   it("passes the engine's own messages through (too large for this browser)", async () => {

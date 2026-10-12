@@ -6,8 +6,14 @@
  *
  * Probing is lazy and only for what an export needs: the export verifies its own output canvas
  * right after creating it (no separate allocation, no up-front 16384² probe, which costs ~1 GB on
- * a desktop and can kill a phone tab). Results are cached per size, so a size that failed once
- * fails fast next time, and `canvasDiagnostics()` reports what has been seen.
+ * a desktop and can kill a phone tab). Results are cached per size, and `canvasDiagnostics()`
+ * reports what has been seen.
+ *
+ * A failure can be transient (another tab held the GPU memory, the page was under pressure), so
+ * one failure does not condemn a size: the next Download tries it again. A size that has failed
+ * {@link FAILURES_TO_GIVE_UP} times without working in between fails fast for the rest of the
+ * session (and so does any size at least as large in both sides), so a browser that really cannot
+ * hold it is not made to crash again and again. A size that works clears its failures.
  */
 
 /** Tiles are never larger than this a side; a 4096² canvas works even on iOS (16.7 Mpx). */
@@ -33,7 +39,13 @@ export function context2d(
   return (canvas as OffscreenCanvas).getContext('2d', options);
 }
 
-const results = new Map<string, boolean>();
+/** Failures in a row (without a success) after which a size is not tried again this session. */
+export const FAILURES_TO_GIVE_UP = 2;
+
+/** Sizes verified to work. */
+const working = new Set<string>();
+/** Failures in a row per size (cleared when the size works). */
+const failures = new Map<string, number>();
 /**
  * Failures of auxiliary canvases (the small settle canvas): kept for diagnostics only, never fed to
  * `knownCanvasResult`, so one transient failure on a small canvas cannot mark every poster size as
@@ -42,22 +54,43 @@ const results = new Map<string, boolean>();
 const auxiliaryFailures = new Set<string>();
 const key = (width: number, height: number) => `${String(width)}x${String(height)}`;
 
-/** What is known about a `width × height` canvas: true / false once verified, else undefined. */
+/** Whether `size` has failed often enough to give it up for the session. */
+function givenUp(size: string): boolean {
+  return (failures.get(size) ?? 0) >= FAILURES_TO_GIVE_UP;
+}
+
+/**
+ * What is known about a `width × height` canvas: true once it (or a larger size) worked, false
+ * once it (or a smaller size) has been given up ({@link FAILURES_TO_GIVE_UP} failures in a row),
+ * else undefined: never tried, or failed only once, which is worth one more try.
+ */
 export function knownCanvasResult(width: number, height: number): boolean | undefined {
-  const exact = results.get(key(width, height));
-  if (exact !== undefined) return exact;
-  // A size no larger than one that worked works; one no smaller than one that failed fails.
-  for (const [size, ok] of results) {
+  const exact = key(width, height);
+  if (working.has(exact)) return true;
+  if (givenUp(exact)) return false;
+  // A size no larger than one that worked works; one no smaller than one given up fails.
+  for (const size of working) {
     const [w = 0, h = 0] = size.split('x').map(Number);
-    if (ok && width <= w && height <= h) return true;
-    if (!ok && width >= w && height >= h) return false;
+    if (width <= w && height <= h) return true;
+  }
+  for (const size of failures.keys()) {
+    if (!givenUp(size)) continue;
+    const [w = 0, h = 0] = size.split('x').map(Number);
+    if (width >= w && height >= h) return false;
   }
   return undefined;
 }
 
 /** Records what a `width × height` canvas did (for a failure seen before any probe could run). */
 export function recordCanvasResult(width: number, height: number, ok: boolean): void {
-  results.set(key(width, height), ok);
+  const size = key(width, height);
+  if (ok) {
+    working.add(size);
+    failures.delete(size);
+  } else {
+    working.delete(size);
+    failures.set(size, (failures.get(size) ?? 0) + 1);
+  }
 }
 
 /**
@@ -87,7 +120,7 @@ export function verifyCanvas(canvas: ProbeCanvas, expectWidth: number, expectHei
   } catch {
     ok = false;
   }
-  results.set(key(expectWidth, expectHeight), ok);
+  recordCanvasResult(expectWidth, expectHeight, ok);
   return ok;
 }
 
@@ -120,21 +153,23 @@ export function canvasWorks(
 export interface CanvasDiagnostics {
   /** Sizes verified to work, e.g. "5400x7200". */
   readonly working: readonly string[];
-  /** Sizes that failed. */
+  /** Sizes that failed, with "×2" once given up (and "(settle)" for the settle canvas). */
   readonly failing: readonly string[];
 }
 
 /** The canvas sizes verified so far in this session (for diagnostics and PROGRESS.md). */
 export function canvasDiagnostics(): CanvasDiagnostics {
-  const working: string[] = [];
   const failing: string[] = [];
-  for (const [size, ok] of results) (ok ? working : failing).push(size);
+  for (const [size, count] of failures) {
+    failing.push(count > 1 ? `${size} ×${String(count)}` : size);
+  }
   for (const size of auxiliaryFailures) failing.push(`${size} (settle)`);
-  return { working, failing };
+  return { working: [...working], failing };
 }
 
 /** Forgets every result (tests). */
 export function resetCanvasResults(): void {
-  results.clear();
+  working.clear();
+  failures.clear();
   auxiliaryFailures.clear();
 }

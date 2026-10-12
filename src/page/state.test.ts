@@ -185,6 +185,18 @@ describe('exporting overlay', () => {
     });
   });
 
+  it('carries the encode stage, with every tile done, and leaves it if tiles are reported again', () => {
+    const state = send(at(exporting), { type: 'EXPORT_PROGRESS', done: 7, total: 8 });
+    const encoding = send(state, { type: 'EXPORT_PROGRESS', done: 3, total: 8, stage: 'encode' });
+    expect(encoding.screen).toMatchObject({ progress: { done: 8, total: 8, stage: 'encode' } });
+    expect(send(encoding, { type: 'EXPORT_PROGRESS', done: 8, total: 8, stage: 'encode' })).toBe(
+      encoding,
+    );
+    const back = send(encoding, { type: 'EXPORT_PROGRESS', done: 8, total: 8 });
+    expect(back.screen).toMatchObject({ progress: { done: 8, total: 8 } });
+    expect((back.screen as { progress: object }).progress).not.toHaveProperty('stage');
+  });
+
   it('EXPORT_FAILED returns to poster mode with the error notice', () => {
     const state = send(at(exporting), { type: 'EXPORT_FAILED', message: 'Too large.' });
     expect(state.screen).toEqual({

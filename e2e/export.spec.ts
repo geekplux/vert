@@ -343,7 +343,9 @@ test('Cancel mid-export returns to Poster mode and saves nothing', async ({ page
 
   await tabUntil(page, pngButton(page));
   await page.keyboard.press('Enter');
-  const label = page.locator('p', { hasText: /^(Preparing…|Rendering tile \d+ of \d+)$/ });
+  const label = page.locator('p', {
+    hasText: /^(Preparing…|Rendering tile \d+ of \d+|Saving the file…)$/,
+  });
   await expect(label).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeFocused();
@@ -372,4 +374,61 @@ test('Cancel mid-export returns to Poster mode and saves nothing', async ({ page
   await page.waitForTimeout(4_000);
   expect(downloads).toEqual([]);
   await expect(page.locator('[data-vert-export]')).toHaveCount(0);
+});
+
+test('a one-time canvas failure can be retried, and every progress label is painted', async ({
+  page,
+}) => {
+  // The 18 × 24 output canvas throws once, as a transient allocation failure would.
+  await page.addInitScript(() => {
+    const Real = OffscreenCanvas;
+    let failed = false;
+    window.OffscreenCanvas = class extends Real {
+      constructor(width: number, height: number) {
+        if (!failed && width === 5400 && height === 7200) {
+          failed = true;
+          throw new RangeError('Simulated allocation failure');
+        }
+        super(width, height);
+      }
+    };
+  });
+  // The progress label as each frame is about to be painted.
+  await page.addInitScript(() => {
+    const painted: string[] = [];
+    Object.assign(window, { vertPainted: painted });
+    const label = /^(Preparing…|Rendering tile \d+ of \d+|Saving the file…)$/;
+    const frame = () => {
+      const text = [...document.querySelectorAll('p')]
+        .map((p) => p.textContent)
+        .find((t) => label.test(t));
+      if (text && painted.at(-1) !== text) painted.push(text);
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+  await openPoster(page);
+  await chooseSize(page, /^18 × 24 in/);
+  await previewReady(page, 'terrain');
+
+  await tabUntil(page, pngButton(page));
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByText('This poster is too large for this browser. Try a smaller size.').first(),
+  ).toBeVisible({ timeout: 60_000 });
+
+  // The next Download tries the size again, and it works now.
+  await page.evaluate(() => {
+    (window as unknown as { vertPainted: string[] }).vertPainted.length = 0;
+  });
+  const { name } = await download(page, pngButton(page));
+  expect(name).toBe('vert-coosa-backcountry-trail-18x24.png');
+  const painted = await page.evaluate(
+    () => (window as unknown as { vertPainted: string[] }).vertPainted,
+  );
+  expect(painted).toEqual([
+    'Preparing…',
+    ...Array.from({ length: 8 }, (_, i) => `Rendering tile ${String(i + 1)} of 8`),
+    'Saving the file…',
+  ]);
 });

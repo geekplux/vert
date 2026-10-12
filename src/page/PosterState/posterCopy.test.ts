@@ -17,10 +17,38 @@ describe('posterCopy', () => {
     ['Coosa Backcountry Trail', 'coosa-backcountry-trail'],
     ['  Côte d’Azur — Loop #2 ', 'cote-d-azur-loop-2'],
     ['高尾山 Trail', '高尾山-trail'],
+    ['Żółta Góra', 'zolta-gora'],
+    ['Ålesund Øya', 'alesund-oya'],
+    ['Łódź · Đakovo · Ðorvik', 'lodz-dakovo-dorvik'],
+    ['Æbeltoft Œuvre Straße', 'aebeltoft-oeuvre-strasse'],
+    ['ÆØÅ STRASSE ẞ', 'aeoa-strasse-ss'],
+    ['Þórsmörk Þingvellir', 'thorsmork-thingvellir'],
+    ['Dağı Ilık', 'dagi-ilik'],
+    ['İstanbul', 'istanbul'],
+    ['Ŋa Ħal Ŧur ĸ', 'na-hal-tur-k'],
+    ['Tiếng Việt', 'tieng-viet'],
+    ['ﬁve ½', 'five-1-2'],
     ['!!!', ''],
     ['', ''],
   ])('slugifies %j as %j', (text, slug) => {
     expect(slugify(text)).toBe(slug);
+  });
+
+  it.each([
+    ['富士山', '富士山'],
+    ['ぶどう峠 パーク', 'ぶどう峠-パーク'],
+    ['서울 둘레길', '서울-둘레길'],
+    ['جَبَل طارق', 'جَبَل-طارق'],
+    ['हिमालय', 'हिमालय'],
+    ['Москва Йошкар', 'москва-йошкар'],
+    ['Ελλάδα', 'ελλάδα'],
+  ])('keeps %j as written (%j), marks and all', (text, slug) => {
+    expect(slugify(text)).toBe(slug);
+    expect(slugify(text)).toBe(slugify(text).normalize('NFC'));
+  });
+
+  it('caps the slug at 60 characters, not code units', () => {
+    expect(Array.from(slugify('𠀀'.repeat(70)))).toHaveLength(60);
   });
 
   it('caps the slug at 60 characters without a trailing hyphen', () => {
@@ -37,6 +65,9 @@ describe('posterCopy', () => {
     );
     expect(posterFileName('A3 Loop', 'a3', 'pdf')).toBe('vert-a3-loop-a3.pdf');
     expect(posterFileName('—', '4x5', 'png')).toBe('vert-4x5.png');
+    expect(posterFileName('Żółta Góra – Ålesund Øya', '4x5', 'png')).toBe(
+      'vert-zolta-gora-alesund-oya-4x5.png',
+    );
   });
 
   it('labels the PNG button with the pixel size and offers PDF for print only', () => {
@@ -59,6 +90,17 @@ describe('posterCopy', () => {
     expect(exportTileLabel({ done: 12, total: 12 })).toBe('Rendering tile 12 of 12');
     expect(exportValueText({ done: 3, total: 12 })).toBe('3 of 12 tiles rendered');
     expect(exportValueText({ done: 0, total: null })).toBe('Preparing');
+  });
+
+  it('says Saving the file… while the file is written', () => {
+    expect(exportTileLabel({ done: 8, total: 8, stage: 'encode' })).toBe('Saving the file…');
+    expect(exportValueText({ done: 8, total: 8, stage: 'encode' })).toBe(
+      'All 8 tiles rendered, saving the file',
+    );
+    // The live region adds nothing for it: it already said every tile was rendered.
+    expect(exportAnnouncement({ done: 8, total: 8, stage: 'encode' }, 'v.png')).toBe(
+      exportAnnouncement({ done: 8, total: 8 }, 'v.png'),
+    );
   });
 
   it('announces the export on start and at each quarter only', () => {

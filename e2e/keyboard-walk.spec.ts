@@ -219,6 +219,14 @@ async function expectRingPixels(page: Page, ring: FocusRing, name: string) {
 async function expectAccessibleAndNoSideScroll(page: Page, state: string) {
   if (!(await page.evaluate(() => 'axe' in window))) await page.addScriptTag({ path: AXE_PATH });
   const violations = await page.evaluate(async () => {
+    // Let colour transitions finish first (a button fading from disabled to enabled reads as
+    // low contrast mid-way).
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation instanceof CSSTransition)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
     const axe = (window as unknown as { axe: typeof import('axe-core') }).axe;
     const result = await axe.run(document, { rules: { region: { enabled: true } } });
     return result.violations.map(
@@ -423,7 +431,7 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     await page.keyboard.press('Enter');
 
     const progressLabel = page.locator('p', {
-      hasText: /^(Preparing…|Rendering tile \d+ of \d+)$/,
+      hasText: /^(Preparing…|Rendering tile \d+ of \d+|Saving the file…)$/,
     });
     await expect(progressLabel).toBeFocused();
     await expect(page.getByRole('button', { name: 'Back to the run' })).toBeDisabled();

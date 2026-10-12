@@ -284,10 +284,11 @@
   white-space: nowrap;
 }
 
+/* The muted footer colour, faded (styles.ts `profileOpacity`): 4.37:1 on the card, a graphic. */
 .shareProfile {
   display: block;
   flex: none;
   width: 100%;
-  color: var(--share-accent);
-  opacity: 0.35;
+  color: var(--share-muted);
+  opacity: var(--share-profile-opacity);
 }

@@ -272,11 +272,13 @@ export function PosterState({
 
 /**
  * Output px per logical px for the preview's raster figure: the preview's scale times the device
- * pixel ratio (at most 2), in steps of 1/20 so a sub-pixel resize does not re-render it.
+ * pixel ratio (at most 2), in steps of 1/20 so a sub-pixel resize does not re-render it, rounded
+ * up so the canvas is never stretched (blurred) to fill its box.
  */
 export function figurePixelScale(previewScale: number): number {
   const ratio = Math.min(MAX_PIXEL_RATIO, window.devicePixelRatio || 1);
-  return Math.max(0.05, Math.round(previewScale * ratio * 20) / 20);
+  // The epsilon keeps an exact step (0.5 × 2 = 1) from rounding up to the next one.
+  return Math.max(0.05, Math.ceil(previewScale * ratio * 20 - 1e-6) / 20);
 }
 
 /** The status region's text: the export's milestones, then how it ended. */

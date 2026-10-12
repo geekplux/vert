@@ -3,10 +3,13 @@ import type { CSSProperties } from 'react';
 import { trimTrack } from '../../gpx/trim';
 import {
   NIGHT_RIDGE_ROWS,
+  figureFrameBounds,
   nightRidgeFigureData,
+  padBounds,
   quadBounds,
   ridgeBounds,
   surveyQuadFigureData,
+  trackBounds,
 } from '../../poster/figures';
 import { posterLayout } from '../../poster/layout';
 import { NightRidgePoster } from '../../poster/NightRidgePoster';
@@ -18,6 +21,7 @@ import { SurveyQuadPoster } from '../../poster/SurveyQuadPoster';
 import { TrailSignPoster } from '../../poster/TrailSignPoster';
 import type { FigureBoxSize } from '../../poster/TrailSignPoster';
 import type { PosterContent } from '../../poster/types';
+import type { Bounds } from '../../lib/geo';
 import type { ViewCamera } from '../../terrain/camera';
 import type { LoadFigureTerrain } from '../hooks';
 import type { Prefs } from '../state';
@@ -55,25 +59,36 @@ export const FIGURE_ERROR_TEXT = 'The terrain couldn’t be drawn.';
  * live"): style A's three.js terrain from the View's camera, Night Ridge's ridgelines and Survey
  * Quad's contour map from height grids built for their figure boxes. Every style draws the route
  * without its hidden ends (`trimTrack(run.track, hideEnds)`): the line and its start / finish
- * markers begin and end that far in, so the poster never shows where the run starts. The stats
- * and the elevation strip keep the whole run.
+ * markers begin and end that far in, and the figure is framed on what is drawn
+ * (`figureFrameBounds`; style A then builds its own height grid for it), so neither the line nor
+ * the margin around it shows where the run starts. The stats and the elevation strip keep the
+ * whole run.
  */
 export function LivePoster(props: LivePosterProps) {
   const { run, prefs } = props;
   const { hideEnds } = prefs.poster;
   // null when nothing would be left: the route is not drawn at all.
   const drawnTrack = useMemo(() => trimTrack(run.track, hideEnds), [run.track, hideEnds]);
+  const frame = useMemo(
+    () => figureFrameBounds(run.bounds, drawnTrack, hideEnds),
+    [run.bounds, drawnTrack, hideEnds],
+  );
+  const live = { ...props, drawnTrack, frame };
   switch (prefs.poster.style) {
     case 'A':
-      return <TrailSignLive {...props} drawnTrack={drawnTrack} />;
+      return <TrailSignLive {...live} />;
     case 'B':
-      return <NightRidgeLive {...props} drawnTrack={drawnTrack} />;
+      return <NightRidgeLive {...live} />;
     case 'E':
-      return <SurveyQuadLive {...props} drawnTrack={drawnTrack} />;
+      return <SurveyQuadLive {...live} />;
   }
 }
 
-type LiveProps = LivePosterProps & { drawnTrack: RunTrack | null };
+type LiveProps = LivePosterProps & {
+  drawnTrack: RunTrack | null;
+  /** The bounds the figure is framed on (`figureFrameBounds`). */
+  frame: Bounds;
+};
 
 /** The figure note's colour per style: the ink each figure's own background carries. */
 const NOTE_COLOR: Readonly<Record<PosterStyleId, string>> = {
@@ -124,9 +139,25 @@ function FigureCanvas({
   );
 }
 
-function TrailSignLive({ content, size, terrain, prefs, drawnTrack, pixelScale }: LiveProps) {
+function TrailSignLive(props: LiveProps) {
+  const { content, size, terrain, prefs, drawnTrack, pixelScale, loadFigureTerrain } = props;
   const [box, setBox] = useState<FigureBoxSize | null>(null);
-  const heightfield = terrain.status === 'ready' ? terrain.heightfield : null;
+  // With the ends hidden, a grid of its own around the drawn route (padded as the View's); the
+  // View's grid frames the whole run, start and finish included.
+  const hideEnds = prefs.poster.hideEnds;
+  const ownBounds = useMemo(() => {
+    const drawn = hideEnds > 0 && drawnTrack ? trackBounds(drawnTrack) : null;
+    return drawn ? padBounds(drawn) : null;
+  }, [hideEnds, drawnTrack]);
+  const own = useFigureHeightfield(ownBounds, loadFigureTerrain);
+  const heightfield = ownBounds
+    ? own.status === 'ready'
+      ? own.heightfield
+      : null
+    : terrain.status === 'ready'
+      ? terrain.heightfield
+      : null;
+  const gridError = ownBounds ? own.status === 'error' : terrain.status === 'error';
   const figure = useTerrainFigure({
     heightfield,
     track: drawnTrack,
@@ -136,7 +167,7 @@ function TrailSignLive({ content, size, terrain, prefs, drawnTrack, pixelScale }
     pixelScale,
   });
   const node =
-    terrain.status === 'error' || figure.status === 'error' ? (
+    gridError || figure.status === 'error' ? (
       <FigureNote text={FIGURE_ERROR_TEXT} style="A" />
     ) : figure.status === 'ready' ? (
       <FigureCanvas canvas={figure.canvas} version={figure.version} camera={prefs.poster.camera} />
@@ -165,7 +196,8 @@ const boxKey = (box: FigureBoxSize | NightRidgeBox | null) =>
         .join(',')
     : '';
 
-function NightRidgeLive({ run, content, size, prefs, drawnTrack, loadFigureTerrain }: LiveProps) {
+function NightRidgeLive(props: LiveProps) {
+  const { run, content, size, prefs, drawnTrack, frame, loadFigureTerrain } = props;
   const fonts = usePosterFonts('B', posterText(content), Boolean(content.subtitle));
   const [reported, setBox] = useState<NightRidgeBox | null>(null);
   // Typing the title moves the text's line boxes: lay the ridges out once it settles.
@@ -177,13 +209,13 @@ function NightRidgeLive({ run, content, size, prefs, drawnTrack, loadFigureTerra
   const bounds = useMemo(
     () =>
       stageW > 0 && stageH > 0
-        ? ridgeBounds(run.bounds, {
+        ? ridgeBounds(frame, {
             width: stageW,
             height: stageH,
             keepOut: [{ x: 0, y: 0, width: 1, height: textBottom }],
           })
         : null,
-    [run.bounds, stageW, stageH, textBottom],
+    [frame, stageW, stageH, textBottom],
   );
   const grid = useFigureHeightfield(bounds, loadFigureTerrain);
   const data = useMemo(
@@ -212,17 +244,15 @@ function NightRidgeLive({ run, content, size, prefs, drawnTrack, loadFigureTerra
   );
 }
 
-function SurveyQuadLive({ run, content, size, prefs, drawnTrack, loadFigureTerrain }: LiveProps) {
+function SurveyQuadLive(props: LiveProps) {
+  const { run, content, size, prefs, drawnTrack, frame, loadFigureTerrain } = props;
   const fonts = usePosterFonts('E', posterText(content), Boolean(content.subtitle));
   const [reported, setBox] = useState<FigureBoxSize | null>(null);
   const box = useDebounced(reported, boxKey(reported));
   const layout = posterLayout(size).kind;
   // The aspect to two decimals, so a sub-pixel relayout does not rebuild the height grid.
   const aspect = box && box.height > 0 ? Math.round((box.width / box.height) * 100) / 100 : null;
-  const bounds = useMemo(
-    () => (aspect ? quadBounds(run.bounds, aspect) : null),
-    [run.bounds, aspect],
-  );
+  const bounds = useMemo(() => (aspect ? quadBounds(frame, aspect) : null), [frame, aspect]);
   const grid = useFigureHeightfield(bounds, loadFigureTerrain);
   const data = useMemo(
     () =>
@@ -230,8 +260,9 @@ function SurveyQuadLive({ run, content, size, prefs, drawnTrack, loadFigureTerra
         units: prefs.units,
         layout,
         drawnTrack,
+        frame,
       }),
-    [run, grid.heightfield, box, prefs.units, layout, drawnTrack],
+    [run, grid.heightfield, box, prefs.units, layout, drawnTrack, frame],
   );
   if (!fonts) return <LoadingPoster style="E" size={size} />;
   return (

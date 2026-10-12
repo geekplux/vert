@@ -3,6 +3,7 @@ import type { Ref } from 'react';
 import { ElevationProfile, Slider, StatGrid, StatTile } from '../../components';
 import { formatDistance, formatDuration, formatElevation, formatKmRange } from '../../lib/format';
 import type { Units } from '../../lib/format';
+import type { ViewCamera } from '../../terrain/camera';
 import { PageShell } from '../PageShell/PageShell';
 import { runDateLine, runPaceAt } from '../runCopy';
 import { EXAGGERATION } from '../state';
@@ -41,6 +42,11 @@ export interface ViewStateProps {
   paceAt?: PaceAt;
   /** Reads the terrain's camera ("Make a poster" hands it to Poster mode); see `TerrainBox`. */
   cameraRef?: Ref<TerrainCameraSource>;
+  /**
+   * The camera to start from, flat or oblique, with no intro: the poster's, back from Poster
+   * mode, so the next "Make a poster" keeps the user's angle. Default: the intro.
+   */
+  initialCamera?: ViewCamera;
 }
 const formatExaggeration = (value: number) => `${value.toFixed(1)}×`;
 
@@ -60,13 +66,14 @@ export function ViewState({
   headingRef,
   paceAt: paceAtProp,
   cameraRef,
+  initialCamera,
 }: ViewStateProps) {
   const paceAt: PaceAt = paceAtProp ?? ((d) => runPaceAt(run, d));
   const climbsId = useId();
   const elevationId = useId();
   // Local to the View; the page keys this component by run, so a new run starts fresh.
   const [scrub, setScrub] = useState(() => defaultScrub(run));
-  const [flat, setFlat] = useState(false);
+  const [flat, setFlat] = useState(() => initialCamera?.view === 'flat');
   const phone = useMediaQuery(PHONE_QUERY);
 
   const distance = formatDistance(run.distance, units);
@@ -177,6 +184,7 @@ export function ViewState({
         summit={summitText(run, units)}
         exaggerationLabel={exaggerationText(exaggeration)}
         flat={flat}
+        initialCamera={initialCamera}
         onToggleFlat={() => {
           setFlat((on) => !on);
         }}

@@ -58,6 +58,8 @@ export interface TerrainBoxProps {
   exaggerationLabel: string;
   /** Whether the flat (top-down) map is showing; the Flat map button's pressed state. */
   flat: boolean;
+  /** Where the terrain's camera starts, with no intro (see `TerrainView`); default the intro. */
+  initialCamera?: ViewCamera;
   onToggleFlat: () => void;
   /**
    * Below 600px (DECISIONS "Terrain overlays"): the legend chip and the buttons move out of the box
@@ -103,6 +105,7 @@ export function TerrainBox({
   summit,
   exaggerationLabel,
   flat,
+  initialCamera,
   onToggleFlat,
   overlaysBelow,
   cameraRef,
@@ -266,6 +269,7 @@ export function TerrainBox({
                   heightfield={heightfield}
                   exaggeration={exaggeration}
                   view={flat ? 'flat' : 'oblique'}
+                  initialCamera={initialCamera}
                   track={track}
                   scrub={scrub}
                   overlays={overlays}

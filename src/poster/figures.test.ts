@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { SAMPLE_RUN } from '../page/sample';
 import type { Run } from '../page/types';
 import type { Heightfield } from '../terrain/heightfield';
+import { trimTrack } from '../gpx/trim';
 import {
+  figureFrameBounds,
   formatLatLon,
   nightRidgeFigureData,
+  padBounds,
   quadBounds,
   ridgeBounds,
   surveyQuadFigureData,
+  trackBounds,
 } from './figures';
 
 const METRES_PER_DEGREE = 111_320;
@@ -125,7 +129,51 @@ describe('nightRidgeFigureData', () => {
   });
 });
 
+describe('figureFrameBounds', () => {
+  it('frames the drawn route when the ends are hidden, the run otherwise', () => {
+    const drawn = trimTrack(SAMPLE_RUN.track, 500);
+    if (!drawn) throw new Error('nothing drawn');
+    const own = trackBounds(drawn);
+    expect(figureFrameBounds(SAMPLE_RUN.bounds, drawn, 500)).toEqual(own);
+    expect(figureFrameBounds(SAMPLE_RUN.bounds, SAMPLE_RUN.track, 0)).toBe(SAMPLE_RUN.bounds);
+    // Nothing left to draw: nothing to give away either.
+    expect(figureFrameBounds(SAMPLE_RUN.bounds, null, 500)).toBe(SAMPLE_RUN.bounds);
+    // Inside the run's bounds, and smaller on some side.
+    if (!own) throw new Error('no bounds');
+    expect(own.west).toBeGreaterThanOrEqual(SAMPLE_RUN.bounds.west);
+    expect(own.east).toBeLessThanOrEqual(SAMPLE_RUN.bounds.east);
+    expect(own.south).toBeGreaterThanOrEqual(SAMPLE_RUN.bounds.south);
+    expect(own.north).toBeLessThanOrEqual(SAMPLE_RUN.bounds.north);
+  });
+
+  it('measures a track and pads bounds by a share of each side', () => {
+    expect(
+      trackBounds({ lat: Float64Array.from([1, 3, 2]), lon: Float64Array.from([10, 12, 8]) }),
+    ).toEqual({ west: 8, east: 12, south: 1, north: 3 });
+    expect(trackBounds({ lat: new Float64Array(0), lon: new Float64Array(0) })).toBeNull();
+    expect(padBounds({ west: 0, east: 10, south: 0, north: 20 })).toEqual({
+      west: -1.5,
+      east: 11.5,
+      south: -3,
+      north: 23,
+    });
+  });
+});
+
 describe('surveyQuadFigureData', () => {
+  it('centres the map and the coordinates on the frame it is given', () => {
+    const { west, south, east, north } = SAMPLE_RUN.bounds;
+    const frame = { west, south, east: (west + east) / 2, north: (south + north) / 2 };
+    const box = { width: 600, height: 500 };
+    const data = surveyQuadFigureData(SAMPLE_RUN, sampleField(), box, { frame });
+    const whole = surveyQuadFigureData(SAMPLE_RUN, sampleField(), box);
+    expect(data.coordinates).toEqual(
+      formatLatLon((south + frame.north) / 2, (west + frame.east) / 2),
+    );
+    // The same route, moved: centred on the south-west quarter instead of the whole run.
+    expect(data.map?.route).not.toBe(whole.map?.route);
+  });
+
   it('has the coordinates of the run centre even before the terrain loads', () => {
     const data = surveyQuadFigureData(SAMPLE_RUN, null, null);
     expect(data.map).toBeNull();

@@ -25,6 +25,58 @@ import { ridgeFigure, RIDGE_ROWS } from './ridges';
 import type { Point, Rect, RidgeFigure } from './ridges';
 
 // ---------------------------------------------------------------------------------------------
+// Framing (every style)
+// ---------------------------------------------------------------------------------------------
+
+/** The bounds of a track's points; null for an empty track. */
+export function trackBounds(track: Pick<RunTrack, 'lat' | 'lon'>): Bounds | null {
+  const n = Math.min(track.lat.length, track.lon.length);
+  if (n === 0) return null;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const lat = track.lat[i] ?? 0;
+    const lon = track.lon[i] ?? 0;
+    if (lon < west) west = lon;
+    if (lon > east) east = lon;
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+  }
+  return { west, south, east, north };
+}
+
+/**
+ * The bounds every poster figure is framed on. With the ends hidden ("Hide start and end"), the
+ * drawn route's: framed on the whole run, the empty margin around the drawn line would show where
+ * the hidden start and finish were. Otherwise (or when nothing is left to draw) the run's.
+ */
+export function figureFrameBounds(
+  runBounds: Bounds,
+  drawnTrack: RunTrack | null,
+  hideEnds: number,
+): Bounds {
+  if (!(hideEnds > 0) || !drawnTrack) return runBounds;
+  return trackBounds(drawnTrack) ?? runBounds;
+}
+
+/** The View's heightfield padding: 15% of the width and height on every side. */
+export const TRAIL_SIGN_PADDING = 0.15;
+
+/** `bounds` with `padding` of its width and height added on every side. */
+export function padBounds(bounds: Bounds, padding: number = TRAIL_SIGN_PADDING): Bounds {
+  const padX = (bounds.east - bounds.west) * padding;
+  const padY = (bounds.north - bounds.south) * padding;
+  return {
+    west: bounds.west - padX,
+    east: bounds.east + padX,
+    south: bounds.south - padY,
+    north: bounds.north + padY,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 // B · Night Ridge
 // ---------------------------------------------------------------------------------------------
 
@@ -201,10 +253,14 @@ export interface SurveyQuadOptions {
   detailScale?: number;
   /**
    * The route to draw, its start and finish markers at its ends: the run's track with the hidden
-   * ends cut off (`trimTrack`), or null to draw no route. Default `run.track`. The map's centre
-   * and coordinates always come from the whole run's bounds.
+   * ends cut off (`trimTrack`), or null to draw no route. Default `run.track`.
    */
   drawnTrack?: RunTrack | null;
+  /**
+   * What the map is centred on, and whose centre the coordinates give (`figureFrameBounds`: the
+   * drawn route's when the ends are hidden). Default `run.bounds`.
+   */
+  frame?: Bounds;
 }
 
 /** Figure data for Survey Quad. `heightfield` and `box` may be missing while they load. */
@@ -212,9 +268,15 @@ export function surveyQuadFigureData(
   run: Pick<Run, 'track' | 'bounds'>,
   heightfield: Heightfield | null,
   box: BoxSize | null,
-  { units = 'metric', layout = 'print', detailScale = 1, drawnTrack }: SurveyQuadOptions = {},
+  {
+    units = 'metric',
+    layout = 'print',
+    detailScale = 1,
+    drawnTrack,
+    frame,
+  }: SurveyQuadOptions = {},
 ): SurveyQuadFigureData {
-  const { bounds } = run;
+  const bounds = frame ?? run.bounds;
   const centred = [bounds.north, bounds.south, bounds.east, bounds.west].every(Number.isFinite);
   const coordinates = centred
     ? formatLatLon((bounds.north + bounds.south) / 2, (bounds.east + bounds.west) / 2)

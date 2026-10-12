@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc -b",
     "sample": "node scripts/make-sample.mjs",
+    "fixtures": "node scripts/fetch-courses.mjs",
     "stories": "ladle serve",
     "stories:build": "ladle build",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",

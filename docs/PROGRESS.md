@@ -51,17 +51,17 @@ verification sub-agent → merge on PASS. Max three rounds.
 
 Started early where a module has no UI dependency (sample data, `src/lib`, parser, tile data).
 
-| Done | Task                                                                 | Rounds | Notes                                                                                          |
-| ---- | -------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
-| [x]  | Sample run (Coosa Backcountry, OSM + Terrarium, synthetic times)     | 1      | 21.48 km, +1,092 m, 5,623 points.                                                              |
-| [x]  | `src/lib`: geo, tile maths, Terrarium decoding, formatting           | 1      | Verified against Vincenty and the OSM tile formulas.                                           |
-| [ ]  | 0. Course fixtures (UTMB courses, git-ignored unless licence allows) |        |                                                                                                |
-| [ ]  | 1a. GPX parser (worker-safe tokenizer)                               |        |                                                                                                |
-| [ ]  | 1b. Stats (distance, moving time, gain, climbs) + Web Worker         |        |                                                                                                |
-| [x]  | 2. Terrarium tiles → heightfield                                     | 1      | Exact decode in Chromium vs Node; sample: z13, 278×430, mean error 0.86 m vs GPX; 273 ms cold. |
-| [ ]  | 3. Terrain mesh + TerrainView (three.js)                             |        |                                                                                                |
-| [ ]  | 4. Scrub: profile ↔ route marker                                     |        |                                                                                                |
-| [ ]  | 5. Poster layout + style A                                           |        |                                                                                                |
-| [ ]  | 6. Tiled export (PNG, PDF)                                           |        |                                                                                                |
-| [ ]  | 7. Styles B and E                                                    |        |                                                                                                |
-| [ ]  | 8. Worker tile proxy + R2, deploy                                    |        |                                                                                                |
+| Done | Task                                                             | Rounds | Notes                                                                                                                                                       |
+| ---- | ---------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x]  | Sample run (Coosa Backcountry, OSM + Terrarium, synthetic times) | 1      | 21.48 km, +1,092 m, 5,623 points.                                                                                                                           |
+| [x]  | `src/lib`: geo, tile maths, Terrarium decoding, formatting       | 1      | Verified against Vincenty and the OSM tile formulas.                                                                                                        |
+| [x]  | 0. Course fixtures (UTMB courses, git-ignored)                   | 1      | Lavaredo 20K, Eiger E51, CCC; terms forbid reproduction, so `pnpm fixtures` downloads them locally. The committed shareable sample is the Coosa run (ODbL). |
+| [ ]  | 1a. GPX parser (worker-safe tokenizer)                           |        |                                                                                                                                                             |
+| [ ]  | 1b. Stats (distance, moving time, gain, climbs) + Web Worker     |        |                                                                                                                                                             |
+| [x]  | 2. Terrarium tiles → heightfield                                 | 1      | Exact decode in Chromium vs Node; sample: z13, 278×430, mean error 0.86 m vs GPX; 273 ms cold.                                                              |
+| [ ]  | 3. Terrain mesh + TerrainView (three.js)                         |        |                                                                                                                                                             |
+| [ ]  | 4. Scrub: profile ↔ route marker                                 |        |                                                                                                                                                             |
+| [ ]  | 5. Poster layout + style A                                       |        |                                                                                                                                                             |
+| [ ]  | 6. Tiled export (PNG, PDF)                                       |        |                                                                                                                                                             |
+| [ ]  | 7. Styles B and E                                                |        |                                                                                                                                                             |
+| [ ]  | 8. Worker tile proxy + R2, deploy                                |        |                                                                                                                                                             |

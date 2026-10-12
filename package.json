@@ -19,6 +19,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc -b",
+    "sample": "node scripts/make-sample.mjs",
     "stories": "ladle serve",
     "stories:build": "ladle build",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",

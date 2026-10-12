@@ -60,6 +60,9 @@ everything.
   "social · 1080 × 1350", "9 : 16" / "story · 1080 × 1920". Unselected: transparent, 1px `--rule`
   border, sub-line `--muted`. Selected: `--ink` fill, white text, sub-line white at 80% opacity.
   Padding 10×12, left aligned.
+- **Slider**: the drawn layout matches the canvas (native track directly under the label row,
+  gap 6px). The 44px hit area may extend invisibly over the slider's own label row (clicking a
+  label focuses its input anyway) and into the space below, never over another control.
 - **ElevationProfile**: climbs shaded `--surface`, the steepest one `--surface-strong`; the scrub
   is an ARIA `slider` (`aria-valuetext` like "km 12.2, 640 m"); arrow keys ±1%, Shift+arrow ±10%,
   Home/End to the ends; pointer drag scrubs. km ticks under it: "0 km", round steps, total.

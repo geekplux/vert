@@ -1,0 +1,76 @@
+/* TextField. Source: DESIGN-SPEC §2 and the TEXT section of canvas frame "03 Poster mode". */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 10px var(--space-3);
+  font: 16px var(--font-display);
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+}
+
+.input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.input:focus {
+  border-color: var(--ink);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+.footer {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.hint {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.counter {
+  margin: 0 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visually hidden, still read by screen readers. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -16,6 +16,11 @@ body {
   color: var(--ink);
   font-family: var(--font-display);
   font-size: 16px;
-  line-height: 1.5;
+  /* The canvas leaves line-height at normal and sets 1.5 only on running text. */
+  line-height: normal;
   -webkit-font-smoothing: antialiased;
+}
+
+p {
+  line-height: 1.5;
 }

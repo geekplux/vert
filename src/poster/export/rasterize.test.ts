@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { posterLayout } from '../layout';
 import { POSTER_SIZES, posterSizeById } from '../sizes';
-import { knownCanvasResult, resetCanvasResults } from './canvasLimits';
-import { CanvasLimitError, planTiles, rasterize, settleFonts } from './rasterize';
+import { canvasDiagnostics, knownCanvasResult, resetCanvasResults } from './canvasLimits';
+import { CanvasLimitError, abortableDelay, planTiles, rasterize, settleFonts } from './rasterize';
 import type { FigureTile, LoadedImage, Tile } from './rasterize';
 import type { ViewBox } from './serialize';
 import { fakeCanvas } from './testFakes';
@@ -208,6 +208,36 @@ describe('rasterize', () => {
     ).rejects.toBeInstanceOf(CanvasLimitError);
   });
 
+  it('remembers a size whose canvas has no context or throws on creation', async () => {
+    const { ...hooks } = setup();
+    await expect(
+      rasterize({
+        ...hooks,
+        createCanvas: (w, h) => fakeCanvas(w, h, { context: false }),
+        width: 1080,
+        height: 1350,
+        scale: 1,
+        settle: false,
+      }),
+    ).rejects.toBeInstanceOf(CanvasLimitError);
+    expect(knownCanvasResult(1080, 1350)).toBe(false);
+
+    const error = new RangeError('Invalid array length');
+    const failure: unknown = await rasterize({
+      ...hooks,
+      createCanvas: () => {
+        throw error;
+      },
+      width: 1000,
+      height: 1000,
+      scale: 1,
+      settle: false,
+    }).catch((reason: unknown) => reason);
+    expect(failure).toBeInstanceOf(CanvasLimitError);
+    expect((failure as Error).cause).toBe(error);
+    expect(knownCanvasResult(1000, 1000)).toBe(false);
+  });
+
   it('settles the fonts on a small whole-poster draw before the tiles', async () => {
     const { harness, ...hooks } = setup();
     const onSettled = vi.fn();
@@ -266,5 +296,90 @@ describe('settleFonts', () => {
       delays: [0, 0, 0],
     });
     expect(result).toEqual({ attempts: 3, stable: false });
+  });
+
+  it('stops waiting as soon as the signal aborts', async () => {
+    vi.useFakeTimers();
+    try {
+      let n = 0;
+      const loadImage = vi.fn(() =>
+        Promise.resolve({
+          image: `draw ${String((n += 1))}` as unknown as CanvasImageSource,
+          release: () => undefined,
+        }),
+      );
+      const controller = new AbortController();
+      const settling = settleFonts({
+        svg,
+        width: 1080,
+        height: 1350,
+        scale,
+        loadImage,
+        createCanvas: fakeCanvas,
+        delays: [0, 800, 800],
+        signal: controller.signal,
+      });
+      const outcome = settling.then(
+        () => 'resolved',
+        (error: unknown) => (error instanceof Error ? error.name : String(error)),
+      );
+      // The first draw is made; now it waits 800 ms for the second.
+      await vi.advanceTimersByTimeAsync(10);
+      expect(loadImage).toHaveBeenCalledTimes(1);
+      controller.abort();
+      // No timer needs to fire: the wait rejects on the abort itself.
+      await expect(outcome).resolves.toBe('AbortError');
+      expect(loadImage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a failed settle canvas out of the size cache, so later exports still run', async () => {
+    await expect(
+      settleFonts({
+        svg,
+        width: 1080,
+        height: 1350,
+        scale,
+        loadImage: vi.fn(),
+        createCanvas: (w, h) => fakeCanvas(w, h, { context: false }),
+      }),
+    ).rejects.toBeInstanceOf(CanvasLimitError);
+    // Reported for diagnostics, but no size (not even its own) is known to fail.
+    expect(canvasDiagnostics().failing).toEqual(['720x900 (settle)']);
+    expect(knownCanvasResult(720, 900)).toBeUndefined();
+    for (const size of POSTER_SIZES) {
+      expect(knownCanvasResult(size.width, size.height)).toBeUndefined();
+    }
+  });
+
+  it('does not start when the signal has already aborted', async () => {
+    const loadImage = vi.fn();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      settleFonts({
+        svg,
+        width: 1080,
+        height: 1350,
+        scale,
+        loadImage,
+        createCanvas: fakeCanvas,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(loadImage).not.toHaveBeenCalled();
+  });
+});
+
+describe('abortableDelay', () => {
+  it('resolves after its time, or rejects with the abort reason', async () => {
+    await expect(abortableDelay(0)).resolves.toBeUndefined();
+    const controller = new AbortController();
+    const waiting = abortableDelay(60_000, controller.signal);
+    const reason = new Error('stop');
+    controller.abort(reason);
+    await expect(waiting).rejects.toBe(reason);
   });
 });

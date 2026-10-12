@@ -139,6 +139,30 @@ describe('MarkerShape', () => {
     expect(g?.querySelector('path')?.getAttribute('d')).toBe('M9 2 L16 15 L2 15 Z');
   });
 
+  it('puts a gap band between the scrub fill and its ring when asked (Night Ridge)', () => {
+    const { container } = render(
+      <svg>
+        <MarkerShape kind="scrub" accent="#FFD9A0" ring="#E8F1F5" gap="#0F2233" />
+        <MarkerShape kind="scrub" accent="#FFD9A0" ring="#E8F1F5" />
+      </svg>,
+    );
+    const [withGap, plain] = Array.from(container.querySelectorAll('g'));
+    const [ring, dot] = Array.from(withGap?.querySelectorAll('circle') ?? []);
+    // The ring's outer edge stays where it was (6.25); inside it the gap, then the dot.
+    expect(Number(ring?.getAttribute('r')) + Number(ring?.getAttribute('stroke-width')) / 2).toBe(
+      6.25,
+    );
+    expect(ring?.style.stroke).toBe('rgb(232, 241, 245)');
+    expect(ring?.style.fill).toBe('rgb(15, 34, 51)');
+    expect(dot?.style.fill).toBe('rgb(255, 217, 160)');
+    // Gap band: from the dot's edge (3.5) to the ring's inner edge (4.25).
+    expect(Number(dot?.getAttribute('r'))).toBeLessThan(
+      Number(ring?.getAttribute('r')) - Number(ring?.getAttribute('stroke-width')) / 2,
+    );
+    // Without a gap the scrub is unchanged: one circle, fill and ring.
+    expect(plain?.querySelectorAll('circle')).toHaveLength(1);
+  });
+
   it('defaults to an 18-unit box centred on the origin', () => {
     const { container } = render(
       <svg>

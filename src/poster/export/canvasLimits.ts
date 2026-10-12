@@ -34,6 +34,12 @@ export function context2d(
 }
 
 const results = new Map<string, boolean>();
+/**
+ * Failures of auxiliary canvases (the small settle canvas): kept for diagnostics only, never fed to
+ * `knownCanvasResult`, so one transient failure on a small canvas cannot mark every poster size as
+ * too large for the rest of the session.
+ */
+const auxiliaryFailures = new Set<string>();
 const key = (width: number, height: number) => `${String(width)}x${String(height)}`;
 
 /** What is known about a `width × height` canvas: true / false once verified, else undefined. */
@@ -47,6 +53,19 @@ export function knownCanvasResult(width: number, height: number): boolean | unde
     if (!ok && width >= w && height >= h) return false;
   }
   return undefined;
+}
+
+/** Records what a `width × height` canvas did (for a failure seen before any probe could run). */
+export function recordCanvasResult(width: number, height: number, ok: boolean): void {
+  results.set(key(width, height), ok);
+}
+
+/**
+ * Records that an auxiliary canvas (not the output) failed. Diagnostics only: it does not decide
+ * whether any size, this one included, is tried again.
+ */
+export function recordAuxiliaryCanvasFailure(width: number, height: number): void {
+  auxiliaryFailures.add(key(width, height));
 }
 
 /**
@@ -88,7 +107,7 @@ export function canvasWorks(
     canvas = create(width, height);
     return verifyCanvas(canvas, width, height);
   } catch {
-    results.set(key(width, height), false);
+    recordCanvasResult(width, height, false);
     return false;
   } finally {
     if (canvas) {
@@ -110,10 +129,12 @@ export function canvasDiagnostics(): CanvasDiagnostics {
   const working: string[] = [];
   const failing: string[] = [];
   for (const [size, ok] of results) (ok ? working : failing).push(size);
+  for (const size of auxiliaryFailures) failing.push(`${size} (settle)`);
   return { working, failing };
 }
 
 /** Forgets every result (tests). */
 export function resetCanvasResults(): void {
   results.clear();
+  auxiliaryFailures.clear();
 }

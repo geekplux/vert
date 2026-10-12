@@ -218,6 +218,29 @@ describe('moving time', () => {
     expect(stats.endTime).toBe(T0 + 405_000);
   });
 
+  it('keeps an interpolated gap out of moving time but in elapsed time', () => {
+    // 100 s at 3 m/s and 1 Hz, then 30 points 20 m apart with no <time> spanning a 10-minute
+    // recording gap, then 100 s more. The filled steps are 600/31 ≈ 19 s each: under MAX_GAP_S
+    // one by one, but they stand for one 600 s gap.
+    const points: TrackPoint[] = [];
+    let d = 0;
+    for (let t = 0; t <= 100; t++, d += 3) points.push(at(d, null, t));
+    d -= 3;
+    for (let k = 1; k <= 30; k++) points.push(at((d += 20), null, null));
+    d += 20;
+    for (let t = 700; t <= 800; t++, d += 3) points.push(at(d, null, t));
+    const stats = computeStats(points);
+    expect(stats.elapsedTime).toBe(800);
+    expect(stats.movingTime).toBe(200);
+    expect(stats.time?.[110]).toBeCloseTo(T0 + 100_000 + (600_000 * 10) / 31, 0);
+  });
+
+  it('still counts a short span with an untimed point', () => {
+    // 1 Hz at 3 m/s, every fifth point without a time: each filled span is 2 s.
+    const points = Array.from({ length: 101 }, (_, t) => at(t * 3, null, t % 5 === 2 ? null : t));
+    expect(computeStats(points).movingTime).toBe(100);
+  });
+
   it('does not count jitter while standing as moving', () => {
     // Two minutes standing at 1 Hz, wandering ±1.5 m: step speeds up to 3 m/s.
     const points = Array.from({ length: 121 }, (_, s) =>

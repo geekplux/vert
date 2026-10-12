@@ -169,6 +169,16 @@
   align-items: flex-start;
 }
 
+/*
+ * CONTOUR INTERVAL ends at the column edge whichever is wider, it or the scale bar above. The
+ * negative margin hangs the letter-spacing after its last letter past the edge, so the letter
+ * itself ends there.
+ */
+.scale > .label {
+  align-self: flex-end;
+  margin-right: -0.14em;
+}
+
 .scaleBar {
   display: flex;
   flex-direction: column;

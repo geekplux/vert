@@ -14,6 +14,18 @@ import type { PosterSizeId } from './sizes';
 import { NIGHT_RIDGE_PALETTE } from './styles';
 import { posterContentFromRun } from './types';
 
+/** WCAG 2 contrast ratio of two #RRGGBB colours. */
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const [r = 0, g = 0, b = 0] = [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [hi = 0, lo = 0] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 const NAME = SAMPLE_RUN.name;
 const ALL = { distance: true, vert: true, time: true, highPoint: true };
 
@@ -134,7 +146,7 @@ describe('NightRidgePoster', () => {
     const { root } = renderPoster('18x24');
     const svg = root.querySelector('[data-figure="ridges"]');
     expect(svg?.getAttribute('viewBox')).toBe('0 0 600 300');
-    const rows = svg?.querySelectorAll('g') ?? [];
+    const rows = svg?.querySelectorAll('g:not([data-marker])') ?? [];
     expect(rows).toHaveLength(2);
     const [fill, line] = Array.from(rows[0]?.querySelectorAll('path') ?? []);
     expect(fill?.getAttribute('fill')).toBe(NIGHT_RIDGE_PALETTE.paper);
@@ -146,9 +158,35 @@ describe('NightRidgePoster', () => {
     expect(glow?.getAttribute('stroke-opacity')).toBe('0.35');
     expect(core?.getAttribute('stroke')).toBe('#FFD9A0');
     expect(core?.getAttribute('stroke-width')).toBe('3');
-    const start = svg?.querySelector('[data-marker="start"]');
+    const start = svg?.querySelector('[data-marker="start"] [data-part="ring"]');
     expect(start?.getAttribute('fill')).toBe(NIGHT_RIDGE_PALETTE.paper);
     expect(start?.getAttribute('stroke')).toBe('#FFD9A0');
+  });
+
+  it('separates each marker ring from the route it sits on, and tells finish from start by shape', () => {
+    const { root } = renderPoster('18x24', {
+      data: { ...DATA, ridges: { ...RIDGES, finish: { x: 500, y: 225 } } },
+    });
+    const part = (marker: string, name: string) =>
+      root.querySelector(`[data-marker="${marker}"] [data-part="${name}"]`);
+    for (const marker of ['start', 'finish']) {
+      const ring = part(marker, 'ring');
+      const halo = part(marker, 'halo');
+      const ringColour = ring?.getAttribute('stroke') ?? '';
+      // Inside the ring: its fill; outside: the paper band, then the route and its glow.
+      const inside = ring?.getAttribute('fill') ?? '';
+      const outside = halo?.getAttribute('stroke') ?? '';
+      expect(contrast(ringColour, inside)).toBeGreaterThanOrEqual(3);
+      expect(contrast(ringColour, outside)).toBeGreaterThanOrEqual(3);
+      expect(contrast(outside, NIGHT_RIDGE_PALETTE.route)).toBeGreaterThanOrEqual(3);
+      // The band starts where the ring's stroke ends (r 7 + 1.5) and is 3 px wide.
+      expect(halo?.getAttribute('r')).toBe('10');
+      expect(halo?.getAttribute('stroke-width')).toBe('3');
+    }
+    expect(part('start', 'dot')).toBeNull();
+    const dot = part('finish', 'dot');
+    expect(dot?.getAttribute('fill')).toBe(NIGHT_RIDGE_PALETTE.route);
+    expect(contrast(NIGHT_RIDGE_PALETTE.route, NIGHT_RIDGE_PALETTE.paper)).toBeGreaterThan(10);
   });
 
   it('scales strokes 1.5× on the share card (1080 wide)', () => {

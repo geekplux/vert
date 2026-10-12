@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
-import { StatGrid } from './StatGrid';
+import { FIT_TOLERANCE_PX, StatGrid, fitScale } from './StatGrid';
 import { StatTile } from './StatTile';
 
 // Test-only formatters; the app's shared formatters arrive in src/lib in a later phase.
@@ -100,5 +100,204 @@ describe('StatTile', () => {
   it('has no axe violations', async () => {
     const { container } = renderFourStats();
     await expectNoAxeViolations(container);
+  });
+});
+
+describe('fitScale', () => {
+  it('is 1 when the value fits, within a pixel of rounding', () => {
+    expect(fitScale(105.8, 77.5)).toBe(1);
+    expect(fitScale(105.57, 105.7)).toBe(1);
+    expect(fitScale(105.8, 105.8 + FIT_TOLERANCE_PX)).toBe(1);
+  });
+
+  it('shrinks an overflowing value to the column, from its width at the current scale', () => {
+    // "+10,070 m" is ~122 px at 34 px in a 106 px column.
+    expect(fitScale(105.8, 122.2)).toBe(0.865);
+    // Already drawn at 0.865: the same answer, so it does not oscillate.
+    expect(fitScale(105.8, 122.2 * 0.865, 0.865)).toBe(0.865);
+    // The column widened: back to full size.
+    expect(fitScale(146, 122.2 * 0.865, 0.865)).toBe(1);
+  });
+
+  it('is 1 when nothing can be measured (no layout)', () => {
+    expect(fitScale(0, 0)).toBe(1);
+    expect(fitScale(100, 0)).toBe(1);
+    expect(fitScale(Number.NaN, 120)).toBe(1);
+  });
+});
+
+describe('StatGrid value fitting', () => {
+  /** px per character at 34 px: "+10,070 m" (9) is 108 px, "+1,070 m" (8) 96 px. */
+  const PX_PER_CHAR = 12;
+  const COLUMN = 100;
+  /** Text-only zoom: the text grows, the column does not. */
+  let textZoom = 1;
+  type ResizeCallback = (entries: { contentRect: { width: number } }[]) => void;
+  let observers: ResizeCallback[] = [];
+  /** Animation frames waiting to run (run by `flushFrames`). */
+  let frames: FrameRequestCallback[] = [];
+
+  beforeEach(() => {
+    observers = [];
+    frames = [];
+    textZoom = 1;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeCallback) {
+          observers.push(callback);
+        }
+        observe() {
+          return undefined;
+        }
+        disconnect() {
+          return undefined;
+        }
+      },
+    );
+    // Text width scales with the grid's --fit, as the CSS font size does.
+    const scaleOf = (node: Node) =>
+      parseFloat(node.parentElement?.closest('dl')?.style.getPropertyValue('--fit') ?? '') || 1;
+    vi.spyOn(document, 'createRange').mockImplementation(() => {
+      let node: Node | null = null;
+      return {
+        selectNodeContents: (target: Node) => {
+          node = target;
+        },
+        getBoundingClientRect: () =>
+          ({
+            width: node
+              ? (node.textContent ?? '').length * PX_PER_CHAR * textZoom * scaleOf(node)
+              : 0,
+          }) as DOMRect,
+      } as unknown as Range;
+    });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () => ({ width: COLUMN }) as DOMRect,
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const fitOf = (container: HTMLElement) =>
+    container.querySelector('dl')?.style.getPropertyValue('--fit') ?? '';
+  const flushFrames = () => {
+    const due = frames;
+    frames = [];
+    for (const callback of due) callback(0);
+  };
+  /** The grid's width changed to `width`: the observer schedules a measure; run it. */
+  let width = COLUMN * 2;
+  const resizeTo = (next = (width += 1)) => {
+    for (const callback of observers) callback([{ contentRect: { width: next } }]);
+  };
+  const remeasure = () => {
+    resizeTo();
+    flushFrames();
+  };
+
+  it('leaves normal values at full size (no --fit)', () => {
+    const { container } = renderFourStats();
+    expect(fitOf(container)).toBe('');
+  });
+
+  it('steps every value down together when one overflows, without wrapping it', () => {
+    const { container, rerender } = render(
+      <StatGrid>
+        <StatTile label="Distance" value={171.4} unit="km" format={oneDecimal} />
+        <StatTile label="Vert" value={10070} unit="m" emphasis format={signedGrouped} />
+      </StatGrid>,
+    );
+    // 108 px wide in 100: 100 / 108 = 0.925.
+    expect(fitOf(container)).toBe('0.925');
+    // Measuring again at that scale settles on the same value.
+    remeasure();
+    expect(fitOf(container)).toBe('0.925');
+
+    // Shorter values: back to full size.
+    rerender(
+      <StatGrid>
+        <StatTile label="Distance" value={21.4} unit="km" format={oneDecimal} />
+        <StatTile label="Vert" value={1070} unit="m" emphasis format={signedGrouped} />
+      </StatGrid>,
+    );
+    remeasure();
+    expect(fitOf(container)).toBe('');
+  });
+
+  it('never writes --fit inside the ResizeObserver callback, and settles after its own write', () => {
+    const { container, rerender } = render(
+      <StatGrid>
+        <StatTile label="Distance" value={21.4} unit="km" format={oneDecimal} />
+      </StatGrid>,
+    );
+    rerender(
+      <StatGrid>
+        <StatTile label="Vert" value={10070} unit="m" emphasis format={signedGrouped} />
+      </StatGrid>,
+    );
+    // A width change: nothing is written during the callback, one measure is queued (coalesced).
+    resizeTo();
+    resizeTo();
+    expect(fitOf(container)).toBe('');
+    expect(frames).toHaveLength(1);
+    flushFrames();
+    expect(fitOf(container)).toBe('0.925');
+    // The write changes the grid's height: one more measure, which finds the fit unchanged.
+    resizeTo(width);
+    expect(frames).toHaveLength(1);
+    flushFrames();
+    expect(fitOf(container)).toBe('0.925');
+    expect(frames).toHaveLength(0);
+  });
+
+  it('re-fits on a height-only change (text-only zoom at the same width)', () => {
+    const { container } = render(
+      <StatGrid>
+        <StatTile label="Vert" value={1070} unit="m" emphasis format={signedGrouped} />
+      </StatGrid>,
+    );
+    expect(fitOf(container)).toBe('');
+    // Text at 150%: "+1,070 m" is 144 px in the same 100 px column; only the height changes.
+    textZoom = 1.5;
+    resizeTo(width);
+    flushFrames();
+    expect(fitOf(container)).toBe('0.694');
+  });
+});
+
+describe('StatGrid without text layout (jsdom)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders without fitting and never throws, even with a ResizeObserver', () => {
+    // jsdom's Range has no getBoundingClientRect.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {
+          return undefined;
+        }
+        disconnect() {
+          return undefined;
+        }
+      },
+    );
+    const { container } = render(
+      <StatGrid>
+        <StatTile label="Vert" value={10070} unit="m" emphasis format={signedGrouped} />
+      </StatGrid>,
+    );
+    expect(container.querySelector('dl')?.style.getPropertyValue('--fit')).toBe('');
+    expect(screen.getByRole('definition').textContent).toBe('+10,070 m');
   });
 });

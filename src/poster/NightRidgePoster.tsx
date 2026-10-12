@@ -298,6 +298,12 @@ function Stage({
   );
 }
 
+/** Start and finish markers, px at 720 wide: ring radius and width, the paper band around it, the finish's dot. */
+const MARKER_R = 7;
+const MARKER_W = 3;
+const MARKER_HALO = 3;
+const MARKER_DOT_R = 2.5;
+
 /** The ridgeline figure: rows back to front (paper fill, then the line), then the glowing route. */
 function Ridges({ figure, k }: { figure: RidgeFigure; k: number }) {
   return (
@@ -345,16 +351,38 @@ function Ridges({ figure, k }: { figure: RidgeFigure; k: number }) {
       {[figure.finish, figure.start].map(
         (point, index) =>
           point && (
-            <circle
-              key={index}
-              cx={point.x}
-              cy={point.y}
-              r={sc(7, k)}
-              fill={PALETTE.paper}
-              stroke={PALETTE.route}
-              strokeWidth={sc(3, k)}
-              data-marker={index === 1 ? 'start' : 'finish'}
-            />
+            <g key={index} data-marker={index === 1 ? 'start' : 'finish'}>
+              {/* A paper band around the ring: the ring is the route's colour and sits on the
+                  route, so without it the ring would meet its own colour (1:1) at its edge. */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={sc(MARKER_R + MARKER_W / 2 + MARKER_HALO / 2, k)}
+                fill="none"
+                stroke={PALETTE.paper}
+                strokeWidth={sc(MARKER_HALO, k)}
+                data-part="halo"
+              />
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={sc(MARKER_R, k)}
+                fill={PALETTE.paper}
+                stroke={PALETTE.route}
+                strokeWidth={sc(MARKER_W, k)}
+                data-part="ring"
+              />
+              {/* The finish is ◉, the start ○: told apart by shape, never by colour. */}
+              {index === 0 && (
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={sc(MARKER_DOT_R, k)}
+                  fill={PALETTE.route}
+                  data-part="dot"
+                />
+              )}
+            </g>
           ),
       )}
     </svg>

@@ -1,0 +1,44 @@
+/* Upload frame: nav { display: flex; gap: 24px; font-size: 15px }, links without underline. */
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.link {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/*
+ * 44px touch target without changing the drawn text: the hit area grows into the header padding
+ * (20px) and half of the 24px gap on each side, so it never overlaps the neighbouring link.
+ */
+.link::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + var(--space-6));
+  height: var(--touch);
+  transform: translate(-50%, -50%);
+}
+
+/* Canvas hovers to --route; at 15px that is small text, so use the 4.5:1 route colour. */
+.link:hover {
+  color: var(--route-text);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}

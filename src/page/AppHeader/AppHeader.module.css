@@ -1,0 +1,22 @@
+/* Canvas header (Upload, Main, PosterMode frames): padding 20×40, 1px rule bottom; wraps as in Main. */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 20px var(--space-10); /* canvas: 20px, no token */
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Holds text: may shrink, and a long route name in the poster tagline wraps instead of overflowing. */
+.wordmark {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 599.98px) {
+  .header {
+    padding-inline: var(--space-4);
+  }
+}

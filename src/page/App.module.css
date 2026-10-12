@@ -1,0 +1,6 @@
+/* Header above the body; the body fills the rest of the viewport (Upload frame: main flex 1). */
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}

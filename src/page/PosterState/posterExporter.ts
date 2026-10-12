@@ -18,12 +18,17 @@
  *    `downloadBlob` unless the export was cancelled meanwhile.
  *
  * Failures the user can act on are `ExportError`s: too large for this browser (from the engine),
- * the terrain could not be loaded, or the browser could not draw it.
+ * the terrain could not be loaded, the browser has no WebGL at all (style A cannot be exported
+ * here; B and E can), or it has WebGL but could not draw the figure at this size. Only the last
+ * two are told apart after the fact (`hasWebGL`), and "Try a smaller size" is advised only when a
+ * smaller size exists.
  */
 import { createElement } from 'react';
 import type { FigureLayer, FigureTile } from '../../poster/export/rasterize';
 import { ExportError } from '../../poster/export/errors';
 import { posterLayout } from '../../poster/layout';
+import { hasSmallerSize } from '../../poster/sizes';
+import type { PosterSize } from '../../poster/sizes';
 import type { TerrainFigureScene } from '../../poster/terrainFigure';
 import { loadTerrainFigure } from '../../poster/terrainFigureChunk';
 import { trimTrack } from '../../gpx/trim';
@@ -38,9 +43,36 @@ import type { PosterFigureStatus } from './LivePoster';
 /** When the figure's terrain cannot be built (offline, tile server down). */
 export const TERRAIN_UNAVAILABLE_MESSAGE =
   'The terrain for this poster couldn’t be loaded. Check your connection and try again.';
-/** When the browser cannot draw style A's terrain (no WebGL, or not at this size). */
+/** When the browser has WebGL but could not draw style A's terrain at this size. */
 export const TERRAIN_DRAW_MESSAGE =
   'This browser couldn’t draw the terrain for this poster. Try a smaller size.';
+/** The same at the smallest size, where there is no smaller one to suggest. */
+export const TERRAIN_DRAW_SMALLEST_MESSAGE =
+  'This browser couldn’t draw the terrain for this poster. Try again.';
+/** When the browser has no WebGL at all: style A cannot be exported, the SVG styles can. */
+export const NO_WEBGL_MESSAGE =
+  'This browser can’t draw 3D terrain, so Trail Sign posters can’t be exported here. Night Ridge and Survey Quad still work.';
+
+/** What to say when style A's terrain could not be drawn. */
+export function terrainDrawMessage(
+  size: Pick<PosterSize, 'width' | 'height'>,
+  webgl: boolean,
+): string {
+  if (!webgl) return NO_WEBGL_MESSAGE;
+  return hasSmallerSize(size) ? TERRAIN_DRAW_MESSAGE : TERRAIN_DRAW_SMALLEST_MESSAGE;
+}
+
+/** Whether this browser can make a WebGL 2 context at all (three.js needs WebGL 2). */
+export function browserHasWebGL(): boolean {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return false;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** A figure counts as ready once its state has not changed for this long, ms. */
 export const FIGURE_STABLE_MS = 50;
@@ -70,6 +102,8 @@ export interface PosterExporterDeps {
   readonly loadTerrain: LoadTerrain;
   /** Builds a figure's own grid when the job brings no loader. */
   readonly loadFigureTerrain: LoadFigureTerrain;
+  /** Whether WebGL works at all; asked only after the figure failed to draw. */
+  readonly hasWebGL: () => boolean;
 }
 
 export const defaultPosterExporterDeps: PosterExporterDeps = {
@@ -78,9 +112,10 @@ export const defaultPosterExporterDeps: PosterExporterDeps = {
     loadTerrainFigure().then((module) => new module.TerrainFigureRenderer()),
   loadTerrain: realLoadTerrain,
   loadFigureTerrain: realLoadFigureTerrain,
+  hasWebGL: browserHasWebGL,
 };
 
-/** The terrain figure could not be drawn (mapped to {@link TERRAIN_DRAW_MESSAGE}). */
+/** The terrain figure could not be drawn (mapped to {@link terrainDrawMessage}). */
 class FigureDrawError extends Error {
   override name = 'FigureDrawError';
 }
@@ -283,7 +318,7 @@ export function createPosterExporter(
     } catch (error) {
       if (isAbort(error, signal)) throw abortReason(signal);
       if (error instanceof FigureDrawError) {
-        throw new ExportError(TERRAIN_DRAW_MESSAGE, { cause: error });
+        throw new ExportError(terrainDrawMessage(size, deps.hasWebGL()), { cause: error });
       }
       throw error;
     } finally {

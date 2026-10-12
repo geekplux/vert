@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   canvasDiagnostics,
+  FAILURES_TO_GIVE_UP,
   canvasWorks,
   knownCanvasResult,
+  recordCanvasResult,
   resetCanvasResults,
   verifyCanvas,
 } from './canvasLimits';
@@ -28,14 +30,30 @@ describe('verifyCanvas', () => {
 });
 
 describe('knownCanvasResult', () => {
-  it('infers smaller sizes from one that worked and larger ones from one that failed', () => {
+  it('infers smaller sizes from one that worked and larger ones from one given up', () => {
     expect(knownCanvasResult(1080, 1350)).toBeUndefined();
     verifyCanvas(fakeCanvas(3508, 4961), 3508, 4961);
     verifyCanvas(fakeCanvas(5400, 7200, { works: false }), 5400, 7200);
+    // One failure is worth another try, for that size and for larger ones.
+    expect(knownCanvasResult(5400, 7200)).toBeUndefined();
+    expect(knownCanvasResult(6000, 8000)).toBeUndefined();
+    verifyCanvas(fakeCanvas(5400, 7200, { works: false }), 5400, 7200);
+    expect(knownCanvasResult(5400, 7200)).toBe(false);
     expect(knownCanvasResult(1080, 1920)).toBe(true);
     expect(knownCanvasResult(6000, 8000)).toBe(false);
     // Neither smaller than the working size nor larger than the failing one: unknown.
     expect(knownCanvasResult(4000, 4000)).toBeUndefined();
+  });
+
+  it(`gives a size up after ${String(FAILURES_TO_GIVE_UP)} failures in a row, and a success resets the count`, () => {
+    recordCanvasResult(1080, 1920, false);
+    recordCanvasResult(1080, 1920, true);
+    expect(knownCanvasResult(1080, 1920)).toBe(true);
+    recordCanvasResult(1080, 1920, false);
+    expect(knownCanvasResult(1080, 1920)).toBeUndefined();
+    recordCanvasResult(1080, 1920, false);
+    expect(knownCanvasResult(1080, 1920)).toBe(false);
+    expect(canvasDiagnostics().failing).toEqual(['1080x1920 ×2']);
   });
 });
 
@@ -60,6 +78,7 @@ describe('canvasWorks', () => {
         throw new RangeError('too big');
       }),
     ).toBe(false);
-    expect(knownCanvasResult(20000, 20000)).toBe(false);
+    expect(knownCanvasResult(20000, 20000)).toBeUndefined();
+    expect(canvasDiagnostics().failing).toEqual(['20000x20000']);
   });
 });

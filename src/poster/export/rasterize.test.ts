@@ -204,7 +204,7 @@ describe('rasterize', () => {
     expect(harness.canvas?.width).toBe(0);
   });
 
-  it('verifies the output canvas itself and remembers a size that failed', async () => {
+  it('verifies the output canvas itself, retries a size that failed once, gives up after two', async () => {
     const { ...hooks } = setup();
     const tooLarge = {
       ...hooks,
@@ -213,8 +213,13 @@ describe('rasterize', () => {
     await expect(
       rasterize({ ...tooLarge, width: 5400, height: 7200, scale, settle: false }),
     ).rejects.toBeInstanceOf(CanvasLimitError);
+    // One failure may be transient: the next export tries the size again.
+    expect(knownCanvasResult(5400, 7200)).toBeUndefined();
+    await expect(
+      rasterize({ ...tooLarge, width: 5400, height: 7200, scale, settle: false }),
+    ).rejects.toBeInstanceOf(CanvasLimitError);
     expect(knownCanvasResult(5400, 7200)).toBe(false);
-    // Next time it fails before allocating anything.
+    // After the second failure it fails before allocating anything.
     const create = vi.fn(fakeCanvas);
     await expect(
       rasterize({ ...hooks, createCanvas: create, width: 5400, height: 7200, scale }),
@@ -232,22 +237,47 @@ describe('rasterize', () => {
     ).rejects.toBeInstanceOf(CanvasLimitError);
   });
 
-  it('remembers a size whose canvas has no context or throws on creation', async () => {
-    const { ...hooks } = setup();
+  it('draws a size that failed once when the cause has gone, and forgets the failure', async () => {
+    const { harness, ...hooks } = setup();
     await expect(
       rasterize({
         ...hooks,
-        createCanvas: (w, h) => fakeCanvas(w, h, { context: false }),
+        createCanvas: (w, h) => fakeCanvas(w, h, { works: false }),
         width: 1080,
         height: 1350,
         scale: 1,
         settle: false,
       }),
     ).rejects.toBeInstanceOf(CanvasLimitError);
+    const canvas = await rasterize({
+      ...hooks,
+      width: 1080,
+      height: 1350,
+      scale: 1,
+      settle: false,
+    });
+    expect(canvas).toBe(harness.canvas);
+    expect(knownCanvasResult(1080, 1350)).toBe(true);
+    expect(canvasDiagnostics().failing).toEqual([]);
+  });
+
+  it('remembers a size whose canvas has no context or throws on creation', async () => {
+    const { ...hooks } = setup();
+    const noContext = {
+      ...hooks,
+      createCanvas: (w: number, h: number) => fakeCanvas(w, h, { context: false }),
+      width: 1080,
+      height: 1350,
+      scale: 1,
+      settle: false,
+    };
+    await expect(rasterize(noContext)).rejects.toBeInstanceOf(CanvasLimitError);
+    expect(canvasDiagnostics().failing).toEqual(['1080x1350']);
+    await expect(rasterize(noContext)).rejects.toBeInstanceOf(CanvasLimitError);
     expect(knownCanvasResult(1080, 1350)).toBe(false);
 
     const error = new RangeError('Invalid array length');
-    const failure: unknown = await rasterize({
+    const throwing = {
       ...hooks,
       createCanvas: () => {
         throw error;
@@ -256,10 +286,14 @@ describe('rasterize', () => {
       height: 1000,
       scale: 1,
       settle: false,
-    }).catch((reason: unknown) => reason);
+    };
+    const failure: unknown = await rasterize(throwing).catch((reason: unknown) => reason);
     expect(failure).toBeInstanceOf(CanvasLimitError);
     expect((failure as Error).cause).toBe(error);
+    expect(canvasDiagnostics().failing).toContain('1000x1000');
+    await rasterize(throwing).catch(() => undefined);
     expect(knownCanvasResult(1000, 1000)).toBe(false);
+    expect(canvasDiagnostics().failing).toContain('1000x1000 ×2');
   });
 
   it('settles the fonts on a small whole-poster draw before the tiles', async () => {

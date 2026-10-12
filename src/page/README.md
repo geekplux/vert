@@ -59,14 +59,15 @@ This is the only place that owns application state and composes `components`, `t
   when Poster mode closes. `simulateExport.ts` is still the `defaultExporter` (see the exporter
   contract below).
 - Exporting (`PosterState/ExportProgress.tsx`): under the Download button, a 6px progress bar, the
-  label ("Preparing…" until the exporter reports its tile count, then "Rendering tile 4 of 12")
-  and a Quiet Cancel; afterwards "✓ Saved <file>" or "⚠ <error>" (`--route-text`). While
+  label ("Preparing…" until the exporter reports its tile count, then "Rendering tile 4 of 12",
+  then "Saving the file…" while it encodes) and a Quiet Cancel; afterwards "✓ Saved <file>" or "⚠ <error>" (`--route-text`). While
   exporting the settings fieldset, the Download buttons and Back to the run are disabled. A
   visually hidden polite status region announces the start, each quarter and the outcome.
 - Exporter contract (`PosterState/exporter.ts`): `buildExportJob(run, prefs, format, sources)`
   builds the whole `ExportJob` (run, prefs, content, resolved size, format, file name, and the
   terrain Poster mode has: `sources.terrain` and `sources.loadFigureTerrain`); an `Exporter` is
-  `(job, onProgress({ done, total }), signal) => Promise<{ fileName }>` and owns the tile count;
+  `(job, onProgress({ done, total, stage? }), signal) => Promise<{ fileName }>` and owns the tile
+  count (`stage: 'encode'` once every tile is drawn and the file is being written);
   rejecting with an `ExportError` shows its message, anything else a generic one. `useExport`
   turns that into EXPORT_STARTED / EXPORT_PROGRESS / EXPORT_DONE / EXPORT_FAILED /
   EXPORT_CANCELLED. `defaultExporter` is what the app uses: `posterExporter`

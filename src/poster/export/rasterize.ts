@@ -138,9 +138,10 @@ export interface RasterizeOptions {
   /**
    * Called with `(0, total)` once the tiles are planned, then after each step with the steps done
    * and the total. A step is one poster tile, or one figure tile (the part of the figure layer
-   * inside a poster tile): 18×24 with style A's terrain is 4 poster + 4 figure tiles.
+   * inside a poster tile): 18×24 with style A's terrain is 4 poster + 4 figure tiles. A returned
+   * promise is awaited before the next step (the export lets the page paint the label there).
    */
-  readonly onTile?: (done: number, total: number) => void;
+  readonly onTile?: (done: number, total: number) => void | Promise<void>;
   readonly createCanvas?: (width: number, height: number) => ProbeCanvas;
   readonly loadImage?: (svg: string) => Promise<LoadedImage>;
 }
@@ -302,7 +303,7 @@ export async function rasterize({
   const total = tiles.length + [...figureParts.values()].filter((part) => part !== null).length;
   let done = 0;
   signal?.throwIfAborted();
-  onTile?.(0, total);
+  await onTile?.(0, total);
   if (settle) {
     const result = await settleFonts({
       svg,
@@ -355,7 +356,7 @@ export async function rasterize({
       }
 
       done += 1;
-      onTile?.(done, total);
+      await onTile?.(done, total);
 
       const part = figureParts.get(tile.index);
       if (figure && box && part) {
@@ -371,7 +372,7 @@ export async function rasterize({
         signal?.throwIfAborted();
         context.drawImage(image, part.x, part.y, part.width, part.height);
         done += 1;
-        onTile?.(done, total);
+        await onTile?.(done, total);
       }
     }
     return canvas;

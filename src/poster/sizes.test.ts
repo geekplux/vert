@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { POSTER_SIZES, posterSizeById } from './sizes';
+import { POSTER_SIZES, hasSmallerSize, posterSizeById } from './sizes';
 import type { PosterSizeId } from './sizes';
 
 describe('POSTER_SIZES', () => {
@@ -21,5 +21,16 @@ describe('posterSizeById', () => {
 
   it('throws on an id that is not a size', () => {
     expect(() => posterSizeById('letter' as PosterSizeId)).toThrow(RangeError);
+  });
+});
+
+describe('hasSmallerSize', () => {
+  it('is true for every size but the smallest, 4 : 5', () => {
+    expect(POSTER_SIZES.map((size) => [size.id, hasSmallerSize(size)])).toEqual([
+      ['18x24', true],
+      ['a3', true],
+      ['4x5', false],
+      ['9x16', true],
+    ]);
   });
 });

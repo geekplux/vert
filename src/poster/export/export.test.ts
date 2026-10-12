@@ -16,7 +16,7 @@ import type { ExportDeps, ExportPosterOptions } from './export';
 import { CanvasLimitError, rasterize } from './rasterize';
 import type { LoadedImage, RasterizeOptions } from './rasterize';
 import type { SerializedPoster } from './serialize';
-import { ExportError } from './errors';
+import { ExportError, TOO_LARGE_SMALLEST_MESSAGE } from './errors';
 import { fakeCanvas, fakeJpeg } from './testFakes';
 
 const PNG_HEAD = new Uint8Array([
@@ -43,6 +43,7 @@ interface Spies {
   unmount: Spy;
   encode: Spy;
   serialize: Spy;
+  paint: Spy;
   rasterizeOptions: RasterizeOptions[];
   events: string[];
 }
@@ -56,6 +57,7 @@ function fakeDeps(
     unmount: vi.fn<(...args: unknown[]) => void>(),
     encode: vi.fn<(...args: unknown[]) => void>(),
     serialize: vi.fn<(...args: unknown[]) => void>(),
+    paint: vi.fn<(...args: unknown[]) => void>(),
     rasterizeOptions: [],
     events: [],
   };
@@ -102,6 +104,10 @@ function fakeDeps(
           : new Blob([fakeJpeg(canvas.width, canvas.height)], { type }),
       );
     },
+    paint: () => {
+      spies.paint();
+      return Promise.resolve();
+    },
     ...overrides,
   };
   return { deps, spies, loadImage };
@@ -125,7 +131,7 @@ function options(
 }
 
 describe('exportPoster', () => {
-  it('reports the tile total first, then each tile, and returns the PNG', async () => {
+  it('reports the tile total first, then each tile, then the encode, and returns the PNG', async () => {
     const { deps, spies } = fakeDeps();
     const job = options('18x24');
     const blob = await exportPoster(job, deps);
@@ -135,7 +141,10 @@ describe('exportPoster', () => {
       { done: 2, total: 4 },
       { done: 3, total: 4 },
       { done: 4, total: 4 },
+      { done: 4, total: 4, stage: 'encode' },
     ]);
+    // A paint after every report, so each label is seen.
+    expect(spies.paint).toHaveBeenCalledTimes(6);
     expect(spies.events).toEqual([
       'mount',
       'prepare',
@@ -159,6 +168,7 @@ describe('exportPoster', () => {
     expect(job.progress).toEqual([
       { done: 0, total: 1 },
       { done: 1, total: 1 },
+      { done: 1, total: 1, stage: 'encode' },
     ]);
     expect(blob.size).toBe(PNG_HEAD.length);
   });
@@ -202,6 +212,55 @@ describe('exportPoster', () => {
     expect(spies.unmount).toHaveBeenCalledTimes(1);
   });
 
+  it('waits for each paint before the next step', async () => {
+    const order: string[] = [];
+    let release: () => void = () => undefined;
+    const { deps, loadImage } = fakeDeps({
+      paint: () => {
+        order.push('paint');
+        return new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      },
+    });
+    loadImage.mockImplementation(() => {
+      order.push('tile');
+      return Promise.resolve({
+        image: 'tile' as unknown as CanvasImageSource,
+        release: () => undefined,
+      });
+    });
+    const job = options('4x5');
+    const result = exportPoster(job, deps);
+    await vi.waitFor(() => {
+      expect(order).toEqual(['paint']);
+    });
+    release();
+    await vi.waitFor(() => {
+      expect(order).toEqual(['paint', 'tile', 'paint']);
+    });
+    expect(job.progress.at(-1)).toEqual({ done: 1, total: 1 });
+    release();
+    await vi.waitFor(() => {
+      expect(job.progress.at(-1)).toEqual({ done: 1, total: 1, stage: 'encode' });
+    });
+    release();
+    await expect(result).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('stops before the encode when cancelled while the last label paints', async () => {
+    const controller = new AbortController();
+    const { deps, spies } = fakeDeps({
+      paint: () => {
+        if (job.progress.at(-1)?.stage === 'encode') controller.abort();
+        return Promise.resolve();
+      },
+    });
+    const job = options('4x5', { signal: controller.signal });
+    await expect(exportPoster(job, deps)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(spies.encode).not.toHaveBeenCalled();
+  });
+
   it('rejects at once when cancelled during the encode, and releases the canvas', async () => {
     const controller = new AbortController();
     let canvas: ProbeCanvas | null = null;
@@ -229,6 +288,7 @@ describe('exportPoster', () => {
       { done: 0, total: 2 },
       { done: 1, total: 2 },
       { done: 2, total: 2 },
+      { done: 2, total: 2, stage: 'encode' },
     ]);
   });
 
@@ -264,6 +324,17 @@ describe('exportPoster', () => {
     await expect(failure).rejects.toBeInstanceOf(ExportError);
     await expect(failure).rejects.toThrow(TOO_LARGE_MESSAGE);
     expect(spies.events).toEqual([]);
+  });
+
+  it('does not suggest a smaller size at the smallest one', async () => {
+    const { deps } = fakeDeps({ canvasKnown: () => false });
+    await expect(exportPoster(options('4x5'), deps)).rejects.toThrow(
+      new ExportError(TOO_LARGE_SMALLEST_MESSAGE),
+    );
+    await expect(exportPoster(options('9x16'), deps)).rejects.toThrow(
+      new ExportError(TOO_LARGE_MESSAGE),
+    );
+    expect(TOO_LARGE_SMALLEST_MESSAGE).not.toMatch(/smaller/);
   });
 
   it.each([

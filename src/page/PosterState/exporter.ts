@@ -4,8 +4,9 @@
  * Download builds an `ExportJob` with `buildExportJob` (the run, every preference that affects
  * the output, the poster's content, the format and the file name) and passes it to `exporter`,
  * which owns the rest: it decides how many tiles to render, reports `{ done, total }` through
- * `onProgress` (the first report replaces "Preparing…" with "Rendering tile 1 of N"), saves the
- * file, and resolves with its name. Aborting `signal` (Cancel) must stop the work; the page ignores
+ * `onProgress` (the first report replaces "Preparing…" with "Rendering tile 1 of N"), then
+ * `{ done: total, total, stage: 'encode' }` while it writes the file ("Saving the file…"), saves
+ * the file, and resolves with its name. Aborting `signal` (Cancel) must stop the work; the page ignores
  * anything the exporter does after that. A rejection shows "The export failed. Try again.", or the
  * rejection's own message when it is an `ExportError`.
  *
@@ -55,10 +56,15 @@ export interface ExportSources {
   readonly loadFigureTerrain: LoadFigureTerrain;
 }
 
-/** Tiles finished out of the total; `total` is an integer ≥ 1 and may be revised. */
+/**
+ * Tiles finished out of the total; `total` is an integer ≥ 1 and may be revised. `stage:
+ * 'encode'` (with every tile done) says the tiles are drawn and the file is being written
+ * ("Saving the file…"); without it the exporter is rendering tiles.
+ */
 export interface ExportProgressReport {
   readonly done: number;
   readonly total: number;
+  readonly stage?: 'encode';
 }
 
 export interface ExportResult {

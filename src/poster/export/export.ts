@@ -10,10 +10,12 @@
  *    settles the fonts, tile by tile (`rasterize.ts`). The first progress report, `{ done: 0,
  *    total }`, comes once the tiles are planned (poster tiles ≤ 4096 px, plus a figure tile for
  *    each poster tile the raster figure layer overlaps), then one per tile; cancellable between
- *    tiles. Until then the page says "Preparing…". The output canvas is verified as it is made
- *    (no up-front canvas probe).
- * 5. Encode: PNG (marked 300 dpi for print sizes) or a single-image PDF (`pdf.ts`). The encode
- *    cannot be interrupted, but an abort rejects at once and the canvas is released.
+ *    tiles. Until then the page says "Preparing…". After each report the export waits for the
+ *    next paint (`nextPaint`), so every "Rendering tile k of N" is seen. The output canvas is
+ *    verified as it is made (no up-front canvas probe).
+ * 5. Encode: `{ done: total, total, stage: 'encode' }` ("Saving the file…") and a paint, then PNG
+ *    (marked 300 dpi for print sizes) or a single-image PDF (`pdf.ts`). The encode cannot be
+ *    interrupted, but an abort rejects at once and the canvas is released.
  *
  * `downloadBlob` is the only place a file is handed to the browser.
  */
@@ -29,7 +31,7 @@ import type { PosterSize } from '../sizes';
 import type { PosterStyleId } from '../styles';
 import { MAX_TILE, knownCanvasResult } from './canvasLimits';
 import type { ProbeCanvas } from './canvasLimits';
-import { ExportError, TOO_LARGE_MESSAGE } from './errors';
+import { ExportError, TOO_LARGE_MESSAGE, tooLargeMessage } from './errors';
 import { preloadFonts } from './fontPreload';
 import { PRINT_DPI, pdfPageSize, writeSingleImagePdf } from './pdf';
 import { withPngDensity } from './png';
@@ -83,6 +85,8 @@ export interface ExportDeps {
   readonly serialize: (root: HTMLElement, options: SerializeOptions) => Promise<SerializedPoster>;
   readonly rasterize: (options: RasterizeOptions) => Promise<ProbeCanvas>;
   readonly encode: (canvas: ProbeCanvas, type: string, quality?: number) => Promise<Blob>;
+  /** Lets the page paint the latest progress report (`nextPaint`). */
+  readonly paint: () => Promise<void>;
 }
 
 /** Lets React commit and the browser lay out: timers, not frames (frames stop in hidden tabs). */
@@ -125,6 +129,43 @@ export async function mountOffscreen(
   }
 }
 
+/** The User Timing measure each {@link nextPaint} wait is recorded under (diagnostics). */
+export const PAINT_WAIT_MEASURE = 'vert:export-paint-wait';
+
+/** Longest wait for a frame, ms: a tab hidden meanwhile never runs the frame callback. */
+const PAINT_WAIT_MAX_MS = 100;
+
+/**
+ * Resolves just after the next frame has been painted (a frame callback, then a task), so a
+ * progress report made before it is on screen before the export goes on. At once in a hidden tab
+ * (nothing is painted; frames do not run there). Each wait is recorded as a User Timing measure
+ * ({@link PAINT_WAIT_MEASURE}) so the cost can be checked.
+ */
+export function nextPaint(): Promise<void> {
+  if (typeof requestAnimationFrame !== 'function' || document.visibilityState === 'hidden') {
+    return Promise.resolve();
+  }
+  const start = performance.now();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(fallback);
+      try {
+        performance.measure(PAINT_WAIT_MEASURE, { start });
+      } catch {
+        // Diagnostics only.
+      }
+      resolve();
+    };
+    const fallback = setTimeout(finish, PAINT_WAIT_MAX_MS);
+    requestAnimationFrame(() => {
+      setTimeout(finish, 0);
+    });
+  });
+}
+
 /** Loads every face the mounted poster's text needs, then waits for the layout to settle. */
 export async function preparePoster(root: HTMLElement, style: PosterStyleId): Promise<void> {
   await loadPosterFonts(style, root.textContent || 'Aa0', { subtitle: true });
@@ -161,6 +202,7 @@ export const defaultExportDeps: ExportDeps = {
   serialize: serializePoster,
   rasterize,
   encode: encodeCanvas,
+  paint: nextPaint,
 };
 
 const TOO_LARGE_DOM_ERRORS = new Set([
@@ -248,6 +290,7 @@ export async function exportPoster(
     releaseFonts = await deps.preloadFonts(poster.fontUrls);
     signal?.throwIfAborted();
 
+    let tileTotal = 1;
     canvas = await deps.rasterize({
       svg: (view, width, height) => posterSvg(poster, view, width, height),
       width: size.width,
@@ -257,10 +300,15 @@ export async function exportPoster(
       onSettled: options.onSettled,
       figure: figure && poster.figureBox ? { layer: figure, box: poster.figureBox } : undefined,
       signal,
-      onTile: (done, tiles) => {
+      onTile: async (done, tiles) => {
+        tileTotal = tiles;
         onProgress?.({ done, total: tiles });
+        await deps.paint();
       },
     });
+    signal?.throwIfAborted();
+    onProgress?.({ done: tileTotal, total: tileTotal, stage: 'encode' });
+    await deps.paint();
     signal?.throwIfAborted();
 
     if (format === 'pdf') {
@@ -281,7 +329,9 @@ export async function exportPoster(
     if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
       throw abortError(signal);
     }
-    if (isCanvasLimitError(error)) throw new ExportError(TOO_LARGE_MESSAGE, { cause: error });
+    if (isCanvasLimitError(error)) {
+      throw new ExportError(tooLargeMessage(size), { cause: error });
+    }
     throw error;
   } finally {
     mounted?.unmount();

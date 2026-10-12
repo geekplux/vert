@@ -48,3 +48,15 @@ const PREPARING = state({
 export const Preparing390: Story = () => <Page initialRun={SAMPLE_RUN} initialState={PREPARING} />;
 Preparing390.storyName = 'Preparing 390';
 Preparing390.meta = { width: 390 };
+
+// Every tile drawn, the file being written: a full bar and "Saving the file…".
+const SAVING = state({
+  name: 'exporting',
+  runId: SAMPLE_RUN.id,
+  fileName: FILE,
+  progress: { done: 8, total: 8, stage: 'encode' },
+});
+
+export const Saving1440: Story = () => <Page initialRun={SAMPLE_RUN} initialState={SAVING} />;
+Saving1440.storyName = 'Saving the file 1440';
+Saving1440.meta = { width: 1440 };

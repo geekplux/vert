@@ -67,7 +67,7 @@ function renderPoster(exporter: Exporter, initialState: PageState = POSTER) {
 const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name });
 const status = () => screen.getByRole('status');
 const progressBar = () => screen.getByRole<HTMLProgressElement>('progressbar');
-const label = () => screen.getByText(/^(Rendering tile \d+ of \d+|Preparing…)$/);
+const label = () => screen.getByText(/^(Rendering tile \d+ of \d+|Preparing…|Saving the file…)$/);
 
 /** Resolves the exporter's promise and lets React apply the result. */
 async function settle(callback: () => void) {
@@ -221,6 +221,18 @@ describe('Exporting overlay', () => {
       last().onProgress({ done: 12, total: 12 });
     });
     expect(label().textContent).toBe('Rendering tile 12 of 12');
+    expect(status().textContent).toBe('Rendered 12 of 12 tiles.');
+
+    // Then the file is written: the label says so, the live region stays as it was.
+    act(() => {
+      last().onProgress({ done: 12, total: 12, stage: 'encode' });
+    });
+    expect(label().textContent).toBe('Saving the file…');
+    expect(document.activeElement).toBe(label());
+    expect([progressBar().value, progressBar().max]).toEqual([12, 12]);
+    expect(progressBar().getAttribute('aria-valuetext')).toBe(
+      'All 12 tiles rendered, saving the file',
+    );
     expect(status().textContent).toBe('Rendered 12 of 12 tiles.');
   });
 

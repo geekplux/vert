@@ -138,18 +138,36 @@ everything.
   ≥ 3:1 on the terrain fill (WCAG 1.4.11) for a colour-weak viewer: 3.5:1 in the View, 4.0:1 on
   poster A (measured on screen; the route colour at 40% was 1.7:1 and 1.8:1). Poster widths are
   logical px × scale.
-- Hide start and end also reframes: with ends hidden every poster figure is framed on the drawn
-  route's bounds (A builds its own grid, +15%; the View keeps the whole run), so the margin does
-  not show where the trimmed start was.
+- Hide start and end also reframes (privacy): with ends hidden every poster figure is framed on
+  the drawn (trimmed) route's bounds (A builds its own grid, +15%; the View keeps the whole run),
+  so neither the margin nor the frame's centre shows where the trimmed start was.
 - The 9:16 share card's elevation strip is the muted `#C9D1D9` at 60% (4.37:1 on the card).
-- Back to the run starts the View from the poster's camera (angle, zoom, flat), no intro; New file
-  resets it.
+- Camera handoff: Make a poster copies the View's camera (angle, zoom, flat) into
+  `prefs.poster.camera`, and style A's figure (preview and export) is drawn from it. Back to the run
+  keeps it and starts the View from it, no intro; New file resets it.
 - Flat map off returns to the oblique angle and zoom the user left when turning it on (the default
   view only if the View opened flat). Reset view still goes to the default.
 - Long routes (terrain ≥ 15 km on its longer side, e.g. the CCC): the default oblique view is 50°
   from vertical instead of 62°, so ridges hide less of the route (CCC: 42% → 11% hidden at 1440,
   28% → 4% at 600), and the heightfield samples one tile zoom finer than its 512-sample grid needs
   (CCC: z10 → z11, 6 → 12 tiles, 107 → 77 m samples from 2× finer data), capped at 32 tiles.
+
+## Export
+
+- Exports reuse the preview's height grids (the View's grid, or the figure loader's cache by
+  bounds), so a download normally fetches no tiles and draws exactly what the preview shows.
+- File names: `vert-<title slug>-<size>.<ext>`. Latin letters lose their accents and the ones
+  without a decomposition are transliterated (ł→l, ø→o, đ/ð→d, æ→ae, œ→oe, ß→ss, þ→th, ı→i,
+  ŋ→n, ħ→h, ŧ→t, ĸ→k, capitals too); every other script is kept as written, marks included
+  (NFC), so Japanese voiced kana and Indic vowel signs survive. Slugs stop at 60 characters.
+- A canvas size that failed once is tried again on the next Download (the cause may be gone);
+  after two failures in a row it fails at once for the rest of the session. Error messages
+  suggest a smaller size only when one exists (not at 4 : 5).
+- No WebGL at all is told apart from a draw failure: "This browser can’t draw 3D terrain, so Trail
+  Sign posters can’t be exported here. Night Ridge and Survey Quad still work."
+- Progress: the engine waits for a paint after every report, so each "Rendering tile k of N" is
+  seen, then shows "Saving the file…" while it encodes. The live region still speaks only at the
+  start, each quarter and the outcome.
 
 ## Architecture
 

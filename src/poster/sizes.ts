@@ -33,3 +33,12 @@ export function posterSizeById<Id extends PosterSizeId>(id: Id): PosterSizeEntry
   if (!size) throw new RangeError(`Unknown poster size: ${id}`);
   return size;
 }
+
+/**
+ * Whether another size has fewer pixels than `size` (the advice "Try a smaller size" only makes
+ * sense then): every size but 4 : 5, the smallest.
+ */
+export function hasSmallerSize(size: Pick<PosterSize, 'width' | 'height'>): boolean {
+  const pixels = size.width * size.height;
+  return POSTER_SIZES.some((other) => other.width * other.height < pixels);
+}

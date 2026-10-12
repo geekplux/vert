@@ -79,10 +79,29 @@ describe('StylePicker', () => {
       <StylePicker styles={POSTER_STYLES} value="A" onChange={noop} label="Style" />,
     );
     const svgs = container.querySelectorAll('svg');
-    expect(svgs).toHaveLength(3);
+    // Three terrain hints plus the selected option's check badge.
+    expect(svgs).toHaveLength(4);
     for (const svg of svgs) {
       expect(svg.getAttribute('aria-hidden')).toBe('true');
     }
+  });
+
+  it('marks only the selected swatch with the check badge, and moves it with value', () => {
+    const { container, rerender } = render(
+      <StylePicker styles={POSTER_STYLES} value="A" onChange={noop} label="Style" />,
+    );
+    const markedOption = () => {
+      const marks = container.querySelectorAll('[data-selected-mark]');
+      expect(marks).toHaveLength(1);
+      const mark = marks[0];
+      expect(mark?.getAttribute('aria-hidden')).toBe('true');
+      return mark?.closest('label')?.querySelector('input')?.value;
+    };
+    expect(markedOption()).toBe('A');
+    rerender(<StylePicker styles={POSTER_STYLES} value="B" onChange={noop} label="Style" />);
+    expect(markedOption()).toBe('B');
+    // The badge adds no text to the radio's accessible name.
+    expect(screen.getByRole('radio', { name: 'B Night Ridge' })).toBeTruthy();
   });
 
   it('has no axe violations', async () => {

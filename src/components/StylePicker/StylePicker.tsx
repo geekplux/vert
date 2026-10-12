@@ -72,9 +72,38 @@ function TerrainHint({ terrain }: { terrain: PosterStyleTerrain }) {
 }
 
 /**
+ * The selected swatch's corner badge: an ink disc with a white ring and a white check. The ring
+ * keeps it visible on any paper (on Night Ridge's dark paper the 2px ink border alone is 1.11:1),
+ * and the check is a shape, so selection never rests on colour. Decorative: the radio's checked
+ * state is what assistive tech reads.
+ */
+function SelectedMark() {
+  return (
+    <svg
+      className={styles.mark}
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      focusable="false"
+      data-selected-mark=""
+    >
+      <circle cx="10" cy="10" r="9" className={styles.markDisc} strokeWidth="2" />
+      <path
+        d="M5.8 10.4 L8.6 13.1 L14.2 7.3"
+        className={styles.markCheck}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/**
  * Poster style chooser (DESIGN-SPEC §2, canvas frame "03 Poster mode", STYLE). Native radios,
  * visually hidden, in a `radiogroup`: one tab stop, arrow keys move the selection. The selected
- * option has a 2px ink swatch border and a 600-weight name as well as the radio's checked state.
+ * option has a 2px ink swatch border, a check badge in the swatch's top-right corner and a
+ * 600-weight name, as well as the radio's checked state.
  */
 export function StylePicker<Id extends string = PosterStyleId>({
   styles: options,
@@ -104,6 +133,7 @@ export function StylePicker<Id extends string = PosterStyleId>({
             />
             <span className={styles.swatch} style={{ background: option.paper }}>
               <TerrainHint terrain={option.terrain} />
+              {checked && <SelectedMark />}
             </span>
             <span className={styles.name}>{option.name}</span>
           </label>

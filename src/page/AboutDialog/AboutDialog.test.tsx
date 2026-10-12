@@ -59,6 +59,28 @@ describe('AboutDialog', () => {
     expect(document.activeElement).toBe(about);
   });
 
+  // A browser restores focus itself, then fires `close` as a queued task. A quick Tab in between
+  // moves focus on; the late `close` must not pull it back to About.
+  it('leaves focus alone when it has moved on before the close event', () => {
+    const { about, dialog } = openAbout();
+    const github = screen.getByRole('link', { name: 'GitHub' });
+    dialog.removeAttribute('open');
+    github.focus();
+    fireEvent(dialog, new Event('close'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(github);
+    expect(document.activeElement).not.toBe(about);
+  });
+
+  it('returns focus to About when the browser left it on <body>', () => {
+    const { about, dialog } = openAbout();
+    (document.activeElement as HTMLElement | null)?.blur();
+    dialog.removeAttribute('open');
+    expect(document.activeElement).toBe(document.body);
+    fireEvent(dialog, new Event('close'));
+    expect(document.activeElement).toBe(about);
+  });
+
   it('opens again after closing', () => {
     const { about } = openAbout();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });

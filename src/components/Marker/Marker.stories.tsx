@@ -84,8 +84,11 @@ export const Sizes: Story = () => (
   </div>
 );
 
-/** Night Ridge (poster style B) palette. Hard-coded on purpose: poster palettes are not tokens. */
-const nightRidge = { ink: '#E8F1F5', paper: '#0F2233', accent: '#FFD9A0' };
+/**
+ * Night Ridge (poster style B) palette. Hard-coded on purpose: poster palettes are not tokens.
+ * `paper` is the background here, so the scrub ring takes the ink (`ring`) or it would vanish.
+ */
+const nightRidge = { ink: '#E8F1F5', paper: '#0F2233', accent: '#FFD9A0', ring: '#E8F1F5' };
 
 export const OnDark: Story = () => (
   <div

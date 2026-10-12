@@ -6,11 +6,15 @@ export type MarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
  * - `ink`: start and finish stroke, finish dot, summit fill (default `--ink`)
  * - `paper`: start and finish fill, scrub ring (default `--white`)
  * - `accent`: scrub fill (default `--route`)
+ * - `ring`: scrub ring only (default `paper`). On a dark palette `paper` is the background, so the
+ *   ring vanishes into it; pass the palette's ink (Night Ridge: `ring={ink}`) so the scrub keeps
+ *   its ring, the cue that tells it apart from a plain dot without colour.
  */
 export interface MarkerColors {
   ink?: string;
   paper?: string;
   accent?: string;
+  ring?: string;
 }
 
 export interface MarkerShapeProps extends MarkerColors {
@@ -45,6 +49,7 @@ export function MarkerShape({
   ink = 'var(--ink)',
   paper = 'var(--white)',
   accent = 'var(--route)',
+  ring = paper,
 }: MarkerShapeProps) {
   const scale = size / BOX;
   const half = size / 2;
@@ -56,7 +61,7 @@ export function MarkerShape({
       {kind === 'finish' && <circle cx={9} cy={9} r={FINISH_DOT_R} style={{ fill: ink }} />}
       {kind === 'summit' && <path d="M9 2 L16 15 L2 15 Z" style={{ fill: ink }} />}
       {kind === 'scrub' && (
-        <circle cx={9} cy={9} r={5} strokeWidth={2.5} style={{ fill: accent, stroke: paper }} />
+        <circle cx={9} cy={9} r={5} strokeWidth={2.5} style={{ fill: accent, stroke: ring }} />
       )}
     </g>
   );

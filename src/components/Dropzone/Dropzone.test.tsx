@@ -198,6 +198,13 @@ describe('Dropzone', () => {
     expect(screen.getByText('Reading given.gpx…')).toBeDefined();
   });
 
+  it('says "Loading the sample run…" while the sample it asked for loads', () => {
+    const { onFile, onSample, rerender } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
+    rerender(<Dropzone onFile={onFile} onSample={onSample} busy />);
+    expect(screen.getByText('Loading the sample run…')).toBeDefined();
+  });
+
   it('calls onSample from "try a sample run"', () => {
     const { onSample } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));

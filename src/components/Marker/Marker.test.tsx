@@ -105,6 +105,16 @@ describe('Marker', () => {
     expect(scrubCircle?.style.stroke).toBe('rgb(15, 34, 51)');
   });
 
+  it('draws the scrub ring in `ring` when given, leaving the other shapes alone', () => {
+    const colors = { ink: '#E8F1F5', paper: '#0F2233', accent: '#FFD9A0', ring: '#E8F1F5' };
+    const { container: scrub } = render(<Marker kind="scrub" {...colors} />);
+    const { container: start } = render(<Marker kind="start" {...colors} />);
+    const scrubCircle = svgOf(scrub).querySelector('circle');
+    expect(scrubCircle?.style.fill).toBe('rgb(255, 217, 160)');
+    expect(scrubCircle?.style.stroke).toBe('rgb(232, 241, 245)');
+    expect(svgOf(start).querySelector('circle')?.style.fill).toBe('rgb(15, 34, 51)');
+  });
+
   it('has no axe violations, decorative or labelled', async () => {
     const { container } = render(
       <p>

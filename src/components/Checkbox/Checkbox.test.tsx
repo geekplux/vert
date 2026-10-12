@@ -1,3 +1,4 @@
+import { createRef } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
@@ -63,6 +64,32 @@ describe('Checkbox', () => {
     expect(box.id).toBe('stat-distance');
     expect(box.name).toBe('stats');
     expect(box.value).toBe('distance');
+  });
+
+  it('keeps className and style on the input and puts rowClassName on the label row', () => {
+    render(
+      <Checkbox
+        label="Distance"
+        className="box"
+        style={{ marginInlineStart: 2 }}
+        rowClassName="row"
+        checked
+        onChange={() => undefined}
+      />,
+    );
+    const box = screen.getByRole<HTMLInputElement>('checkbox', { name: 'Distance' });
+    expect(box.classList.contains('box')).toBe(true);
+    expect(box.style.marginInlineStart).toBe('2px');
+    const row = box.closest('label');
+    expect(row?.classList.contains('row')).toBe(true);
+    expect(row?.classList.contains('box')).toBe(false);
+    expect(box.classList.contains('row')).toBe(false);
+  });
+
+  it('forwards ref to the input element', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<Checkbox label="Vert" ref={ref} checked onChange={() => undefined} />);
+    expect(ref.current).toBe(screen.getByRole('checkbox', { name: 'Vert' }));
   });
 
   it('has no axe violations', async () => {

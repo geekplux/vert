@@ -86,21 +86,12 @@
   outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .card {
-    transition:
-      background-color 120ms ease-out,
-      border-color 120ms ease-out,
-      color 120ms ease-out;
-  }
-
-  /* The sub-line sets its own colour, so it changes in step with the card. */
-  .detail {
-    transition:
-      color 120ms ease-out,
-      opacity 120ms ease-out;
-  }
-}
+/*
+ * No transitions. Selection swaps the fill (transparent ↔ ink) and the text (ink ↔ white) together;
+ * any crossfade leaves a moment where the text matches the background (a synced 120 ms colour fade
+ * dipped the name near 1:1 for ~40 ms), and a background-only fade is worse because the text snaps
+ * first. An instant swap is always legible.
+ */
 
 /* Windows High Contrast drops the fill; mark the selected size with a heavier system-colour edge. */
 @media (forced-colors: active) {

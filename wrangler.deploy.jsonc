@@ -1,0 +1,25 @@
+// Vert as ONE Worker: the app's static assets from dist/, and /tiles/* to the tile proxy in
+// worker/src, with tiles cached in R2. Not active yet: Workers Builds only auto-detects
+// wrangler.jsonc / wrangler.json / wrangler.toml, and this file binds an R2 bucket that does not
+// exist yet. Activation steps: worker/README.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vert",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-10-12",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    // Only tile requests run Worker code; everything else is a static asset (or the SPA shell).
+    "run_worker_first": ["/tiles/*"],
+  },
+  "r2_buckets": [{ "binding": "TILES", "bucket_name": "vert-tiles" }],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    // Privacy: keep only the Worker's own structured logs (zoom, source, status). Invocation logs
+    // record request metadata (headers, the cf object), which the proxy must not keep.
+    "logs": { "enabled": true, "invocation_logs": false },
+    "redact_query_string": true,
+  },
+}

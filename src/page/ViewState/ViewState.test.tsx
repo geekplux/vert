@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
 import { immediateSchedule } from '../hooks';
 import { Page } from '../Page';
@@ -7,6 +7,9 @@ import { SAMPLE_RUN } from '../sample';
 import { INITIAL_PREFS } from '../state';
 import type { PageState, Prefs } from '../state';
 import type { Run } from '../types';
+
+// jsdom has no WebGL: the View's lazy TerrainView is a fake (src/test/fakeTerrainView.tsx).
+vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'));
 
 const ROUTE = 'Coosa Backcountry Trail';
 
@@ -82,11 +85,10 @@ describe('ViewState', () => {
       ),
     ).toBeDefined();
 
-    // Main: terrain with its label, legend and buttons; the elevation section.
-    const terrain = within(main()).getByRole('img', {
-      name: `3D terrain of ${ROUTE}: 21.5 km loop, start and finish marked with a circle, summit 1,267 m marked with a triangle`,
-    });
-    expect(terrain.getAttribute('src')).toMatch(/sample-terrain/);
+    // Main: the terrain box (loading here: placeholder mode never builds a terrain; the live view
+    // is tested in TerrainBox.test.tsx), legend and buttons; the elevation section.
+    expect(within(main()).getByRole('status').textContent).toBe('Loading terrain…');
+    expect(within(main()).queryByRole('img')).toBeNull();
     expect(within(main()).getByText('Start / finish')).toBeDefined();
     expect(within(main()).getByText('Summit 1,267 m')).toBeDefined();
     expect(within(main()).getByText('Vertical ×1.6')).toBeDefined();
@@ -179,7 +181,7 @@ describe('ViewState', () => {
     expect(screen.queryByText('Vertical ×1.6')).toBeNull();
   });
 
-  it('switches stats, climbs, legend, terrain label and profile header with the units toggle', () => {
+  it('switches stats, climbs, legend and profile header with the units toggle', () => {
     renderView();
     fireEvent.click(within(screen.getByRole('banner')).getByRole('radio', { name: 'mi' }));
 
@@ -195,9 +197,6 @@ describe('ViewState', () => {
       '3 | mi 10.4 → 11.8 | +843 ft',
     ]);
     expect(within(main()).getByText('Summit 4,157 ft')).toBeDefined();
-    expect(
-      within(main()).getByRole('img', { name: /: 13\.3 mi loop, .* summit 4,157 ft marked/ }),
-    ).toBeDefined();
     expect(
       within(main()).getByRole('heading', { name: 'Elevation · 2,021–4,157 ft' }),
     ).toBeDefined();
@@ -224,29 +223,39 @@ describe('ViewState', () => {
     expect(profile().getAttribute('aria-valuetext')).toMatch(/^km 2\.1, /);
   });
 
-  it('toggles the Flat map button’s pressed state; Rotate view is a plain button', () => {
+  it('keeps Flat map (a toggle) and Rotate view (a plain button) inert while the terrain loads', () => {
     renderView();
     const flat = within(main()).getByRole('button', { name: 'Flat map' });
-    fireEvent.click(flat);
-    expect(flat.getAttribute('aria-pressed')).toBe('true');
+    const rotate = within(main()).getByRole('button', { name: 'Rotate view' });
+    expect(flat.getAttribute('aria-pressed')).toBe('false');
+    expect(rotate.hasAttribute('aria-pressed')).toBe(false);
+    for (const button of [flat, rotate]) {
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect((button as HTMLButtonElement).disabled).toBe(false);
+    }
+    const reason = document.getElementById(flat.getAttribute('aria-describedby') ?? '');
+    expect(reason?.textContent).toBe('Loading terrain…');
     fireEvent.click(flat);
     expect(flat.getAttribute('aria-pressed')).toBe('false');
-    const rotate = within(main()).getByRole('button', { name: 'Rotate view' });
-    expect(rotate.hasAttribute('aria-pressed')).toBe(false);
-    fireEvent.click(rotate);
   });
 
   it('moves focus to the route name when the View opens, and to Upload’s h1 on New file', async () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
     const heading = await screen.findByRole('heading', { level: 1, name: ROUTE });
-    expect(document.activeElement).toBe(heading);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(heading);
+    });
     expect(heading.getAttribute('tabindex')).toBe('-1');
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
-    expect(document.activeElement).toBe(
-      screen.getByRole('heading', { level: 1, name: 'Your run, as terrain.' }),
-    );
+    const uploadHeading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Your run, as terrain.',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(uploadHeading);
+    });
   });
 
   it('does not steal focus on first render', () => {
@@ -254,14 +263,19 @@ describe('ViewState', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('goes to Poster mode with Make a poster, and focuses its h1', () => {
+  it('goes to Poster mode with Make a poster, and focuses its h1', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
-    const heading = screen.getByRole('heading', { level: 1, name: 'Make a poster' });
-    expect(document.activeElement).toBe(heading);
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Make a poster' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(heading);
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
-    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: ROUTE }));
+    const viewHeading = await screen.findByRole('heading', { level: 1, name: ROUTE });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(viewHeading);
+    });
   });
 
   it('goes back to Upload with New file', () => {

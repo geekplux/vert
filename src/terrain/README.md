@@ -22,11 +22,19 @@ scrub marker. No map library, no basemap.
   follows the edge. Exaggeration is the `uExaggeration` uniform; colours come from a
   `TerrainPalette` (`readPalette` reads `--surface` / `--ink`). `heightfieldToLocal` places a
   lon/lat on the mesh (for the route); `modelBounds` gives the extents; `radialHull` the surface's
-  outline revolved around the vertical axis (for framing).
+  outline revolved around the vertical axis (for the zoom limits) and `surfaceEnvelope` a coarse
+  envelope of the surface that never dips below it (for framing).
 - `stage.ts`: `TerrainStage`, the imperative half of the view: one `WebGLRenderer` (transparent,
-  pixel ratio ≤ 2), a perspective camera framed by `frameModel`: the distance fits the revolved
-  outline plus the walls' bottom inside a 60 px inset (clear of the legend chip and icon buttons in
-  the box's corners) at any azimuth, and a lens shift (`setViewOffset`) centres the model itself.
+  pixel ratio ≤ 2), a perspective camera framed by `frameModel`: the distance fits the model as
+  the current azimuth sees it (convex hull of the surface envelope plus the walls' bottom) inside
+  a 16 px inset and 12 px clear of the overlays on the box (`setOverlays`: legend chip, icon
+  buttons, as rectangles); a lens shift (`setViewOffset`) centres the model itself, and moves it
+  away from an overlay (along a fixed direction per overlay, so it never jumps) before the camera
+  backs off. At each polar angle the distance stays in a zoom band: no farther than the farthest
+  any azimuth needs (sampled every 5°, computed per 3° of polar angle and interpolated), no closer
+  than that ÷ 1.13, so turning changes the distance by under 1.15× (the flat map has no band, and
+  tweens blend between their ends' bands). A camera tween
+  first drops OrbitControls' leftover damping, so Flat map is exactly north-up after a drag.
   The default view is 62° from vertical, 18° east of south. OrbitControls (polar 20°–80°, damping,
   zoom as a factor on the fit, no pan); camera tweens (intro top-down → oblique in 1.2 s, ease-out
   cubic; Flat map; rotate); arrow-key orbit. It renders only while something moves: no frames when
@@ -57,8 +65,9 @@ scrub marker. No map library, no basemap.
   marker without rebuilding. Before each frame `updateOcclusion` marches a ray from each marker
   to the eye over the height grid and fades markers behind a ridge to 35% opacity.
 - The stage builds both layers once it has a heightfield and a track (`setTrack`, `setScrub`,
-  `setRoutePalette`), and `setInsets` reserves room for overlays: each side keeps
-  max(60 px rule, inset + 12 px), and the model is centred in what is left. Every render goes
+  `setRoutePalette`); `setOverlays` keeps the model 12 px clear of rectangles on the box, and
+  `setInsets` reserves whole bands: each side keeps max(16 px rule, inset + 12 px), and the model
+  is centred in what is left. Exports ignore the overlays. Every render goes
   through `renderNow()`, which refits first (OrbitControls' own methods move the camera and call
   `update()` before the stage follows; key handling also refits at once). The fit includes the
   markers' drawn boxes (○ 22 px, ▲ 28 × 24 with its edge) and the scrub marker's 16 px box along
@@ -69,9 +78,9 @@ scrub marker. No map library, no basemap.
 - `TerrainView.tsx`: the React wrapper. Canvas is `role="img"` with the page's `aria-label`; the
   wrapper is focusable (arrow keys orbit, Shift for larger steps, + / − zoom; a visually hidden hint
   says so). Reduced motion: no camera move, the canvas fades in. Props `track`, `scrub`
-  (metres), `insets` and `routePalette` drive the route layer. A ref handle exposes `rotateBy`,
-  `resetView`, `requestRender` and the stage.
-- three.js is ~150 kB gzipped: the page should load `TerrainView` with `lazy(() => import(...))`
+  (metres), `overlays`, `insets` and `routePalette` drive the route layer. A ref handle exposes
+  `rotateBy`, `resetView`, `requestRender`, `focus` and the stage.
+- three.js is ~150 kB gzipped: the page loads `TerrainView` with `React.lazy` (`src/page/terrainChunk.ts`)
   so the Upload state stays light.
 - Decoding and tile maths are pure and live in `src/lib`, so they test without WebGL.
 

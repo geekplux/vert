@@ -15,7 +15,12 @@ This is the only place that owns application state and composes `components`, `t
   `realLoadRun` (`src/gpx/loadRun.ts`, the GPX parsed in a Web Worker), and passing `schedule` or
   `delayMs` selects the placeholder loader instead (tests, stories). It rejects with `RunLoadError`
   (`errors.ts`) for a message the user should see; anything else shows "Vert couldn't read this
-  file."
+  file." The terrain: as soon as a run is current, `RunProvider` builds its height grid
+  (`loadTerrain`, default `realLoadTerrain` = `buildHeightfield(run.bounds)`; placeholder mode uses
+  `pendingLoadTerrain`, which stays loading), aborted by a new run, New file or unmount.
+  `useTerrain()` is `idle | loading | ready (heightfield, failedTiles, totalTiles) | error (message)`;
+  `useRetryTerrain()` builds again. Choosing a file also starts loading the terrain chunk
+  (`terrainChunk.ts`) and sets the `perfMarks.ts` marks (`vert:chosen` … `vert:first-frame`).
 - `runCopy.ts`: `runDateLine(run)` ('' without timestamps; never call `formatDateLine` on a run
   directly) and `runPaceAt(run, d)` (`null` without timestamps). Every call site uses them.
 - Poster sizes and styles come from `src/poster/sizes.ts` and `src/poster/styles.ts`.
@@ -23,9 +28,20 @@ This is the only place that owns application state and composes `components`, `t
   the current state, and the About dialog. `App` renders it.
 - `UploadState/`: the Upload state (h1, intro, Dropzone, note, sample preview and chip).
 - `ViewState/`: the View state (aside: date line, route name, stats, climbs, exaggeration, help;
-  main: `TerrainBox` with legend and Rotate / Flat map, then the elevation section with its scrub
-  readout). `viewCopy.ts` holds its data-driven copy and profile maths. Phase 3 swaps the
-  placeholder terrain illustration for `TerrainView` and supplies `paceAt`.
+  main: `TerrainBox` with the live `TerrainView` (lazy, its own chunk), legend and Rotate / Flat map,
+  then the elevation section with its scrub readout; the scrub is shared, so the profile moves the
+  terrain's marker). `TerrainBox` shows "Loading terrain…" (polite status) until the first frame,
+  the error with "Try again" (tile failure, chunk failure or no WebGL, caught by an error
+  boundary; each has its own message), and a mono note when some tiles were filled from
+  neighbours. After Try again focus moves to the loading text, then to the terrain once drawn
+  ("Terrain loaded." politely), or back to Try again. Rotate view and Flat map are `aria-disabled`
+  (described by the status text) until the terrain is drawn. The box draws the terrain's focus
+  ring (its rounded clip would cut the view's own). The legend reads "○ Start / finish" for a loop
+  and "○ Start · ◉ Finish" otherwise (same 50 m rule as the label). Below 600px the legend and
+  buttons move into a row under the box (no `overlays`); at 600px and up they overlay it and their
+  measured rectangles are passed as `overlays`. Tab order at every width: terrain → Rotate view →
+  Flat map → profile. `viewCopy.ts` holds its data-driven copy and profile maths (the terrain
+  label says "loop" only when the track ends within 50 m of its start).
 - `PosterState/`: Poster mode, also shown under the export overlay (aside: style, size, text,
   stats, hide ends, then the sticky Download block; main: the live `PosterPreview` of
   `TrailSignPoster`, fitted to the stage). At ≥ 900px the page is one viewport tall and the aside

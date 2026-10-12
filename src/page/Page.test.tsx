@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import { immediateSchedule } from './hooks';
 import type { LoadRun } from './hooks';
@@ -7,6 +7,9 @@ import { Page } from './Page';
 import { SAMPLE_RUN } from './sample';
 import { INITIAL_PREFS } from './state';
 import type { Run } from './types';
+
+// jsdom has no WebGL: the View's lazy TerrainView is a fake (src/test/fakeTerrainView.tsx).
+vi.mock('../terrain/TerrainView', () => import('../test/fakeTerrainView'));
 
 const h1 = (name: string) => screen.getByRole('heading', { level: 1, name });
 

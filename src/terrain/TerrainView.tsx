@@ -8,6 +8,7 @@ import {
   TerrainStage,
   type Insets,
   type RendererFactory,
+  type ScreenRect,
   type TerrainViewMode,
 } from './stage';
 import styles from './TerrainView.module.css';
@@ -20,6 +21,8 @@ export interface TerrainViewHandle {
   resetView: () => void;
   /** Redraw after changing something in the scene (on the next animation frame). */
   requestRender: () => void;
+  /** Moves keyboard focus to the view (the focusable wrapper whose arrow keys orbit). */
+  focus: () => void;
   /** The three.js stage (scene and camera) while mounted. */
   readonly stage: TerrainStage | null;
 }
@@ -52,10 +55,17 @@ export interface TerrainViewProps {
    * an edge than the default inset.
    */
   insets?: Insets;
+  /**
+   * Overlays on top of the box (legend chip, icon buttons), CSS px from its top-left corner: the
+   * model is fitted to stay 12 px clear of each, at every azimuth, and otherwise fills the box.
+   */
+  overlays?: readonly ScreenRect[];
   /** Route and marker colours; defaults to `--route`, `--white`, `--ink` read from the page. */
   routePalette?: RoutePalette;
   ref?: Ref<TerrainViewHandle>;
 }
+
+const NO_OVERLAYS: readonly ScreenRect[] = [];
 
 const prefersReducedMotion = () =>
   typeof window.matchMedia === 'function' &&
@@ -79,6 +89,7 @@ export function TerrainView({
   track = null,
   scrub = null,
   insets = NO_INSETS,
+  overlays = NO_OVERLAYS,
   routePalette,
   ref,
 }: TerrainViewProps) {
@@ -174,6 +185,11 @@ export function TerrainView({
     stageRef.current?.setInsets({ top, right, bottom, left });
   }, [top, right, bottom, left, createRenderer]);
 
+  // The stage compares by value: an equal array of rects changes nothing.
+  useEffect(() => {
+    stageRef.current?.setOverlays(overlays);
+  }, [overlays, createRenderer]);
+
   useEffect(() => {
     stageRef.current?.setView(view);
   }, [view]);
@@ -184,6 +200,7 @@ export function TerrainView({
       rotateBy: (radians) => stageRef.current?.rotateBy(radians),
       resetView: () => stageRef.current?.resetView(),
       requestRender: () => stageRef.current?.requestRender(),
+      focus: () => containerRef.current?.focus(),
       get stage() {
         return stageRef.current;
       },

@@ -7,6 +7,7 @@ import {
   RunLoadError,
   RunProvider,
   immediateSchedule,
+  pendingLoadTerrain,
   placeholderLoadRun,
   useRun,
   useRunChooser,
@@ -14,7 +15,8 @@ import {
   useTerrain,
 } from './hooks';
 import type { Run } from './types';
-import type { LoadRun, RunProviderProps, Schedule } from './hooks';
+import type { LoadRun, LoadTerrain, RunProviderProps, Schedule } from './hooks';
+import { hills } from '../terrain/testing';
 import { SAMPLE_RUN } from './sample';
 import { INITIAL_PAGE_STATE, usePageState } from './state';
 import { resetParseWorker } from '../gpx/client';
@@ -74,9 +76,10 @@ function Probe() {
   );
 }
 
+/** Tests here make no tile requests unless they pass a terrain loader. */
 function renderProbe(props: Omit<RunProviderProps, 'children'> = {}) {
   return render(
-    <RunProvider {...props}>
+    <RunProvider loadTerrain={pendingLoadTerrain} {...props}>
       <Probe />
     </RunProvider>,
   );
@@ -84,7 +87,11 @@ function renderProbe(props: Omit<RunProviderProps, 'children'> = {}) {
 
 function wrapper(props: Omit<RunProviderProps, 'children'> = {}) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <RunProvider {...props}>{children}</RunProvider>;
+    return (
+      <RunProvider loadTerrain={pendingLoadTerrain} {...props}>
+        {children}
+      </RunProvider>
+    );
   };
 }
 
@@ -99,12 +106,23 @@ describe('useRun / useTerrain', () => {
     expect(screen.getByText('terrain: idle')).toBeDefined();
   });
 
-  it('return a run given up front, with ready (placeholder) terrain', () => {
+  it('return a run given up front, its terrain loading, then ready', async () => {
+    const heightfield = hills();
+    const loadTerrain: LoadTerrain = () => Promise.resolve(heightfield);
     const { result } = renderHook(() => ({ run: useRun(), terrain: useTerrain() }), {
-      wrapper: wrapper({ initialRun: SAMPLE_RUN }),
+      wrapper: wrapper({ initialRun: SAMPLE_RUN, loadTerrain }),
     });
     expect(result.current.run).toBe(SAMPLE_RUN);
-    expect(result.current.terrain).toEqual({ status: 'ready', placeholder: true });
+    expect(result.current.terrain).toEqual({ status: 'loading' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.terrain).toEqual({
+      status: 'ready',
+      heightfield,
+      failedTiles: [],
+      totalTiles: 4,
+    });
   });
 
   it('throw a clear error outside RunProvider', () => {
@@ -128,7 +146,7 @@ describe('useRunChooser', () => {
     clock.flush();
     await screen.findByText('screen: view');
     expect(screen.getByText('run: Coosa Backcountry Trail')).toBeDefined();
-    expect(screen.getByText('terrain: ready')).toBeDefined();
+    expect(screen.getByText('terrain: loading')).toBeDefined();
     expect(screen.getByText('poster title: Coosa Backcountry Trail')).toBeDefined();
   });
 
@@ -254,7 +272,7 @@ describe('useRunChooser', () => {
     renderProbe({ schedule: immediateSchedule });
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample' }));
     await screen.findByText('screen: view');
-    expect(screen.getByText('terrain: ready')).toBeDefined();
+    expect(screen.getByText('terrain: loading')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'New file' }));
     expect(screen.getByText('screen: upload')).toBeDefined();

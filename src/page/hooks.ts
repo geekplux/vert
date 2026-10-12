@@ -8,15 +8,26 @@
  * The loader is injectable (`RunProvider`'s `loadRun`). The default is `realLoadRun`
  * (`src/gpx/loadRun.ts`: the GPX parsed in a Web Worker). `placeholderLoadRun` yields `SAMPLE_RUN`
  * for any source after a simulated delay; tests and stories get it by passing `schedule` or
- * `delayMs` (or `loadRun={placeholderLoadRun(...)}`). The terrain value is still a placeholder until
- * the terrain task replaces it; the hooks' signatures and their callers stay as they are.
+ * `delayMs` (or `loadRun={placeholderLoadRun(...)}`).
+ *
+ * The terrain: as soon as a run is the current one, `RunProvider` builds its height grid
+ * (`loadTerrain`, by default `buildHeightfield(run.bounds)`: elevation tiles from `/tiles/z/x/y`),
+ * without waiting for the View to mount. A new run, New file or unmounting aborts the build.
+ * `useTerrain()` reports `loading`, `ready` (with any tiles that failed and were filled in) or
+ * `error` (with a message); `useRetryTerrain()` builds it again.
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useRef, useState } from 'react';
 import type { Dispatch, ReactNode } from 'react';
+import { tilesForBounds } from '../lib/geo';
+import { HeightfieldError, buildHeightfield } from '../terrain/heightfield';
+import type { Heightfield } from '../terrain/heightfield';
+import { isAbortError } from '../terrain/tiles';
+import { PERF_MARKS, perfMark } from './perfMarks';
 import { SAMPLE_RUN } from './sample';
 import { posterTextFor } from './state';
 import type { PageAction } from './state';
+import { preloadTerrainView } from './terrainChunk';
 import type { Run, Terrain } from './types';
 import { GENERIC_LOAD_ERROR, RunLoadError } from './errors';
 import { realLoadRun } from '../gpx/loadRun';
@@ -82,12 +93,60 @@ export function placeholderLoadRun(
     });
 }
 
-const IDLE_TERRAIN: Terrain = { status: 'idle', placeholder: true };
-const READY_TERRAIN: Terrain = { status: 'ready', placeholder: true };
+/**
+ * Builds the height grid under a run. Rejects with an `AbortError` when `signal` aborts (a new run,
+ * New file), and with `HeightfieldError` when no elevation tile loads.
+ */
+export type LoadTerrain = (run: Run, signal: AbortSignal) => Promise<Heightfield>;
+
+/** The app's terrain loader: the run's bounds (+15%) from same-origin Terrarium tiles. */
+export const realLoadTerrain: LoadTerrain = (run, signal) =>
+  buildHeightfield(run.bounds, { signal });
+
+/**
+ * A terrain loader that never settles (it only honours the abort): the terrain stays `loading`.
+ * Placeholder mode's default, so tests that do not care about the terrain make no tile requests.
+ */
+export const pendingLoadTerrain: LoadTerrain = (_run, signal) =>
+  new Promise<Heightfield>((_resolve, reject) => {
+    signal.addEventListener(
+      'abort',
+      () => {
+        reject(signal.reason as Error);
+      },
+      { once: true },
+    );
+  });
+
+/** No elevation tile came through: offline, or the tile server is down. */
+export const TERRAIN_OFFLINE_ERROR =
+  "The terrain couldn't load: no elevation data came through. Check your connection and try again.";
+
+/** Anything else that stopped the grid from being built. */
+export const TERRAIN_GENERIC_ERROR = "The terrain couldn't be built for this run.";
+
+function terrainErrorMessage(error: unknown): string {
+  const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+  return offline || error instanceof HeightfieldError || error instanceof TypeError
+    ? TERRAIN_OFFLINE_ERROR
+    : TERRAIN_GENERIC_ERROR;
+}
+
+const IDLE_TERRAIN: Terrain = { status: 'idle' };
+const LOADING_TERRAIN: Terrain = { status: 'loading' };
+
+/** A settled terrain build, for one run and one attempt (Try again starts a new attempt). */
+interface TerrainResult {
+  readonly run: Run;
+  readonly attempt: number;
+  readonly terrain: Terrain;
+}
 
 interface RunContextValue {
   readonly run: Run | null;
   readonly terrain: Terrain;
+  /** Build the current run's terrain again (after an error). */
+  readonly retryTerrain: () => void;
   /**
    * Load a run and make it the current one. Resolves with the run, or with `null` when a later
    * `load` or `clear` superseded this one (the caller then does nothing). Rejects with the loader's
@@ -118,6 +177,11 @@ export interface RunProviderProps {
   schedule?: Schedule;
   /** The placeholder's simulated reading delay, ms. Passing it also selects the placeholder. */
   delayMs?: number;
+  /**
+   * Builds the current run's height grid. Defaults to `realLoadTerrain` (elevation tiles), or, in
+   * placeholder mode (`schedule` / `delayMs` given), to `pendingLoadTerrain` (stays loading).
+   */
+  loadTerrain?: LoadTerrain;
 }
 
 export function RunProvider({
@@ -126,6 +190,7 @@ export function RunProvider({
   loadRun,
   schedule,
   delayMs,
+  loadTerrain,
 }: RunProviderProps) {
   const [run, setRun] = useState<Run | null>(initialRun);
   const pending = useRef<AbortController | null>(null);
@@ -135,6 +200,54 @@ export function RunProvider({
     [schedule, delayMs],
   );
   const loader = loadRun ?? (usePlaceholder ? placeholder : realLoadRun);
+  const terrainLoader = loadTerrain ?? (usePlaceholder ? pendingLoadTerrain : realLoadTerrain);
+
+  // The terrain follows the run: built as soon as a run is current, aborted when it changes.
+  const [attempt, setAttempt] = useState(0);
+  const [terrainResult, setTerrainResult] = useState<TerrainResult | null>(null);
+  useEffect(() => {
+    if (!run) return undefined;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const settle = (terrain: Terrain) => {
+      if (!signal.aborted) setTerrainResult({ run, attempt, terrain });
+    };
+    let building: Promise<Heightfield>;
+    try {
+      building = terrainLoader(run, signal);
+    } catch (error: unknown) {
+      building = Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+    building.then(
+      (heightfield) => {
+        if (signal.aborted) return;
+        perfMark(PERF_MARKS.heightfield);
+        settle({
+          status: 'ready',
+          heightfield,
+          failedTiles: heightfield.failedTiles,
+          totalTiles: tilesForBounds(heightfield.bounds, heightfield.zoom).length,
+        });
+      },
+      (error: unknown) => {
+        if (signal.aborted || isAbortError(error)) return;
+        settle({ status: 'error', error: terrainErrorMessage(error) });
+      },
+    );
+    return () => {
+      controller.abort();
+    };
+  }, [run, attempt, terrainLoader]);
+
+  const terrain: Terrain = !run
+    ? IDLE_TERRAIN
+    : terrainResult?.run === run && terrainResult.attempt === attempt
+      ? terrainResult.terrain
+      : LOADING_TERRAIN;
+
+  const retryTerrain = useCallback(() => {
+    setAttempt((n) => n + 1);
+  }, []);
 
   const cancelPending = useCallback(() => {
     const controller = pending.current;
@@ -164,6 +277,7 @@ export function RunProvider({
           (next) => {
             if (signal.aborted) return;
             pending.current = null;
+            perfMark(PERF_MARKS.parsed);
             setRun(next);
             resolve(next);
           },
@@ -187,8 +301,8 @@ export function RunProvider({
   useEffect(() => cancelPending, [cancelPending]);
 
   const value = useMemo<RunContextValue>(
-    () => ({ run, terrain: run ? READY_TERRAIN : IDLE_TERRAIN, load, clear, isLoading }),
-    [run, load, clear, isLoading],
+    () => ({ run, terrain, retryTerrain, load, clear, isLoading }),
+    [run, terrain, retryTerrain, load, clear, isLoading],
   );
   return createElement(RunContext, { value }, children);
 }
@@ -204,9 +318,14 @@ export function useRun(): Run | null {
   return useRunContext('useRun').run;
 }
 
-/** The terrain under the loaded run (phase 2: a placeholder, `ready` once a run has loaded). */
+/** The terrain under the loaded run: idle without a run, then loading, ready or error. */
 export function useTerrain(): Terrain {
   return useRunContext('useTerrain').terrain;
+}
+
+/** Builds the current run's terrain again (the View's "Try again" after an error). */
+export function useRetryTerrain(): () => void {
+  return useRunContext('useRetryTerrain').retryTerrain;
 }
 
 /** Low-level access to `load` and `clear`. The page normally uses `useRunChooser`. */
@@ -223,7 +342,8 @@ function loadErrorMessage(error: unknown): string {
 /**
  * What the page calls when the user picks a file or the sample, or asks for a new file.
  *
- * - `chooseFile` / `chooseSample` tell the state machine (`FILE_CHOSEN` / `SAMPLE_CHOSEN`), load
+ * - `chooseFile` / `chooseSample` start fetching the terrain view's code (its own chunk), tell the
+ *   state machine (`FILE_CHOSEN` / `SAMPLE_CHOSEN`), load
  *   the run, then send `RUN_LOADED` (seeding the poster's title and subtitle) or `LOAD_FAILED`.
  *   While a load is in flight a second choice is ignored, as the state machine ignores it.
  * - `newFile` sends `NEW_FILE` and forgets the run, so `useRun()` is `null` and the terrain idle.
@@ -251,11 +371,15 @@ export function useRunChooser(dispatch: Dispatch<PageAction>): {
     return {
       chooseFile: (file: File) => {
         if (isLoading()) return;
+        perfMark(PERF_MARKS.chosen);
+        preloadTerrainView();
         dispatch({ type: 'FILE_CHOSEN', fileName: file.name });
         settle(load({ kind: 'file', file }));
       },
       chooseSample: () => {
         if (isLoading()) return;
+        perfMark(PERF_MARKS.chosen);
+        preloadTerrainView();
         dispatch({ type: 'SAMPLE_CHOSEN' });
         settle(load({ kind: 'sample' }));
       },

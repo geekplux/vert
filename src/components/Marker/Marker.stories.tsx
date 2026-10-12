@@ -12,6 +12,13 @@ export const Start: Story = () => (
   </div>
 );
 
+/** A point-to-point run's finish (◉): the start circle with an ink dot, as the terrain draws it. */
+export const Finish: Story = () => (
+  <div style={pad}>
+    <Marker kind="finish" label="Finish" />
+  </div>
+);
+
 export const Summit: Story = () => (
   <div style={pad}>
     <Marker kind="summit" label="Summit" />
@@ -44,11 +51,31 @@ export const Legend: Story = () => (
   </div>
 );
 
+/** A point-to-point run: separate start (○) and finish (◉) entries. */
+export const PointToPointLegend: Story = () => (
+  <div style={{ ...pad, display: 'flex', alignItems: 'center', gap: 20, fontSize: 14 }}>
+    <span style={item}>
+      <Marker kind="start" />
+      Start
+    </span>
+    <span style={item}>
+      <Marker kind="finish" />
+      Finish
+    </span>
+    <span style={item}>
+      <Marker kind="summit" />
+      Summit
+    </span>
+  </div>
+);
+PointToPointLegend.storyName = 'Point-to-point legend';
+
 export const Sizes: Story = () => (
   <div style={{ ...pad, display: 'grid', gap: 'var(--space-4)' }}>
     {[18, 24, 32].map((size) => (
       <div key={size} style={{ ...item, gap: 'var(--space-4)' }}>
         <Marker kind="start" size={size} />
+        <Marker kind="finish" size={size} />
         <Marker kind="summit" size={size} />
         <Marker kind="scrub" size={size} />
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{size}px</span>
@@ -99,6 +126,7 @@ export const Embedded: Story = () => (
         style={{ fill: 'none', stroke: 'var(--route)' }}
       />
       <MarkerShape kind="start" x={20} y={48} />
+      <MarkerShape kind="finish" x={180} y={48} />
       <MarkerShape kind="summit" x={100} y={12} />
       <MarkerShape kind="scrub" x={140} y={30} />
     </svg>

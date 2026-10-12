@@ -211,6 +211,63 @@ export function surfaceSamples(heightfield: Heightfield, perSide = 48): EdgePoin
 }
 
 /**
+ * An envelope of the surface on a coarse lattice of about `perSide` × `perSide` nodes (the grid's
+ * corners and edges included), in the local frame at exaggeration 1: each lattice node is raised to
+ * the highest grid node in the lattice cells around it, so the envelope is never below the surface
+ * and no peak between lattice nodes is missed. For fitting the camera to the model as it is seen
+ * from one azimuth.
+ */
+export function surfaceEnvelope(heightfield: Heightfield, perSide = 24): EdgePoint[] {
+  const { width: w, height: h, elevations, min } = heightfield;
+  const { spanX, spanZ, scale } = frame(heightfield);
+  const lattice = (n: number) => {
+    const stride = Math.max(1, Math.ceil((n - 1) / perSide));
+    const at: number[] = [];
+    for (let k = 0; k < n - 1; k += stride) at.push(k);
+    at.push(n - 1);
+    return at;
+  };
+  const columns = lattice(w);
+  const rows = lattice(h);
+  const cols = columns.length;
+  // Highest node of each lattice cell (its corners included).
+  const cellTop = new Float64Array(Math.max(0, (cols - 1) * (rows.length - 1))).fill(min);
+  for (let b = 0; b < rows.length - 1; b++) {
+    for (let a = 0; a < cols - 1; a++) {
+      let top = min;
+      for (let j = rows[b] ?? 0; j <= (rows[b + 1] ?? 0); j++) {
+        for (let i = columns[a] ?? 0; i <= (columns[a + 1] ?? 0); i++) {
+          top = Math.max(top, elevations[j * w + i] ?? min);
+        }
+      }
+      cellTop[b * (cols - 1) + a] = top;
+    }
+  }
+  const points: EdgePoint[] = [];
+  rows.forEach((j, b) => {
+    columns.forEach((i, a) => {
+      let top = elevations[j * w + i] ?? min;
+      for (const [cb, ca] of [
+        [b - 1, a - 1],
+        [b - 1, a],
+        [b, a - 1],
+        [b, a],
+      ] as const) {
+        if (cb >= 0 && ca >= 0 && cb < rows.length - 1 && ca < cols - 1) {
+          top = Math.max(top, cellTop[cb * (cols - 1) + ca] ?? min);
+        }
+      }
+      points.push({
+        x: (i / (w - 1) - 0.5) * spanX * scale,
+        z: (j / (h - 1) - 0.5) * spanZ * scale,
+        y: (top - min) * scale,
+      });
+    });
+  });
+  return points;
+}
+
+/**
  * About `count` points along the grid's edge (every corner included), for fitting the camera to
  * the bottom of the walls: a wall-bottom point sits at `min(base, y · exaggeration − baseDepth)`.
  */

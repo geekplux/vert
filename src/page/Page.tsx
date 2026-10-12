@@ -5,7 +5,7 @@ import { AppHeader } from './AppHeader/AppHeader';
 import { PosterNav } from './AppHeader/PosterNav';
 import { UploadNav } from './AppHeader/UploadNav';
 import { ViewNav } from './AppHeader/ViewNav';
-import { RunProvider, useRun, useRunChooser } from './hooks';
+import { RunProvider, useRetryTerrain, useRun, useRunChooser, useTerrain } from './hooks';
 import type { RunProviderProps } from './hooks';
 import type { Exporter } from './PosterState/exporter';
 import { PosterState } from './PosterState/PosterState';
@@ -53,6 +53,8 @@ function PageContent({
   // `newFile` is ignored while a load is in flight and forgets the run (hooks.ts).
   const { chooseFile, chooseSample, newFile } = useRunChooser(dispatch);
   const run = useRun();
+  const terrain = useTerrain();
+  const retryTerrain = useRetryTerrain();
   const [aboutOpen, setAboutOpen] = useState(initialAboutOpen);
   const aboutRef = useRef<HTMLButtonElement>(null);
   const { screen, prefs } = state;
@@ -114,6 +116,8 @@ function PageContent({
           headingRef={headingRef}
           units={prefs.units}
           exaggeration={prefs.exaggeration}
+          terrain={terrain}
+          onRetryTerrain={retryTerrain}
           onExaggerationChange={(value) => {
             dispatch({ type: 'SET_EXAGGERATION', value });
           }}

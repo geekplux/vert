@@ -1,10 +1,10 @@
-export type MarkerKind = 'start' | 'summit' | 'scrub';
+export type MarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
 
 /**
  * Colour overrides for posters whose palette differs from the app's (e.g. Night Ridge).
  * Defaults are the app tokens, so the app tracks tokens.css.
- * - `ink`: start stroke, summit fill (default `--ink`)
- * - `paper`: start fill, scrub ring (default `--white`)
+ * - `ink`: start and finish stroke, finish dot, summit fill (default `--ink`)
+ * - `paper`: start and finish fill, scrub ring (default `--white`)
  * - `accent`: scrub fill (default `--route`)
  */
 export interface MarkerColors {
@@ -24,11 +24,18 @@ export interface MarkerShapeProps extends MarkerColors {
 
 /** The geometry lives in an 18×18 box (canvas frame 00, "MARKERS · never color alone"). */
 const BOX = 18;
+/**
+ * The finish's centre dot: the terrain's 7 px dot in its 22 px ring (src/terrain/markers.ts,
+ * `FINISH_DOT_PX` / `START_DIAMETER_PX`), at this ring's 14.5-unit outer diameter.
+ */
+const FINISH_DOT_R = 2.3;
 
 /**
  * Just the marker's `<g>`, for drawing inside an existing `<svg>` (elevation profile, posters).
  * The shape's box is centred on (x, y) and scaled to `size`. Shapes differ, never only colour:
- * start is a hollow circle, summit a solid triangle, scrub a small solid dot with a ring.
+ * start is a hollow circle, finish the same circle with a solid ink dot in the middle (◉, for a
+ * run that does not end where it started), summit a solid triangle, scrub a small solid dot with a
+ * ring.
  */
 export function MarkerShape({
   kind,
@@ -43,9 +50,10 @@ export function MarkerShape({
   const half = size / 2;
   return (
     <g transform={`translate(${String(x - half)} ${String(y - half)}) scale(${String(scale)})`}>
-      {kind === 'start' && (
+      {(kind === 'start' || kind === 'finish') && (
         <circle cx={9} cy={9} r={6} strokeWidth={2.5} style={{ fill: paper, stroke: ink }} />
       )}
+      {kind === 'finish' && <circle cx={9} cy={9} r={FINISH_DOT_R} style={{ fill: ink }} />}
       {kind === 'summit' && <path d="M9 2 L16 15 L2 15 Z" style={{ fill: ink }} />}
       {kind === 'scrub' && (
         <circle cx={9} cy={9} r={5} strokeWidth={2.5} style={{ fill: accent, stroke: paper }} />
@@ -63,7 +71,7 @@ export interface MarkerProps extends MarkerColors {
   className?: string;
 }
 
-/** A start, summit or scrub marker as a standalone inline `<svg>`. */
+/** A start, finish, summit or scrub marker as a standalone inline `<svg>`. */
 export function Marker({ kind, label, size = BOX, className, ...colors }: MarkerProps) {
   const a11y = label
     ? ({ role: 'img', 'aria-label': label } as const)

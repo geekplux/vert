@@ -22,7 +22,10 @@ import { Page } from '../Page';
 import { SAMPLE_RUN } from '../sample';
 import { INITIAL_PREFS, posterTextFor } from '../state';
 import type { PageState, PosterPrefs } from '../state';
-import { FIGURE_LOADING_TEXT } from './LivePoster';
+import { HeightfieldError, HeightfieldTooLargeError } from '../../terrain/heightfield';
+import type { Exporter } from './exporter';
+import { FIGURE_RECOVERED_TEXT } from './FigureRetry';
+import { FIGURE_ERROR_TEXT, FIGURE_LOADING_TEXT } from './LivePoster';
 
 // jsdom has no WebGL: the View's TerrainView and style A's figure renderer are fakes.
 vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'));
@@ -142,7 +145,8 @@ function renderPage(
   {
     loadTerrain = readyTerrain,
     loadFigureTerrain = readyFigureTerrain,
-  }: { loadTerrain?: LoadTerrain; loadFigureTerrain?: LoadFigureTerrain } = {},
+    exporter,
+  }: { loadTerrain?: LoadTerrain; loadFigureTerrain?: LoadFigureTerrain; exporter?: Exporter } = {},
 ) {
   return render(
     <Page
@@ -151,9 +155,42 @@ function renderPage(
       initialState={initialState}
       loadTerrain={loadTerrain}
       loadFigureTerrain={loadFigureTerrain}
+      {...(exporter ? { exporter } : {})}
     />,
   );
 }
+
+/** A tile failure, as `buildHeightfield` reports one when no tile loads. */
+const offline = () =>
+  new HeightfieldError([{ z: 13, x: 0, y: 0 }], new TypeError('Failed to fetch'));
+
+/**
+ * A loader whose tiles are refused until `unblock()`; `calls` counts its builds. A new one per
+ * test: the figure grids are cached per loader.
+ */
+function blockable() {
+  const state = { blocked: true, calls: 0 };
+  const load = () => {
+    state.calls += 1;
+    return state.blocked ? Promise.reject(offline()) : Promise.resolve(hills());
+  };
+  return {
+    load,
+    get calls() {
+      return state.calls;
+    },
+    unblock() {
+      state.blocked = false;
+    },
+  };
+}
+
+/** The row under the preview when its figure failed. */
+const tryAgain = () => screen.queryByRole('button', { name: 'Try again' });
+const previewNote = () =>
+  screen.getByRole('img', { name: /^Poster: / }).querySelector('[data-figure="placeholder"]');
+/** An exporter that never settles: the export runs on its own, the preview is what is checked. */
+const pendingExporter: Exporter = () => new Promise<never>(() => undefined);
 
 const lastRender = () => {
   const input = figure.renders.at(-1);
@@ -395,6 +432,147 @@ describe('Live poster figures', () => {
     });
     expect(await screen.findByRole('img', { name: /^Poster: / })).toBeDefined();
     expect(screen.queryByRole('img', { name: 'Survey Quad preview, loading.' })).toBeNull();
+  });
+
+  it('B: a failed figure offers Try again under the preview, which draws it once the tiles are back', async () => {
+    const tiles = blockable();
+    const { container } = renderPage(posterState({ style: 'B' }), {
+      loadFigureTerrain: tiles.load,
+    });
+    await screen.findByRole('button', { name: 'Try again' });
+    // Past the box debounce: the layout has settled, so no relayout builds a grid of its own.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    const button = screen.getByRole('button', { name: 'Try again' });
+    expect(previewNote()?.textContent).toBe(FIGURE_ERROR_TEXT);
+    // Outside the poster (one image, exported as drawn): no button in the file.
+    expect(screen.getByRole('img', { name: /^Poster: / }).contains(button)).toBe(false);
+    expect(screen.getByText(FIGURE_ERROR_TEXT, { selector: 'p' })).toBeDefined();
+    await expectNoAxeViolations(container);
+
+    // Still refused: it fails again, focus back on Try again.
+    const before = tiles.calls;
+    button.focus();
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(tryAgain()).not.toBeNull();
+    });
+    expect(tiles.calls).toBeGreaterThan(before);
+    expect(document.activeElement).toBe(tryAgain());
+
+    tiles.unblock();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => {
+      expect(previewNote()).toBeNull();
+      // The row goes once the drawn figure is reported (an effect after it is drawn).
+      expect(screen.queryByText(FIGURE_LOADING_TEXT)).toBeNull();
+      expect(tryAgain()).toBeNull();
+    });
+    expect(screen.getByText(FIGURE_RECOVERED_TEXT)).toBeDefined();
+    expect(document.activeElement?.textContent).toMatch(/^Download PNG/);
+  });
+
+  it('E: Download asks again for a failed preview figure, so the preview shows what the file shows', async () => {
+    const tiles = blockable();
+    renderPage(posterState({ style: 'E' }), {
+      loadFigureTerrain: tiles.load,
+      exporter: pendingExporter,
+    });
+    await screen.findByRole('button', { name: 'Try again' });
+    // Past the box debounce: the layout has settled, so no relayout builds a grid of its own.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(previewNote()?.textContent).toBe(FIGURE_ERROR_TEXT);
+    tiles.unblock();
+    const before = tiles.calls;
+    fireEvent.click(screen.getByRole('button', { name: /^Download PNG/ }));
+    await waitFor(() => {
+      expect(previewNote()).toBeNull();
+      expect(tryAgain()).toBeNull();
+    });
+    expect(tiles.calls).toBe(before + 1);
+    // The legend describes the contours again.
+    expect(
+      screen.getByRole('img', { name: /^Poster: / }).querySelector('[data-legend="index"]'),
+    ).not.toBeNull();
+  });
+
+  it.each(['cancelled', 'left running'] as const)(
+    'B: Download with Try again focused, export %s: focus never drops to the page as the preview recovers',
+    async (ending) => {
+      let mode: 'refuse' | 'hold' = 'refuse';
+      let release: () => void = () => undefined;
+      const load: LoadFigureTerrain = () =>
+        mode === 'refuse'
+          ? Promise.reject(offline())
+          : new Promise((resolve) => {
+              release = () => {
+                resolve(hills());
+              };
+            });
+      renderPage(posterState({ style: 'B' }), {
+        loadFigureTerrain: load,
+        exporter: pendingExporter,
+      });
+      await screen.findByRole('button', { name: 'Try again' });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+      mode = 'hold';
+      screen.getByRole('button', { name: 'Try again' }).focus();
+      fireEvent.click(screen.getByRole('button', { name: /^Download PNG/ }));
+      // The quiet retry: "Drawing the terrain…", no Try again; focus on the export's progress.
+      await waitFor(() => {
+        expect(screen.getByText(FIGURE_LOADING_TEXT, { selector: 'p' })).toBeDefined();
+      });
+      expect(document.activeElement).not.toBe(document.body);
+      if (ending === 'cancelled') {
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(document.activeElement?.textContent).toMatch(/^Download PNG/);
+      }
+      await act(async () => {
+        release();
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        expect(previewNote()).toBeNull();
+        expect(screen.queryByText(FIGURE_LOADING_TEXT, { selector: 'p' })).toBeNull();
+      });
+      expect(screen.getByText(FIGURE_RECOVERED_TEXT)).toBeDefined();
+      expect(document.activeElement).not.toBe(document.body);
+      if (ending === 'cancelled') {
+        expect(document.activeElement?.textContent).toMatch(/^Download PNG/);
+      }
+    },
+  );
+
+  it('A drawn from the View’s grid: Try again and Download build the run’s terrain again', async () => {
+    const tiles = blockable();
+    renderPage(posterState({ style: 'A', hideEnds: 0 }), {
+      loadTerrain: tiles.load,
+      exporter: pendingExporter,
+    });
+    await screen.findByRole('button', { name: 'Try again' });
+    expect(previewNote()?.textContent).toBe(FIGURE_ERROR_TEXT);
+    const before = tiles.calls;
+    fireEvent.click(screen.getByRole('button', { name: /^Download PNG/ }));
+    await waitFor(() => {
+      expect(tiles.calls).toBe(before + 1);
+    });
+    await screen.findByRole('button', { name: 'Try again' });
+
+    tiles.unblock();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => {
+      expect(document.querySelector('[data-figure="terrain"] canvas')).not.toBeNull();
+      expect(tryAgain()).toBeNull();
+    });
+  });
+
+  it('offers no Try again when the area is too large to fetch tiles for', async () => {
+    const tooLarge: LoadFigureTerrain = () => Promise.reject(new HeightfieldTooLargeError(40));
+    renderPage(posterState({ style: 'B' }), { loadFigureTerrain: tooLarge });
+    await waitFor(() => {
+      expect(previewNote()?.textContent).toBe(FIGURE_ERROR_TEXT);
+    });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(tryAgain()).toBeNull();
   });
 
   it('has no axe violations with live figures in every style', async () => {

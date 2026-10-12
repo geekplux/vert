@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
-import type { Locator, Page, Request } from '@playwright/test';
+import type { Locator, Page, Request, Route } from '@playwright/test';
 import {
   countPixels,
   decodePng,
@@ -471,4 +471,68 @@ test('with the tiles refused, Night Ridge exports without its terrain and Trail 
       )
       .first(),
   ).toBeVisible({ timeout: 30_000 });
+});
+
+/**
+ * Poster mode on the sample in `style`, with every tile refused until the returned `allow()`
+ * (the refusal is registered after the synthetic tiles, so it wins until it is removed). One style
+ * per page: the tiles one figure loads are cached for the next.
+ */
+async function posterWithTilesRefused(page: Page, style: string) {
+  const refuse = (route: Route) => route.abort();
+  await page.route('**/tiles/**', refuse);
+  await page.goto('/');
+  await tabUntil(page, page.getByRole('button', { name: 'try a sample run' }), 5);
+  await page.keyboard.press('Enter');
+  await tabUntil(page, page.getByRole('button', { name: 'Make a poster' }));
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeFocused();
+  await chooseStyle(page, style);
+  await expect(poster(page).locator('[data-figure="placeholder"]')).toHaveText(
+    'The terrain couldn’t be drawn.',
+    { timeout: 30_000 },
+  );
+  return { allow: () => page.unroute('**/tiles/**', refuse) };
+}
+
+test('once the tiles are back, Download draws Night Ridge’s terrain and the preview follows', async ({
+  page,
+}) => {
+  const { allow } = await posterWithTilesRefused(page, 'Night Ridge');
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await allow();
+  const file = await download(page, pngButton(page));
+  expect(file.name).toBe('vert-coosa-backcountry-trail-night-ridge-18x24.png');
+  // The preview shows what the file shows: the ridges and the exaggeration, no note.
+  await previewReady(page, 'ridges');
+  await expect(poster(page).locator('[data-figure="placeholder"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeHidden();
+  await expect(poster(page).locator('[data-slot="footer"]')).toContainText('ELEVATION ×2.4');
+});
+
+test('Survey Quad without terrain draws its route flat and drops its contour key; Try again draws the contours', async ({
+  page,
+}) => {
+  const { allow } = await posterWithTilesRefused(page, 'Survey Quad');
+  const legend = poster(page).locator('[data-slot="legend"]');
+  await expect(legend).toContainText('Route run');
+  await expect(legend).not.toContainText('contour');
+  await expect(poster(page).locator('[data-slot="credit"]')).not.toContainText('ELEVATION');
+  // A top-down map needs no terrain for the route, its ○ marker and the scale bar.
+  await expect(poster(page).locator('[data-route="line"]')).toHaveAttribute('d', /^M/);
+  await expect(poster(page).locator('[data-marker="start"]')).toBeAttached();
+  await expect(poster(page).locator('[data-scale-bar]')).toBeAttached();
+  await expect(poster(page).locator('[data-contour="index"]')).toHaveAttribute('d', '');
+
+  // By keyboard, once the tiles are back: the map is drawn and focus moves to Download PNG.
+  await allow();
+  const tryAgain = page.getByRole('button', { name: 'Try again' });
+  await tabUntil(page, tryAgain);
+  await page.keyboard.press('Enter');
+  await expect(poster(page).locator('[data-contour="index"]')).toHaveAttribute('d', /^M/, {
+    timeout: 30_000,
+  });
+  await expect(tryAgain).toBeHidden();
+  await expect(legend).toContainText('Index contour');
+  await expect(pngButton(page)).toBeFocused();
 });

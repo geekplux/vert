@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SAMPLE_RUN } from '../page/sample';
 import type { Run } from '../page/types';
+import { buildHeightfield } from '../terrain/heightfield';
 import type { Heightfield } from '../terrain/heightfield';
 import { trimTrack } from '../gpx/trim';
 import {
@@ -218,6 +219,60 @@ describe('surveyQuadFigureData', () => {
     );
     // The same route, moved: centred on the south-west quarter instead of the whole run.
     expect(data.map?.route).not.toBe(whole.map?.route);
+  });
+
+  /** The route path's numbers. */
+  const numbers = (d: string | undefined) => (d?.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+
+  it.each([
+    ['loop', { width: 720, height: 540 }],
+    ['loop', { width: 720, height: 960 }],
+    ['loop', { width: 600, height: 300 }],
+    ['point to point', { width: 4140, height: 3405 }],
+    ['point to point', { width: 720, height: 540 }],
+  ] as const)(
+    'draws the route flat when the terrain failed (%s, %o) where a real grid for the same box puts it',
+    async (kind, box) => {
+      const drawnTrack = kind === 'loop' ? SAMPLE_RUN.track : trimTrack(SAMPLE_RUN.track, 2000);
+      const frame =
+        (kind === 'loop' ? null : trackBounds(drawnTrack ?? SAMPLE_RUN.track)) ?? SAMPLE_RUN.bounds;
+      const bounds = quadBounds(frame, Math.round((box.width / box.height) * 100) / 100);
+      // The grid the figure would have had: buildHeightfield over the same bounds, from fake tiles.
+      const built = await buildHeightfield(bounds, {
+        padding: 0,
+        fetchTile: () =>
+          Promise.resolve(new Float32Array(256 * 256).map((_, i) => 1000 + (i % 251))),
+      });
+      const options = { drawnTrack, frame };
+      const flat = surveyQuadFigureData(SAMPLE_RUN, null, box, { ...options, flatBounds: bounds });
+      const drawn = surveyQuadFigureData(SAMPLE_RUN, built, box, options);
+      const a = numbers(flat.map?.route);
+      const b = numbers(drawn.map?.route);
+      expect(a.length).toBeGreaterThan(10);
+      expect(a).toHaveLength(b.length);
+      const offset = Math.max(...a.map((value, i) => Math.abs(value - (b[i] ?? NaN))));
+      expect(offset).toBeLessThanOrEqual(1);
+      expect(flat.map?.contours).toEqual({ index: '', intermediate: '' });
+      expect(drawn.map?.contours.index).toMatch(/^M/);
+      expect(flat.map?.markers.map((m) => m.kind)).toEqual(
+        kind === 'loop' ? ['start'] : ['start', 'finish'],
+      );
+      flat.map?.markers.forEach((marker, i) => {
+        const real = drawn.map?.markers[i];
+        expect(Math.hypot(marker.x - (real?.x ?? NaN), marker.y - (real?.y ?? NaN))).toBeLessThan(
+          1,
+        );
+      });
+      const [fb, db] = [flat.map?.scaleBar, drawn.map?.scaleBar];
+      expect(fb?.text).toBe(db?.text);
+      expect(fb?.labels).toEqual(db?.labels);
+      expect(fb?.lengthPx).toBeCloseTo(db?.lengthPx ?? NaN, 6);
+      expect(flat.coordinates).toEqual(drawn.coordinates);
+    },
+  );
+
+  it('has no map without terrain until it has failed', () => {
+    expect(surveyQuadFigureData(SAMPLE_RUN, null, { width: 600, height: 450 }).map).toBeNull();
   });
 
   it('has the coordinates of the run centre even before the terrain loads', () => {

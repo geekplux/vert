@@ -28,7 +28,8 @@ export interface SurveyQuadPosterProps {
   onFigureBox?: (size: FigureBoxSize) => void;
   /**
    * The contours could not be drawn (their terrain failed): the key leaves out the contour
-   * interval, which would describe lines that are not there.
+   * interval and the contour rows of the legend, and the credit under the map its elevation
+   * data, which would describe lines that are not there.
    */
   figureFailed?: boolean;
   className?: string;
@@ -163,11 +164,15 @@ export function SurveyQuadPoster({
           </div>
           <div className={styles.frame}>
             <MapBox onFigureBox={onFigureBox}>
-              {map ? <ContourMap map={map} k={k} /> : figure}
+              {map && <ContourMap map={map} k={k} />}
+              {/* Without terrain the route is drawn flat and the note stays, low in the box. */}
+              {(!map || figureFailed) && figure}
             </MapBox>
           </div>
           <div className={styles.mapRow} data-slot="credit">
-            <span>MAPPED FROM GPX + PUBLIC ELEVATION DATA</span>
+            {/* Nothing is mapped when the terrain failed: no credit, but the row keeps its height
+                (a no-break space), so the map box, and the route on it, do not move. */}
+            <span>{figureFailed ? RESERVED : SURVEY_QUAD_CREDIT}</span>
             <span>{content.date}</span>
           </div>
         </div>
@@ -186,7 +191,11 @@ export function SurveyQuadPoster({
           </div>
         )}
         <div className={styles.key} ref={keyRef}>
-          <Legend k={k} pointToPoint={map?.markers.some((m) => m.kind === 'finish') ?? false} />
+          <Legend
+            k={k}
+            pointToPoint={map?.markers.some((m) => m.kind === 'finish') ?? false}
+            contours={!figureFailed}
+          />
           <div className={styles.scale} data-slot="scale">
             {map && (
               <ScaleBarGraphic
@@ -196,7 +205,10 @@ export function SurveyQuadPoster({
                 room={scaleRoom}
               />
             )}
-            {!figureFailed && <div className={styles.label}>CONTOUR INTERVAL {intervalText}</div>}
+            {/* Without contours their interval goes; its line keeps its height. */}
+            <div className={styles.label}>
+              {figureFailed ? RESERVED : `CONTOUR INTERVAL ${intervalText}`}
+            </div>
           </div>
         </div>
       </div>
@@ -218,6 +230,16 @@ function MapBox({
     </div>
   );
 }
+
+/**
+ * What stands in for a line of text the failed figure leaves out (the credit, the contour interval,
+ * the contour legend rows): a no-break space, so the line keeps its height and the layout, the map
+ * box included, stays exactly as with terrain.
+ */
+const RESERVED = '\u00a0';
+
+/** The credit under the map, when it is drawn. */
+export const SURVEY_QUAD_CREDIT = 'MAPPED FROM GPX + PUBLIC ELEVATION DATA';
 
 /** Start and finish markers on the map, px at 720 wide: ring radius, and the finish's dot. */
 const MARKER_R = 8;
@@ -267,8 +289,20 @@ function ContourMap({ map, k }: { map: SurveyQuadMap; k: number }) {
   );
 }
 
-/** The legend, as the canvas draws it: 48 px samples (scaled to the layout), labels in sentence case. */
-function Legend({ k, pointToPoint }: { k: number; pointToPoint: boolean }) {
+/**
+ * The legend, as the canvas draws it: 48 px samples (scaled to the layout), labels in sentence
+ * case. Without `contours` (the terrain failed) the two contour rows are left empty (they keep
+ * their height, so the layout does not move).
+ */
+function Legend({
+  k,
+  pointToPoint,
+  contours,
+}: {
+  k: number;
+  pointToPoint: boolean;
+  contours: boolean;
+}) {
   const w = sc(40, k);
   const ring = (cx: number, finish: boolean) => (
     <>
@@ -299,32 +333,48 @@ function Legend({ k, pointToPoint }: { k: number; pointToPoint: boolean }) {
         </svg>
         Route run
       </div>
-      <div className={styles.legendItem}>
-        <svg width={w} height={sc(10, k)}>
-          <line
-            x1={0}
-            y1={sc(5, k)}
-            x2={w}
-            y2={sc(5, k)}
-            stroke={PALETTE.contour}
-            strokeWidth={sc(1.6, k)}
-          />
-        </svg>
-        Index contour
-      </div>
-      <div className={styles.legendItem}>
-        <svg width={w} height={sc(10, k)}>
-          <line
-            x1={0}
-            y1={sc(5, k)}
-            x2={w}
-            y2={sc(5, k)}
-            stroke={PALETTE.contour}
-            strokeWidth={sc(0.7, k)}
-          />
-        </svg>
-        Intermediate contour
-      </div>
+      {contours ? (
+        <>
+          <div className={styles.legendItem} data-legend="index">
+            <svg width={w} height={sc(10, k)}>
+              <line
+                x1={0}
+                y1={sc(5, k)}
+                x2={w}
+                y2={sc(5, k)}
+                stroke={PALETTE.contour}
+                strokeWidth={sc(1.6, k)}
+              />
+            </svg>
+            Index contour
+          </div>
+          <div className={styles.legendItem} data-legend="intermediate">
+            <svg width={w} height={sc(10, k)}>
+              <line
+                x1={0}
+                y1={sc(5, k)}
+                x2={w}
+                y2={sc(5, k)}
+                stroke={PALETTE.contour}
+                strokeWidth={sc(0.7, k)}
+              />
+            </svg>
+            Intermediate contour
+          </div>
+        </>
+      ) : (
+        // No contours drawn: the two rows keep their place, empty, so the layout does not move.
+        <>
+          <div className={styles.legendItem} data-legend="reserved">
+            <svg width={w} height={sc(10, k)} />
+            {RESERVED}
+          </div>
+          <div className={styles.legendItem} data-legend="reserved">
+            <svg width={w} height={sc(10, k)} />
+            {RESERVED}
+          </div>
+        </>
+      )}
       {/* A loop has one ○ for start and finish; a point-to-point run ○ start and ◉ finish (as the
           View, Trail Sign and Night Ridge draw them), named in one row: "○ Start · ◉ Finish". */}
       <div className={styles.legendItem} data-legend="ends">

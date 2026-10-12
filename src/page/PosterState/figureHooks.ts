@@ -161,9 +161,12 @@ function figureHeightfield(load: LoadFigureTerrain, bounds: Bounds): Promise<Hei
     cache.delete(key);
   } else {
     // Built to completion even if the box moves on: the grid is cached for when it comes back.
-    promise = load(bounds, new AbortController().signal);
-    promise.catch(() => {
-      cache.delete(key);
+    // A failed grid is evicted (never cached), so the next ask (Try again) builds afresh; the
+    // tiles' own timeouts (`TILE_TIMEOUT_MS`) keep a build from hanging for ever.
+    const building = load(bounds, new AbortController().signal);
+    promise = building;
+    building.catch(() => {
+      if (cache.get(key) === building) cache.delete(key);
     });
   }
   cache.set(key, promise);
@@ -184,17 +187,22 @@ export type FigureHeightfieldState =
  * The height grid for a poster figure's `bounds` (null until the poster has reported its box).
  * While a new one builds, the last grid stays (so the figure does not blink between boxes). A
  * failure carries the loader's error (`HeightfieldTooLargeError` for an area too large to fetch).
+ * A new `attempt` asks again after a failure: a failed grid is not cached, so the loader runs
+ * again, unless a build for the same bounds (an export's) is already on its way or done, which
+ * is shared. The state is `loading` until that settles.
  */
 export function useFigureHeightfield(
   bounds: Bounds | null,
   load: LoadFigureTerrain,
+  attempt = 0,
 ): FigureHeightfieldState {
   const [state, setState] = useState<{
     key: string;
+    attempt: number;
     heightfield: Heightfield | null;
     failed: boolean;
     error?: unknown;
-  }>({ key: '', heightfield: null, failed: false });
+  }>({ key: '', attempt, heightfield: null, failed: false });
   const key = bounds ? boundsKey(bounds) : '';
 
   useEffect(() => {
@@ -202,23 +210,29 @@ export function useFigureHeightfield(
     let live = true;
     figureHeightfield(load, bounds).then(
       (heightfield) => {
-        if (live) setState({ key, heightfield, failed: false });
+        if (live) setState({ key, attempt, heightfield, failed: false });
       },
       (error: unknown) => {
         if (!live || isAbortError(error)) return;
-        setState((previous) => ({ key, heightfield: previous.heightfield, failed: true, error }));
+        setState((previous) => ({
+          key,
+          attempt,
+          heightfield: previous.heightfield,
+          failed: true,
+          error,
+        }));
       },
     );
     return () => {
       live = false;
     };
     // `bounds` is memoized by the caller; `key` keeps equal bounds from rebuilding anyway.
-  }, [bounds, key, load]);
+  }, [bounds, key, load, attempt]);
 
   if (state.key === key && state.heightfield && !state.failed) {
     return { status: 'ready', heightfield: state.heightfield };
   }
-  if (state.key === key && state.failed) {
+  if (state.key === key && state.failed && state.attempt === attempt) {
     return { status: 'error', heightfield: null, error: state.error };
   }
   return { status: 'loading', heightfield: state.heightfield };

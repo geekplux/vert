@@ -58,6 +58,9 @@ This is the only place that owns application state and composes `components`, `t
   first frame; Night Ridge and Survey Quad build their own height grids for the box they report
   (`ridgeBounds` / `quadBounds`, cached by bounds, `useFigureTerrainLoader()`), and show only once
   their fonts have loaded (`loadPosterFonts`; a plain card in the style's paper until then).
+  When a figure's terrain fails, `FigureRetry.tsx` puts "The terrain couldn’t be drawn." and Try
+  again on the stage by the preview (DECISIONS "Try again by the preview"), and Download asks again
+  too, so the preview follows the export (DECISIONS "The preview follows the export").
   Hide start and end: every style draws `trimTrack(run.track, hideEnds)` (route and start / finish
   markers); stats, profile, sunrise and the map's centre keep the whole run. The camera: "Make a
   poster" reads the View's terrain camera (`TerrainBox` `cameraRef`) into `prefs.poster.camera`

@@ -123,6 +123,18 @@
   object-position: center;
 }
 
+/* The failure note over a flat map (route, no contours): low in the box, clear of the route the
+   quad's margin keeps away from its edges, haloed in the map's paper. */
+.map > svg ~ [data-figure='placeholder'] {
+  box-sizing: border-box;
+  align-items: flex-end;
+  padding-bottom: 12px;
+  text-shadow:
+    0 0 3px var(--sq-map),
+    0 0 3px var(--sq-map),
+    0 0 6px var(--sq-map);
+}
+
 .stats {
   display: grid;
   flex: none;

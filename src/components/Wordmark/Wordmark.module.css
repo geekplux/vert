@@ -1,0 +1,25 @@
+/* Canvas header (Upload, Main, PosterMode frames) and DECISIONS.md "Wordmark". */
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 14px; /* canvas: gap 14px, no token */
+  line-height: normal; /* the canvas header sets no line-height */
+}
+
+.name {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  font-stretch: 62%;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.tagline {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}

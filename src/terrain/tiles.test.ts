@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TILE_SIZE,
+  TileDecodeError,
   TileHttpError,
   TileLoader,
   fetchTile,
@@ -14,9 +15,17 @@ import {
 const COORD = { z: 12, x: 1088, y: 1641 };
 
 const ok = () =>
-  Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob()) });
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+  });
 const status = (code: number) =>
-  Promise.resolve({ ok: false, status: code, blob: () => Promise.resolve(new Blob()) });
+  Promise.resolve({
+    ok: false,
+    status: code,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+  });
 
 /** A decoder that skips the canvas and returns a flat tile. */
 const flat: TileDecoder = () => Promise.resolve(new Float32Array(TILE_SIZE * TILE_SIZE).fill(42));
@@ -199,12 +208,54 @@ describe('TileLoader', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects a decoded tile of the wrong size', async () => {
+  it('rejects a decoded tile of the wrong size as a decode error', async () => {
     const loader = new TileLoader({
       fetchImpl: ok,
       decode: () => Promise.resolve(new Float32Array(10)),
     });
-    await expect(loader.load(COORD)).rejects.toThrow(RangeError);
+    const error: unknown = await loader.load(COORD).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TileDecodeError);
+    expect((error as Error).cause).toBeInstanceOf(RangeError);
+  });
+
+  it('reads the body with arrayBuffer(), never blob(), and decodes those bytes', async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer;
+    const blob = vi.fn(() => Promise.reject(new TypeError('blob storage full')));
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(bytes), blob }),
+    );
+    const decode = vi.fn<TileDecoder>(flat);
+    await new TileLoader({ fetchImpl, decode }).load(COORD);
+    expect(decode).toHaveBeenCalledWith(bytes);
+    expect(blob).not.toHaveBeenCalled();
+  });
+
+  it('wraps a decoder failure in TileDecodeError and does not retry it', async () => {
+    const fetchImpl = vi.fn<FetchLike>(ok);
+    const cause = new DOMException('The source image could not be decoded.', 'InvalidStateError');
+    const loader = new TileLoader({ fetchImpl, decode: () => Promise.reject(cause) });
+    const error: unknown = await loader.load(COORD).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TileDecodeError);
+    expect((error as Error).cause).toBe(cause);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries a body that fails to arrive (a network error, not a decode error)', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn<FetchLike>(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        arrayBuffer: () =>
+          calls++ === 0
+            ? Promise.reject(new TypeError('network error'))
+            : Promise.resolve(new ArrayBuffer(0)),
+      }),
+    );
+    await expect(new TileLoader({ fetchImpl, decode: flat }).load(COORD)).resolves.toHaveLength(
+      TILE_SIZE * TILE_SIZE,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 });
 

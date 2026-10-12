@@ -17,8 +17,8 @@ import {
 const METRES_PER_DEGREE = 111_320;
 
 /** A cone over the sample run's bounds (plus 15%), 1,200 m at the centre. */
-function sampleField(): Heightfield {
-  const { west, south, east, north } = SAMPLE_RUN.bounds;
+function sampleField(runBounds: Run['bounds'] = SAMPLE_RUN.bounds): Heightfield {
+  const { west, south, east, north } = runBounds;
   const padX = (east - west) * 0.15;
   const padY = (north - south) * 0.15;
   const bounds = { west: west - padX, east: east + padX, south: south - padY, north: north + padY };
@@ -58,6 +58,15 @@ describe('formatLatLon', () => {
     expect(formatLatLon(-33.8688, 151.2093)).toEqual({ lat: '33°52′ S', lon: '151°13′ E' });
     // Rounding to the minute carries into the degree.
     expect(formatLatLon(45.9999, 6.99999)).toEqual({ lat: '46°00′ N', lon: '7°00′ E' });
+  });
+
+  it('folds a longitude past ±180 back into the right hemisphere', () => {
+    // Either side of the antimeridian, in the unwrapped form a crossing run's bounds use.
+    expect(formatLatLon(-16.86, 179.97).lon).toBe('179°58′ E');
+    expect(formatLatLon(-16.86, 180.02).lon).toBe('179°59′ W');
+    expect(formatLatLon(-16.86, -180.02).lon).toBe('179°59′ E');
+    expect(formatLatLon(-16.86, 540 - 0.5).lon).toBe('179°30′ E');
+    expect(formatLatLon(-16.86, 180).lon).toBe('180°00′ W');
   });
 });
 
@@ -196,6 +205,29 @@ describe('surveyQuadFigureData', () => {
     expect(map?.scaleBar.labels.at(-1)).toMatch(/ (k?m)$/);
     // Every route point lies inside the box.
     for (const [, x, y] of map?.route.matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g) ?? []) {
+      expect(Number(x)).toBeGreaterThanOrEqual(0);
+      expect(Number(x)).toBeLessThanOrEqual(600);
+      expect(Number(y)).toBeGreaterThanOrEqual(0);
+      expect(Number(y)).toBeLessThanOrEqual(500);
+    }
+  });
+
+  it('maps a run across the antimeridian at its true size, with its real coordinates', () => {
+    // The sample loop moved so its centre sits on 180°, its longitudes unwrapped past it.
+    const { west, east } = SAMPLE_RUN.bounds;
+    const shift = 180 - (west + east) / 2;
+    const bounds = { ...SAMPLE_RUN.bounds, west: west + shift, east: east + shift };
+    const track = { ...SAMPLE_RUN.track, lon: SAMPLE_RUN.track.lon.map((lon) => lon + shift) };
+    const run = { ...SAMPLE_RUN, bounds, track };
+    const box = { width: 600, height: 500 };
+    const crossing = surveyQuadFigureData(run, sampleField(bounds), box);
+    const home = surveyQuadFigureData(SAMPLE_RUN, sampleField(), box);
+    expect(crossing.coordinates).toEqual({ lat: '34°46′ N', lon: '180°00′ W' });
+    // The same scale bar and the same drawing as the run where it really is.
+    expect(crossing.map?.scaleBar).toEqual(home.map?.scaleBar);
+    expect(crossing.map?.pxPerMetre).toBeCloseTo(home.map?.pxPerMetre ?? NaN, 6);
+    expect(crossing.map?.route.length).toBeGreaterThan(100);
+    for (const [, x, y] of crossing.map?.route.matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g) ?? []) {
       expect(Number(x)).toBeGreaterThanOrEqual(0);
       expect(Number(x)).toBeLessThanOrEqual(600);
       expect(Number(y)).toBeGreaterThanOrEqual(0);

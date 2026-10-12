@@ -4,7 +4,7 @@
  * Pure: the page computes these and passes them as `figureData`.
  */
 import type { Units } from '../lib/format';
-import type { Bounds } from '../lib/geo';
+import { normalizeLon, type Bounds } from '../lib/geo';
 import { formatClock, sunriseAlongRun } from '../lib/sun';
 import type { Run, RunTrack } from '../page/types';
 import type { Heightfield } from '../terrain/heightfield';
@@ -28,7 +28,11 @@ import type { Point, Rect, RidgeFigure } from './ridges';
 // Framing (every style)
 // ---------------------------------------------------------------------------------------------
 
-/** The bounds of a track's points; null for an empty track. */
+/**
+ * The bounds of a track's points; null for an empty track. A plain min/max: the run's track is
+ * already unwrapped across the antimeridian (lib/geo), and its trimmed parts must keep the same
+ * representation.
+ */
 export function trackBounds(track: Pick<RunTrack, 'lat' | 'lon'>): Bounds | null {
   const n = Math.min(track.lat.length, track.lon.length);
   if (n === 0) return null;
@@ -186,7 +190,10 @@ export const SCALE_BAR_MAX_PX: Readonly<Record<PosterLayoutKind, number>> = {
   social: 300,
 };
 
-/** Degrees and minutes, "34°46′ N" / "83°56′ W" (rounded to the minute). */
+/**
+ * Degrees and minutes, "34°46′ N" / "83°56′ W" (rounded to the minute). A longitude past ±180 (a
+ * run across the antimeridian, see lib/geo) is folded back first: 180.02 is "179°59′ W".
+ */
 export function formatLatLon(lat: number, lon: number): { lat: string; lon: string } {
   const dm = (value: number, positive: string, negative: string) => {
     const total = Math.round(Math.abs(value) * 60);
@@ -194,7 +201,7 @@ export function formatLatLon(lat: number, lon: number): { lat: string; lon: stri
     const minutes = total - degrees * 60;
     return `${String(degrees)}°${String(minutes).padStart(2, '0')}′ ${value < 0 ? negative : positive}`;
   };
-  return { lat: dm(lat, 'N', 'S'), lon: dm(lon, 'E', 'W') };
+  return { lat: dm(lat, 'N', 'S'), lon: dm(normalizeLon(lon), 'E', 'W') };
 }
 
 const METRES_PER_DEGREE_LAT = 111_320;

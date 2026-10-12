@@ -3,14 +3,19 @@
 three.js scene: elevation tiles → height grid → custom mesh and shaders, the route on top, camera,
 scrub marker. No map library, no basemap.
 
-- `tiles.ts`: `tileUrl`, `fetchTile` (shared `TileLoader`): fetch, decode (`createImageBitmap` +
+- `tiles.ts`: `tileUrl`, `fetchTile` (shared `TileLoader`): fetch, decode (body read with
+  `arrayBuffer()`, never `blob()`, which fails on a nearly full disk; `createImageBitmap` +
   canvas, no colour conversion), 64-tile LRU cache, one shared request per tile, one retry on a
-  network error, AbortError propagated.
+  network error, AbortError propagated. A tile that arrives but will not decode is a
+  `TileDecodeError` (not retried); when every tile fails that way, `HeightfieldError.kind` is
+  `'decode'` and the View says the data arrived but could not be read, not "check your connection".
 - `heightfield.ts`: `buildHeightfield(bounds)` pads the bbox 15%, picks z12–14 so the area is
   ≤ 512 samples a side at native resolution and ≤ 16 tiles (below z12 only when a long route needs
   it; a long route then samples one zoom finer, ≤ 32 tiles, and downsamples to 512), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`) and
   resamples to a regular Web Mercator grid. `elevationAt` drapes the route; `groundExtent` is the
-  grid's longer side in metres.
+  grid's longer side in metres. Across the antimeridian the bounds run past ±180 (lib/geo), the
+  mosaic's columns stay contiguous and each tile is fetched as `wrapTile(tile)`, so requests keep
+  x in [0, 2^z). Latitudes are clamped to ±85 (inside the Mercator square), a minimum span apart.
 - `mesh.ts`: `createTerrainMesh(heightfield, options)` builds the grid (`width × height` vertices,
   plus a skirt) in a local frame: x east, y up, z south, origin at the grid
   centre and lowest point, 1 unit = the longer horizontal side, true metres vertically. The style A

@@ -73,8 +73,9 @@ test('decodes a colour-tagged Terrarium tile to exact elevations', async ({ page
 
       // The same bytes through a default (colour-managed) decode: proves the fixture would catch
       // a decoder that dropped `colorSpaceConversion: 'none'`.
-      const blob = await (await fetch(`/tiles/${String(coord.z)}/0/0.png`)).blob();
-      const bitmap = await createImageBitmap(blob);
+      // arrayBuffer(), not blob(), as the app does: response blobs fail on a nearly full disk.
+      const png = await (await fetch(`/tiles/${String(coord.z)}/0/0.png`)).arrayBuffer();
+      const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }));
       const context = new OffscreenCanvas(256, 256).getContext('2d');
       if (!context) throw new Error('no 2D context');
       context.drawImage(bitmap, 0, 0);

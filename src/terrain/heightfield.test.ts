@@ -22,6 +22,7 @@ import {
 } from './heightfield';
 import {
   TILE_SIZE,
+  TileDecodeError,
   TileHttpError,
   fetchTile,
   isAbortError,
@@ -42,8 +43,11 @@ function encode(elevation: number): [number, number, number] {
   return [Math.floor(whole / 256), whole % 256, Math.floor((v - whole) * 256)];
 }
 
-/** A tile of {@link surface}, sampled at pixel centres and round-tripped through Terrarium. */
-function analyticTile({ z, x, y }: TileCoord): Float32Array {
+/** A tile of `f` ({@link surface}), sampled at pixel centres and round-tripped through Terrarium. */
+function analyticTile(
+  { z, x, y }: TileCoord,
+  f: (lon: number, lat: number) => number = surface,
+): Float32Array {
   const n = 2 ** z;
   const rgba = new Uint8ClampedArray(TILE_SIZE * TILE_SIZE * 4);
   for (let py = 0; py < TILE_SIZE; py++) {
@@ -52,7 +56,7 @@ function analyticTile({ z, x, y }: TileCoord): Float32Array {
         (x + (px + 0.5) / TILE_SIZE) / n,
         (y + (py + 0.5) / TILE_SIZE) / n,
       );
-      const [r, g, b] = encode(surface(lon, lat));
+      const [r, g, b] = encode(f(lon, lat));
       const i = (py * TILE_SIZE + px) * 4;
       rgba[i] = r;
       rgba[i + 1] = g;
@@ -339,6 +343,29 @@ describe('buildHeightfield', () => {
     );
     expect(error).toBeInstanceOf(HeightfieldError);
     expect((error as HeightfieldError).failedTiles.length).toBe(source.requested.length);
+    expect((error as HeightfieldError).kind).toBe('network');
+  });
+
+  it('says so when every tile arrived but none could be decoded', async () => {
+    const decodeFails = (tile: TileCoord) =>
+      Promise.reject(new TileDecodeError(tile, new Error('bad PNG')));
+    const error: unknown = await buildHeightfield(BOUNDS, { fetchTile: decodeFails }).catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(HeightfieldError);
+    expect((error as HeightfieldError).kind).toBe('decode');
+  });
+
+  it('calls a mix of decode and network failures a network failure', async () => {
+    let n = 0;
+    const mixed = (tile: TileCoord) =>
+      Promise.reject(
+        n++ === 0 ? new TypeError('Failed to fetch') : new TileDecodeError(tile, new Error('x')),
+      );
+    const error: unknown = await buildHeightfield(BOUNDS, { fetchTile: mixed }).catch(
+      (e: unknown) => e,
+    );
+    expect((error as HeightfieldError).kind).toBe('network');
   });
 
   it('propagates AbortError and stops fetching', async () => {
@@ -359,6 +386,72 @@ describe('buildHeightfield', () => {
     controller.abort();
     await expect(promise).rejects.toSatisfy(isAbortError);
     expect(requested.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('across the antimeridian', () => {
+  /** Linear in longitude through 180° (continuous there), whatever representation it gets. */
+  const dateline = (lon: number, lat: number) =>
+    300 + (((lon + 360) % 360) - 180) * 2000 + (lat + 16.86) * 1000;
+  /** Taveuni, Fiji, as `boundsOf` gives a loop across 180°: the east edge past it. */
+  const TAVEUNI: Bounds = { west: 179.9775, south: -16.877, east: 180.0225, north: -16.843 };
+
+  it('fetches only real tiles (x in [0, 2^z)), on both sides of the line', async () => {
+    const requested: TileCoord[] = [];
+    const hf = await buildHeightfield(TAVEUNI, {
+      fetchTile: (tile) => {
+        requested.push(tile);
+        return Promise.resolve(analyticTile(tile, dateline));
+      },
+    });
+    const n = 2 ** hf.zoom;
+    expect(hf.zoom).toBeGreaterThanOrEqual(12);
+    expect(requested.length).toBe(tileCount(hf.bounds, hf.zoom));
+    expect(requested.every((t) => Number.isInteger(t.x) && t.x >= 0 && t.x < n)).toBe(true);
+    const xs = new Set(requested.map((t) => t.x));
+    expect(xs.has(0)).toBe(true);
+    expect(xs.has(n - 1)).toBe(true);
+    // The grid is a few km across, not the globe.
+    expect(groundExtent(hf)).toBeLessThan(10_000);
+    expect(hf.bounds.east).toBeGreaterThan(180);
+  });
+
+  it('reproduces the surface at every node, with no seam at 180°', async () => {
+    const hf = await buildHeightfield(TAVEUNI, {
+      fetchTile: (tile) => Promise.resolve(analyticTile(tile, dateline)),
+    });
+    let worst = 0;
+    for (let j = 0; j < hf.height; j += 7) {
+      for (let i = 0; i < hf.width; i++) {
+        const { lon, lat } = nodeLonLat(hf, i, j);
+        worst = Math.max(worst, Math.abs(at(hf, i, j) - dateline(lon, lat)));
+      }
+    }
+    expect(worst).toBeLessThan(0.05);
+    // Draping: a point just east of the line, in its unwrapped form, lands inside the grid.
+    const p = gridPosition(hf, 180.01, -16.86);
+    expect(p.x).toBeGreaterThan(0);
+    expect(p.x).toBeLessThan(hf.width - 1);
+    expect(elevationAt(hf, 180.01, -16.86)).toBeCloseTo(dateline(-179.99, -16.86), 1);
+  });
+});
+
+describe('near the poles', () => {
+  it('builds a grid for a Svalbard loop (78° N)', async () => {
+    const svalbard: Bounds = { west: 15.49, south: 78.19, east: 15.67, north: 78.22 };
+    const hf = await buildHeightfield(svalbard, { fetchTile: fakeSource().fetchTile });
+    expect(hf.zoom).toBeGreaterThanOrEqual(12);
+    expect(hf.bounds.north).toBeLessThanOrEqual(85);
+    expect(hf.width).toBeGreaterThan(1);
+    expect(hf.height).toBeGreaterThan(1);
+  });
+
+  it('keeps a run beyond the Mercator limit inside it, without an inverted box', async () => {
+    const pole: Bounds = { west: 10, south: 88.9, east: 11, north: 89.5 };
+    const hf = await buildHeightfield(pole, { fetchTile: fakeSource().fetchTile });
+    expect(hf.bounds.north).toBe(85);
+    expect(hf.bounds.south).toBeLessThan(hf.bounds.north);
+    expect(Number.isFinite(hf.min) && Number.isFinite(hf.max)).toBe(true);
   });
 });
 
@@ -399,7 +492,7 @@ describe('privacy', () => {
       return Promise.resolve({
         ok: true,
         status: 200,
-        blob: () => Promise.resolve(new Blob()),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
       });
     });
     // The default path: buildHeightfield → shared fetchTile → global fetch.

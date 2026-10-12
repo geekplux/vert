@@ -8,7 +8,7 @@
  * boundary (structured cloning drops prototypes).
  */
 
-import { boundsOf, type Bounds } from '../lib/geo';
+import { boundsOf, unwrapLongitudes, type Bounds } from '../lib/geo';
 import { GENERIC_LOAD_ERROR } from '../page/errors';
 import type { Run, RunTrack } from '../page/types';
 import { parseGpx } from './parse';
@@ -144,7 +144,8 @@ export function buildRun(
     run,
     points: {
       lat: Float64Array.from(points, (p) => p.lat),
-      lon: Float64Array.from(points, (p) => p.lon),
+      // Continuous across the antimeridian, in the same representation as `bounds` (lib/geo).
+      lon: unwrapLongitudes(points.map((p) => p.lon)),
       ele: stats.elevation,
       cumulative: stats.cumulative,
       time: stats.time,
@@ -152,7 +153,10 @@ export function buildRun(
   };
 }
 
-/** A bbox rounded outward to 4 decimals (≈ 11 m), so every point stays inside. */
+/**
+ * A bbox rounded outward to 4 decimals (≈ 11 m), so every point stays inside. Longitudes are kept
+ * within ±180 unless the box already lies past it (a run across the antimeridian).
+ */
 export function roundOutward(bounds: Bounds): Bounds {
   // Scaling by 1e4 can round across a boundary; a final comparison with the input settles it.
   const at = (k: number) => Number((k / 1e4).toFixed(4));
@@ -165,9 +169,9 @@ export function roundOutward(bounds: Bounds): Bounds {
     return at(k) < v ? at(k + 1) : at(k);
   };
   return {
-    west: Math.max(-180, down(bounds.west)),
+    west: bounds.west < -180 ? down(bounds.west) : Math.max(-180, down(bounds.west)),
     south: Math.max(-90, down(bounds.south)),
-    east: Math.min(180, up(bounds.east)),
+    east: bounds.east > 180 ? up(bounds.east) : Math.min(180, up(bounds.east)),
     north: Math.min(90, up(bounds.north)),
   };
 }

@@ -146,10 +146,15 @@ export const pendingLoadFigureTerrain: LoadFigureTerrain = (_bounds, signal) =>
 export const TERRAIN_OFFLINE_ERROR =
   "The terrain couldn't load: no elevation data came through. Check your connection and try again.";
 
+/** Every elevation tile arrived but this browser could not decode any of them. */
+export const TERRAIN_DECODE_ERROR =
+  "The terrain couldn't load: the elevation data arrived, but this browser couldn't read it. Reload the page and try again.";
+
 /** Anything else that stopped the grid from being built. */
 export const TERRAIN_GENERIC_ERROR = "The terrain couldn't be built for this run.";
 
 function terrainErrorMessage(error: unknown): string {
+  if (error instanceof HeightfieldError && error.kind === 'decode') return TERRAIN_DECODE_ERROR;
   const offline = typeof navigator !== 'undefined' && !navigator.onLine;
   return offline || error instanceof HeightfieldError || error instanceof TypeError
     ? TERRAIN_OFFLINE_ERROR

@@ -14,14 +14,18 @@ export const TILE_SIZE = 256;
 /** Elevations of one tile in metres, row-major from the north-west pixel, TILE_SIZE² values. */
 export type TileElevations = Float32Array;
 
-/** Turns a fetched PNG into elevations. Injectable so tests need no canvas. */
-export type TileDecoder = (blob: Blob) => Promise<TileElevations>;
+/** Turns a fetched PNG's bytes into elevations. Injectable so tests need no canvas. */
+export type TileDecoder = (png: ArrayBuffer) => Promise<TileElevations>;
 
-/** The part of `fetch` the loader uses; `window.fetch` fits. */
+/**
+ * The part of `fetch` the loader uses; `window.fetch` fits. The body is read with
+ * `arrayBuffer()`, never `blob()`: Chromium can back a response blob with a file, and with the
+ * disk nearly full every `blob()` failed while `arrayBuffer()` still worked.
+ */
 export type FetchLike = (
   url: string,
   init: RequestInit,
-) => Promise<Pick<Response, 'ok' | 'status' | 'blob'>>;
+) => Promise<Pick<Response, 'ok' | 'status' | 'arrayBuffer'>>;
 
 export interface FetchTileOptions {
   signal?: AbortSignal;
@@ -38,6 +42,17 @@ export class TileHttpError extends Error {
     super(`Tile ${tileKey(coord)} failed with HTTP ${String(status)}`);
     this.name = 'TileHttpError';
     this.status = status;
+  }
+}
+
+/**
+ * A tile arrived but could not be turned into elevations (the image would not decode, no 2D
+ * canvas, wrong size): a problem in this browser, not the network, so it is not retried.
+ */
+export class TileDecodeError extends Error {
+  constructor(coord: TileCoord, cause: unknown) {
+    super(`Tile ${tileKey(coord)} could not be decoded`, { cause });
+    this.name = 'TileDecodeError';
   }
 }
 
@@ -85,10 +100,11 @@ function abortReason(signal: AbortSignal): Error {
 
 /**
  * Default decoder: `createImageBitmap` with colour-space conversion and premultiplication off, so
- * the RGB bytes reach `getImageData` exactly as stored, then {@link decodeTerrariumImage}.
+ * the RGB bytes reach `getImageData` exactly as stored, then {@link decodeTerrariumImage}. The
+ * bytes go in through a small in-memory `Blob` made here, not the response's own blob.
  */
-export async function decodeTerrariumPng(blob: Blob): Promise<TileElevations> {
-  const bitmap = await createImageBitmap(blob, {
+export async function decodeTerrariumPng(png: ArrayBuffer): Promise<TileElevations> {
+  const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }), {
     colorSpaceConversion: 'none',
     premultiplyAlpha: 'none',
   });
@@ -125,7 +141,7 @@ export interface TileLoaderOptions {
 /**
  * Fetches and decodes tiles with an LRU cache and request sharing: concurrent calls for one tile
  * share one request, which is aborted only when every caller has aborted. A network error (or a
- * 5xx) is retried once; an HTTP 4xx is not.
+ * 5xx) is retried once; an HTTP 4xx is not, nor a {@link TileDecodeError}.
  */
 export class TileLoader {
   readonly capacity: number;
@@ -232,9 +248,18 @@ export class TileLoader {
       try {
         const response = await fetchImpl(url, init);
         if (!response.ok) throw new TileHttpError(coord, response.status);
-        const elevations = await decode(await response.blob());
+        // Reading the body can still fail on the network (a TypeError, retried below).
+        const png = await response.arrayBuffer();
+        let elevations: TileElevations;
+        try {
+          elevations = await decode(png);
+        } catch (error) {
+          if (signal.aborted || isAbortError(error)) throw error;
+          throw new TileDecodeError(coord, error);
+        }
         if (elevations.length !== TILE_SIZE * TILE_SIZE) {
-          throw new RangeError(`Tile ${tileKey(coord)} is not ${String(TILE_SIZE)}² pixels`);
+          const size = new RangeError(`Tile ${tileKey(coord)} is not ${String(TILE_SIZE)}² pixels`);
+          throw new TileDecodeError(coord, size);
         }
         return elevations;
       } catch (error) {

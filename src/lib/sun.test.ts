@@ -76,6 +76,26 @@ describe('sunriseAlongRun', () => {
     const result = sunriseAlongRun({ track: evenRun(start, 20 * 3600, 100_000) });
     expect(minutesApart(result?.time ?? 0, Date.UTC(2026, 9, 4, 11, 33))).toBeLessThanOrEqual(3);
   });
+
+  it('finds sunrise on a Taveuni run unwrapped across 180° (lib/geo), as on one beside it', () => {
+    // A 3 h run from 04:00 local (UTC+12) on 2026-09-13, east across the antimeridian.
+    const start = Date.UTC(2026, 8, 12, 16);
+    const n = 100;
+    const track = (lonAt: (f: number) => number): TimedRunTrack => ({
+      lat: Float64Array.from({ length: n }, () => -16.86),
+      lon: Float64Array.from({ length: n }, (_, i) => lonAt(i / (n - 1))),
+      cumulative: Float64Array.from({ length: n }, (_, i) => (i / (n - 1)) * 15_000),
+      time: Float64Array.from({ length: n }, (_, i) => start + (i / (n - 1)) * 3 * 3_600_000),
+    });
+    const unwrapped = sunriseAlongRun({ track: track((f) => 179.97 + 0.06 * f) });
+    // The same run kept just west of the line (sunrise moves ~4 s per 0.06°).
+    const beside = sunriseAlongRun({ track: track(() => 179.97) });
+    expect(unwrapped).not.toBeNull();
+    expect(minutesApart(unwrapped?.time ?? 0, beside?.time ?? NaN)).toBeLessThan(1);
+    // Near the equinox: about 6 h before solar noon at 180° (00:00 UTC), less the equation of
+    // time: about 17:57 UTC on the 12th.
+    expect(minutesApart(unwrapped?.time ?? 0, Date.UTC(2026, 8, 12, 17, 57))).toBeLessThan(5);
+  });
 });
 
 describe('formatClock', () => {

@@ -20,20 +20,20 @@ Worker deploy.
 One component per task, simplest first. Each: implementation sub-agent (own worktree) →
 verification sub-agent → merge on PASS. Max three rounds.
 
-| Done | Component        | Rounds | Notes                                                                                                       |
-| ---- | ---------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
-| [x]  | Button           | 1      | Four variants, md/lg, link form; widths identical to the canvas buttons; keyboard verified in Chromium.     |
-| [x]  | Wordmark         | 1      | Name 30/800/62%, optional mono tagline; matches the Upload header pixel-for-pixel.                          |
-| [x]  | StatTile         | 2      | Label/value/unit in dl semantics with StatGrid; emphasised unit uses --route-text; 0px from the Main frame. |
-| [ ]  | Segmented        |        |                                                                                                             |
-| [x]  | Checkbox         | 1      | Native checkbox in a 44px label row; within 0px of the PosterMode stats row; keyboard verified.             |
-| [ ]  | TextField        |        |                                                                                                             |
-| [ ]  | Slider           |        |                                                                                                             |
-| [ ]  | Marker           |        |                                                                                                             |
-| [ ]  | SizePicker       |        |                                                                                                             |
-| [ ]  | StylePicker      |        |                                                                                                             |
-| [ ]  | Dropzone         |        |                                                                                                             |
-| [ ]  | ElevationProfile |        |                                                                                                             |
+| Done | Component        | Rounds | Notes                                                                                                               |
+| ---- | ---------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| [x]  | Button           | 1      | Four variants, md/lg, link form; widths identical to the canvas buttons; keyboard verified in Chromium.             |
+| [x]  | Wordmark         | 1      | Name 30/800/62%, optional mono tagline; matches the Upload header pixel-for-pixel.                                  |
+| [x]  | StatTile         | 2      | Label/value/unit in dl semantics with StatGrid; emphasised unit uses --route-text; 0px from the Main frame.         |
+| [x]  | Segmented        | 2      | Native radios in a radiogroup; 40px drawn, 44x44 hit area per segment; NoInfer value typing; 0.4px from the canvas. |
+| [x]  | Checkbox         | 1      | Native checkbox in a 44px label row; within 0px of the PosterMode stats row; keyboard verified.                     |
+| [ ]  | TextField        |        |                                                                                                                     |
+| [ ]  | Slider           |        |                                                                                                                     |
+| [ ]  | Marker           |        |                                                                                                                     |
+| [ ]  | SizePicker       |        |                                                                                                                     |
+| [ ]  | StylePicker      |        |                                                                                                                     |
+| [ ]  | Dropzone         |        |                                                                                                                     |
+| [ ]  | ElevationProfile |        |                                                                                                                     |
 
 ## 2 Layout
 

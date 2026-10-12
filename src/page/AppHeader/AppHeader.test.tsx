@@ -1,0 +1,122 @@
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { expectNoAxeViolations } from '../../test/axe';
+import { AppHeader } from './AppHeader';
+import { PosterNav } from './PosterNav';
+import { UploadNav } from './UploadNav';
+import { ViewNav } from './ViewNav';
+
+function viewNavProps() {
+  return {
+    units: 'metric' as const,
+    onUnitsChange: vi.fn(),
+    onNewFile: vi.fn(),
+    onMakePoster: vi.fn(),
+  };
+}
+
+describe('AppHeader', () => {
+  it('is the banner landmark with the wordmark', () => {
+    render(<AppHeader state="upload" />);
+    const banner = screen.getByRole('banner');
+    expect(within(banner).getByText('Vert')).toBeDefined();
+    expect(within(banner).queryByRole('heading')).toBeNull();
+  });
+
+  it('shows the tagline for each state', () => {
+    const { rerender } = render(<AppHeader state="upload" />);
+    expect(screen.getByText('DROP A GPX. GET A POSTER.')).toBeDefined();
+
+    rerender(<AppHeader state="view" />);
+    expect(screen.getByText('TRAIL RUNS AS TERRAIN')).toBeDefined();
+
+    rerender(<AppHeader state="poster" routeName="Coosa Backcountry Loop" />);
+    expect(screen.getByText('POSTER · COOSA BACKCOUNTRY LOOP')).toBeDefined();
+  });
+
+  it('renders its children on the right', () => {
+    render(
+      <AppHeader state="poster" routeName="Loop">
+        <PosterNav onBack={vi.fn()} />
+      </AppHeader>,
+    );
+    const banner = screen.getByRole('banner');
+    expect(within(banner).getByRole('button', { name: 'Back to the run' })).toBeDefined();
+  });
+});
+
+describe('UploadNav', () => {
+  it('has About as a button and GitHub as a link, in a named nav', () => {
+    render(<UploadNav onAbout={vi.fn()} />);
+    const nav = screen.getByRole('navigation', { name: 'Site' });
+    expect(within(nav).getByRole('button', { name: 'About' })).toBeDefined();
+    const github = within(nav).getByRole<HTMLAnchorElement>('link', { name: 'GitHub' });
+    expect(github.getAttribute('href')).toBe('https://github.com/geekplux');
+  });
+
+  it('calls onAbout', () => {
+    const onAbout = vi.fn();
+    render(<UploadNav onAbout={onAbout} />);
+    fireEvent.click(screen.getByRole('button', { name: 'About' }));
+    expect(onAbout).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ViewNav', () => {
+  it('has the Units group and both buttons', () => {
+    render(<ViewNav {...viewNavProps()} />);
+    expect(screen.getByRole('radiogroup', { name: 'Units' })).toBeDefined();
+    expect(screen.getByRole<HTMLInputElement>('radio', { name: 'km' }).checked).toBe(true);
+    expect(screen.getByRole<HTMLInputElement>('radio', { name: 'mi' }).checked).toBe(false);
+    expect(screen.getByRole('button', { name: 'New file' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Make a poster' })).toBeDefined();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('calls its callbacks', () => {
+    const props = viewNavProps();
+    render(<ViewNav {...props} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'mi' }));
+    expect(props.onUnitsChange).toHaveBeenCalledWith('imperial');
+    fireEvent.click(screen.getByRole('button', { name: 'New file' }));
+    expect(props.onNewFile).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
+    expect(props.onMakePoster).toHaveBeenCalledOnce();
+  });
+});
+
+describe('PosterNav', () => {
+  it('calls onBack', () => {
+    const onBack = vi.fn();
+    render(<PosterNav onBack={onBack} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AppHeader accessibility', () => {
+  it('has no axe violations in each state', async () => {
+    const upload = render(
+      <AppHeader state="upload">
+        <UploadNav onAbout={vi.fn()} />
+      </AppHeader>,
+    );
+    await expectNoAxeViolations(upload.container);
+    upload.unmount();
+
+    const view = render(
+      <AppHeader state="view">
+        <ViewNav {...viewNavProps()} />
+      </AppHeader>,
+    );
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+
+    const poster = render(
+      <AppHeader state="poster" routeName="Loop">
+        <PosterNav onBack={vi.fn()} />
+      </AppHeader>,
+    );
+    await expectNoAxeViolations(poster.container);
+  });
+});

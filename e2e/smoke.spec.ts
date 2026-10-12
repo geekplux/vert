@@ -7,7 +7,9 @@ test('the app loads without requesting anything from another origin', async ({ p
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Vert' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Your run, as terrain.' }),
+  ).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
 
   // Privacy and self-hosting: no CDN, no analytics, no third-party fonts.

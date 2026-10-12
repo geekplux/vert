@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { profilePaths, scaleProfile } from '../components/ElevationProfile/profileGeometry';
+import { plotProfile, profilePaths } from '../components/ElevationProfile/profileGeometry';
 import { SHARE_PROFILE_GAP, SHARE_PROFILE_HEIGHT, figureBoxRule, posterLayout } from './layout';
 import type { FigureBoxRule } from './layout';
 import type { PosterSize } from './sizes';
@@ -168,7 +168,10 @@ function FigureSlot({ rule, kind, onFigureBox, children }: FigureSlotProps) {
 }
 
 function useProfileArea(profile: readonly ProfilePoint[]): string {
-  return useMemo(() => profilePaths(profile, scaleProfile(profile)).area, [profile]);
+  return useMemo(() => {
+    const plot = plotProfile(profile);
+    return profilePaths(plot.points, plot.scale).area;
+  }, [profile]);
 }
 
 interface LayoutProps {
@@ -227,12 +230,13 @@ function PrintLayout({ content, figure }: LayoutProps) {
 }
 
 /**
- * "[SAMPLE DATA · ][<subtitle> · ]ELEVATION ×1.6" on one line (the text of `elevationNote`). Only
- * the subtitle truncates, so the sample note and the exaggeration always stay readable.
+ * "[SAMPLE DATA · ][<subtitle> · ][ELEVATION FROM TERRAIN DATA · ]ELEVATION ×1.6" on one line (the
+ * text of `elevationNote`). Only the subtitle truncates, so the sample note, the terrain note and
+ * the exaggeration always stay readable.
  */
 function PrintFooterNote({ content }: { content: PosterContent }) {
-  const { isSample, subtitle, exaggeration } = content;
-  const elevation = elevationNote({ isSample: false, exaggeration });
+  const { isSample, subtitle, exaggeration, elevationSource } = content;
+  const elevation = elevationNote({ isSample: false, exaggeration, elevationSource });
   return (
     <span className={styles.footerLeft}>
       {isSample && <span className={styles.keep}>SAMPLE DATA · </span>}

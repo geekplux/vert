@@ -26,8 +26,28 @@ export const VIEW_H = 120;
 /** The lowest point sits at y = 110 and the highest at y = 15, as in the canvas. */
 export const Y_BOTTOM = 110;
 export const Y_TOP = 15;
-/** A flat profile (min == max) is drawn as a centred line. */
-export const Y_FLAT = VIEW_H / 2;
+/** A flat profile is drawn as a line half-way up the plot (see {@link minimumSpan}). */
+export const Y_FLAT = (Y_BOTTOM + Y_TOP) / 2;
+
+/**
+ * The least elevation span (metres) a profile is drawn over, whatever the run's own range: a flat
+ * city loop with a metre of GPS noise must read as flat, not as full-height mountains.
+ */
+export const MIN_SPAN_M = 100;
+/**
+ * …or this grade over the route's length, when larger (1%: 200 m over a 20 km run, 1,000 m over
+ * 100 km). 1% keeps long mountain ultras as they were: the CCC's 1,521 m range is over its 994 m.
+ */
+export const MIN_SPAN_GRADE = 0.01;
+/**
+ * Elevation steps in GPX files (whole metres on many watches and course files), the size the
+ * plotted line is smoothed against.
+ */
+export const QUANTUM_M = 1;
+/** Drawn spans at least this tall (m) are never smoothed: a metre is under 0.5 px at 140 px. */
+export const SMOOTH_BELOW_SPAN_M = 300;
+/** The smoothing reaches at most this fraction of the points on either side. */
+const MAX_SMOOTH_FRACTION = 0.05;
 
 export const M_PER_KM = 1000;
 export const M_PER_MI = 1609.344;
@@ -36,8 +56,15 @@ export const FT_PER_M = 3.28084;
 export interface ProfileScale {
   /** Route length in metres (distance of the last point); 0 for fewer than two points. */
   total: number;
+  /** The run's own lowest and highest elevation. */
   minEle: number;
   maxEle: number;
+  /**
+   * The elevations at the bottom (y 110) and top (y 15) of the plot: the run's range, widened to
+   * {@link minimumSpan} around its middle when that is smaller.
+   */
+  bottomEle: number;
+  topEle: number;
   /** Distance (m) → x in viewBox units, clamped to [0, VIEW_W]. */
   x: (d: number) => number;
   /** Elevation (m) → y in viewBox units. */
@@ -46,7 +73,20 @@ export interface ProfileScale {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-/** Builds the distance and elevation scales for a profile. Safe for empty and flat input. */
+/**
+ * The least span a profile of `total` metres is drawn over: {@link MIN_SPAN_M}, or
+ * {@link MIN_SPAN_GRADE} of the length when that is more. Normal trail runs (hundreds of metres of
+ * range) are well above it and draw exactly as before.
+ */
+export function minimumSpan(total: number): number {
+  return Math.max(MIN_SPAN_M, MIN_SPAN_GRADE * Math.max(0, total));
+}
+
+/**
+ * Builds the distance and elevation scales for a profile. Safe for empty and flat input. A range
+ * smaller than {@link minimumSpan} is drawn centred in that span, so a flat run is a flat line
+ * half-way up and a gentle climb a gentle slope.
+ */
 export function scaleProfile(points: readonly ProfilePoint[]): ProfileScale {
   const last = points[points.length - 1];
   const total = points.length >= 2 && last ? Math.max(0, last.d) : 0;
@@ -60,14 +100,60 @@ export function scaleProfile(points: readonly ProfilePoint[]): ProfileScale {
     minEle = 0;
     maxEle = 0;
   }
-  const range = maxEle - minEle;
+  const span = Math.max(maxEle - minEle, minimumSpan(total));
+  const middle = (minEle + maxEle) / 2;
+  const bottomEle = maxEle - minEle >= span ? minEle : middle - span / 2;
+  const topEle = bottomEle + span;
   return {
     total,
     minEle,
     maxEle,
+    bottomEle,
+    topEle,
     x: (d) => (total > 0 ? clamp((d / total) * VIEW_W, 0, VIEW_W) : 0),
-    y: (ele) => (range > 0 ? Y_BOTTOM - ((ele - minEle) / range) * (Y_BOTTOM - Y_TOP) : Y_FLAT),
+    y: (ele) => Y_BOTTOM - ((ele - bottomEle) / span) * (Y_BOTTOM - Y_TOP),
   };
+}
+
+/**
+ * The points as drawn: on a short span (under {@link SMOOTH_BELOW_SPAN_M}) a centred moving
+ * average removes the stairs whole-metre elevations draw, reaching ±4 quanta's worth of the plot
+ * (`4 · QUANTUM_M / span` of the points each side, at most 5%). The ends stay where they are. Taller
+ * spans, every normal trail run, are returned as they are. Only the line is smoothed: the stats,
+ * readouts and climbs keep the real values. Expects evenly spaced points (the run's profile).
+ */
+export function smoothForPlot(
+  points: readonly ProfilePoint[],
+  scale: Pick<ProfileScale, 'bottomEle' | 'topEle'>,
+): readonly ProfilePoint[] {
+  const n = points.length;
+  const span = scale.topEle - scale.bottomEle;
+  if (n < 5 || !(span > 0) || span >= SMOOTH_BELOW_SPAN_M) return points;
+  const radius = Math.min(
+    Math.floor((n * 4 * QUANTUM_M) / span),
+    Math.floor(n * MAX_SMOOTH_FRACTION),
+  );
+  if (radius < 2) return points;
+  const prefix = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) prefix[i + 1] = (prefix[i] ?? 0) + (points[i]?.ele ?? 0);
+  return points.map((point, i) => {
+    // Symmetric, shrinking at the ends so the first and last points keep their elevation.
+    const r = Math.min(radius, i, n - 1 - i);
+    const sum = (prefix[i + r + 1] ?? 0) - (prefix[i - r] ?? 0);
+    return { d: point.d, ele: sum / (2 * r + 1) };
+  });
+}
+
+/** What a profile drawing needs: its scales and the points as drawn ({@link smoothForPlot}). */
+export interface ProfilePlot {
+  scale: ProfileScale;
+  points: readonly ProfilePoint[];
+}
+
+/** Scales a profile and smooths it for drawing. Every elevation profile Vert draws uses this. */
+export function plotProfile(points: readonly ProfilePoint[]): ProfilePlot {
+  const scale = scaleProfile(points);
+  return { scale, points: smoothForPlot(points, scale) };
 }
 
 /** Two decimals is well under a pixel at any width the profile is drawn. */

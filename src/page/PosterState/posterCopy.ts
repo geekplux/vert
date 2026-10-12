@@ -2,7 +2,7 @@
  * Poster mode's data-driven copy: the download file name and button labels, and the size's use.
  */
 import type { PosterSize, PosterSizeId } from '../../poster/sizes';
-import type { PosterStyleOption } from '../../poster/styles';
+import type { PosterStyleId, PosterStyleOption } from '../../poster/styles';
 
 /** Longest slug the file name carries, in code points (cut at a grapheme boundary). */
 const SLUG_MAX = 60;
@@ -137,13 +137,25 @@ export function slugify(text: string, maxBytes = Infinity): string {
   return capSlug(slug, SLUG_MAX, maxBytes);
 }
 
+/** Each style's name in a file name, so A, B and E downloads of one run never clash. */
+export const STYLE_FILE_SLUGS: Readonly<Record<PosterStyleId, string>> = {
+  A: 'trail-sign',
+  B: 'night-ridge',
+  E: 'survey-quad',
+};
+
 /**
- * The download's file name: "vert-coosa-backcountry-trail-18x24.png" from the poster's title and
- * size ("vert-18x24.png" when the title has no letters or digits), at most
- * {@link FILE_NAME_MAX_BYTES} UTF-8 bytes.
+ * The download's file name: "vert-coosa-backcountry-trail-trail-sign-18x24.png" from the poster's
+ * title, style and size ("vert-trail-sign-18x24.png" when the title has no letters or digits), at
+ * most {@link FILE_NAME_MAX_BYTES} UTF-8 bytes (the title is cut, never the style or size).
  */
-export function posterFileName(title: string, sizeId: PosterSizeId, extension: 'png' | 'pdf') {
-  const suffix = `-${sizeId}.${extension}`;
+export function posterFileName(
+  title: string,
+  styleId: PosterStyleId,
+  sizeId: PosterSizeId,
+  extension: 'png' | 'pdf',
+) {
+  const suffix = `-${STYLE_FILE_SLUGS[styleId]}-${sizeId}.${extension}`;
   const slug = slugify(title, FILE_NAME_MAX_BYTES - byteLength(`vert-${suffix}`));
   return ['vert', slug].filter(Boolean).join('-') + suffix;
 }

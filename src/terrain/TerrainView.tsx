@@ -111,9 +111,9 @@ export function TerrainView({
   const hintId = useId();
 
   // Latest values for callbacks and for the heightfield effect, without re-running effects.
-  const latest = useRef({ exaggeration, view, initialCamera, onReady, onRenderFrame });
+  const latest = useRef({ exaggeration, view, initialCamera, onReady, onRenderFrame, track });
   useEffect(() => {
-    latest.current = { exaggeration, view, initialCamera, onReady, onRenderFrame };
+    latest.current = { exaggeration, view, initialCamera, onReady, onRenderFrame, track };
   });
 
   // One stage per mount: renderer, camera, controls, resize observer, key handling.
@@ -169,6 +169,9 @@ export function TerrainView({
       view: latest.current.view,
       camera: latest.current.initialCamera,
       reducedMotion,
+      // The current track, so a track that changed in the same render (terrain elevations for a
+      // GPX without <ele>) builds the route once, here, and setTrack below finds nothing to do.
+      track: latest.current.track,
       onFirstFrame: () => {
         canvas.dataset.visible = 'true';
         latest.current.onReady?.();
@@ -180,7 +183,8 @@ export function TerrainView({
     stageRef.current?.setExaggeration(exaggeration);
   }, [exaggeration]);
 
-  // After the heightfield effect, so a new heightfield and track build the route once each.
+  // After the heightfield effect, so a new heightfield and track build the route once each (and a
+  // track that arrived with the heightfield was already taken by show()).
   useEffect(() => {
     stageRef.current?.setTrack(track);
   }, [track, createRenderer]);

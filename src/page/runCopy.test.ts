@@ -12,7 +12,7 @@ describe('runDateLine', () => {
 describe('runPaceAt', () => {
   it('reads pace from the track, and nothing for a timeless run', () => {
     // The placeholder track runs at an even 11,093 s over 21,480 m: 516.4 s/km.
-    expect(runPaceAt(SAMPLE_RUN, 10_000)).toBeCloseTo(11_093 / 21.48, 0);
+    expect(runPaceAt(SAMPLE_RUN, 10_000)).toBeCloseTo(11_098 / 21.48, 0);
     expect(runPaceAt({ ...SAMPLE_RUN, hasTime: false }, 10_000)).toBeNull();
   });
 

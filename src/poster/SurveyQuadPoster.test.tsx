@@ -123,7 +123,7 @@ describe('SurveyQuadPoster', () => {
       'MAPPED FROM GPX + PUBLIC ELEVATION DATASAT · 2026-10-03',
     );
     expect(slot('stats')?.textContent).toBe(
-      'DISTANCE21.5 kmASCENT1,092 mTIME3:04:53HIGH POINT1,267 m',
+      'DISTANCE21.5 kmASCENT1,102 mTIME3:04:58HIGH POINT1,267 m',
     );
     expect(slot('legend')?.textContent).toBe(
       'Route runIndex contourIntermediate contourStart and finish',
@@ -200,7 +200,7 @@ describe('SurveyQuadPoster', () => {
       },
     });
     expect(slot('subtitle')?.textContent).toBe('Vogel State Park');
-    expect(slot('stats')?.textContent).toBe('DISTANCE21.5 kmASCENT1,092 m');
+    expect(slot('stats')?.textContent).toBe('DISTANCE21.5 kmASCENT1,102 m');
     expect(slot('stats')?.style.getPropertyValue('--stat-columns')).toBe('2');
   });
 

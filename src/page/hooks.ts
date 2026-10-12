@@ -15,13 +15,19 @@
  * without waiting for the View to mount. A new run, New file or unmounting aborts the build.
  * `useTerrain()` reports `loading`, `ready` (with any tiles that failed and were filled in) or
  * `error` (with a message); `useRetryTerrain()` builds it again.
+ *
+ * A run whose GPX has no elevations gets them from that grid as soon as it is ready
+ * (`withTerrainElevation`): `useRun()` then returns the run with its profile, vert, high point and
+ * climbs filled in and `elevationSource: 'terrain'`, in the same render that reports the terrain
+ * `ready`, so the View never draws the route twice. Before that, or if the terrain fails, the
+ * elevation figures stay unknown (`NaN`, shown as "–").
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useRef, useState } from 'react';
 import type { Dispatch, ReactNode } from 'react';
 import { tilesForBounds } from '../lib/geo';
 import type { Bounds } from '../lib/geo';
-import { HeightfieldError, buildHeightfield } from '../terrain/heightfield';
+import { HeightfieldError, buildHeightfield, elevationAt } from '../terrain/heightfield';
 import type { Heightfield } from '../terrain/heightfield';
 import { isAbortError } from '../terrain/tiles';
 import { PERF_MARKS, perfMark } from './perfMarks';
@@ -32,6 +38,7 @@ import { preloadTerrainView } from './terrainChunk';
 import type { Run, Terrain } from './types';
 import { GENERIC_LOAD_ERROR, RunLoadError } from './errors';
 import { realLoadRun } from '../gpx/loadRun';
+import { withTerrainElevation } from '../gpx/terrainElevation';
 
 /** What to load: a file the user chose, or the built-in sample run. */
 export type RunSource =
@@ -229,7 +236,8 @@ export function RunProvider({
   loadTerrain,
   loadFigureTerrain,
 }: RunProviderProps) {
-  const [run, setRun] = useState<Run | null>(initialRun);
+  // The run as loaded; `run` below is this one with terrain elevations when the file had none.
+  const [loadedRun, setRun] = useState<Run | null>(initialRun);
   const pending = useRef<AbortController | null>(null);
   const usePlaceholder = schedule !== undefined || delayMs !== undefined;
   const placeholder = useMemo(
@@ -245,7 +253,8 @@ export function RunProvider({
   const [attempt, setAttempt] = useState(0);
   const [terrainResult, setTerrainResult] = useState<TerrainResult | null>(null);
   useEffect(() => {
-    if (!run) return undefined;
+    if (!loadedRun) return undefined;
+    const run = loadedRun;
     const controller = new AbortController();
     const { signal } = controller;
     const settle = (terrain: Terrain) => {
@@ -276,13 +285,22 @@ export function RunProvider({
     return () => {
       controller.abort();
     };
-  }, [run, attempt, terrainLoader]);
+  }, [loadedRun, attempt, terrainLoader]);
 
-  const terrain: Terrain = !run
+  const terrain: Terrain = !loadedRun
     ? IDLE_TERRAIN
-    : terrainResult?.run === run && terrainResult.attempt === attempt
+    : terrainResult?.run === loadedRun && terrainResult.attempt === attempt
       ? terrainResult.terrain
       : LOADING_TERRAIN;
+
+  // No <ele> in the file: sample the elevations from the terrain grid once it is ready (O(n)).
+  const run = useMemo(
+    () =>
+      loadedRun && !loadedRun.hasElevation && terrain.status === 'ready'
+        ? withTerrainElevation(loadedRun, (lon, lat) => elevationAt(terrain.heightfield, lon, lat))
+        : loadedRun,
+    [loadedRun, terrain],
+  );
 
   const retryTerrain = useCallback(() => {
     setAttempt((n) => n + 1);

@@ -12,15 +12,16 @@ import {
 } from '../lib/format';
 import type { Formatted, Units } from '../lib/format';
 import type { PosterPrefs, Prefs } from '../page/state';
-import type { ProfilePoint, Run } from '../page/types';
+import type { ElevationSource, ProfilePoint, Run } from '../page/types';
 
 /** The poster's stats, only the ones switched on, in display order. */
 export interface PosterStats {
   readonly distance?: Formatted;
-  /** Signed: "+1,092 m". */
+  /** Signed: "+1,102 m". Absent when the run's elevation is unknown (no `<ele>`, no terrain yet). */
   readonly vert?: Formatted;
-  /** Moving time, "3:04:53". Absent when the run has no time data. */
+  /** Moving time, "3:04:58". Absent when the run has no time data. */
   readonly time?: string;
+  /** Absent when the run's elevation is unknown. */
   readonly highPoint?: Formatted;
 }
 
@@ -46,7 +47,11 @@ export interface PosterContent {
   /** The author's handle; empty for none (the footer then shows the site URL). */
   readonly signature: string;
   readonly stats: PosterStats;
+  /** The route's length, metres, whatever stats are shown (the profile axis, sunrise position). */
+  readonly distance: number;
   readonly profile: readonly ProfilePoint[];
+  /** Where the elevations come from (`Run.elevationSource`); `null` while unknown. */
+  readonly elevationSource: ElevationSource | null;
   readonly units: Units;
   readonly isSample: boolean;
   /** Vertical exaggeration the terrain figure is drawn with. */
@@ -88,7 +93,8 @@ function dateLine(run: Run): string {
  * The poster content for a run and the current preferences: title defaults to the run name,
  * subtitle to none (a subtitle equal to the date line counts as none, since the date is always
  * shown); only the stats switched on are included, in the display units; a run
- * without time data has no time stat even when it is switched on.
+ * without time data has no time stat even when it is switched on, and one whose elevation is
+ * unknown (no `<ele>` and no terrain yet) has no vert or high point, so no poster prints "–".
  */
 export function posterContentFromRun(run: Run, prefs: PosterContentPrefs): PosterContent {
   const { units, exaggeration, poster } = prefs;
@@ -101,18 +107,24 @@ export function posterContentFromRun(run: Run, prefs: PosterContentPrefs): Poste
     highPoint?: Formatted;
   } = {};
   if (shown.distance) stats.distance = formatDistance(run.distance, units);
-  if (shown.vert) stats.vert = formatElevation(run.vert, units, { signed: true });
+  if (shown.vert && Number.isFinite(run.vert)) {
+    stats.vert = formatElevation(run.vert, units, { signed: true });
+  }
   if (shown.time && Number.isFinite(run.movingTime) && run.movingTime > 0) {
     stats.time = formatDuration(run.movingTime);
   }
-  if (shown.highPoint) stats.highPoint = formatElevation(run.highPoint, units);
+  if (shown.highPoint && Number.isFinite(run.highPoint)) {
+    stats.highPoint = formatElevation(run.highPoint, units);
+  }
   return {
     title: poster.title.trim() || run.name,
     subtitle: poster.subtitle.trim() === date ? '' : poster.subtitle.trim(),
     date,
     signature: clampSignature(poster.signature),
     stats,
+    distance: run.distance,
     profile: run.profile,
+    elevationSource: run.elevationSource,
     units,
     isSample: run.isSample,
     exaggeration,
@@ -129,16 +141,30 @@ export function posterStatList(stats: PosterStats): [PosterStatKey, string, stri
   return list;
 }
 
+/** The small print a poster adds when its elevations were sampled from the terrain… */
+export const TERRAIN_ELEVATION_NOTE = 'ELEVATION FROM TERRAIN DATA';
+/** …or when the terrain filled gaps in the file's own. */
+export const MIXED_ELEVATION_NOTE = 'ELEVATION PARTLY FROM TERRAIN DATA';
+
 /**
- * The print footer's left side: "[SAMPLE DATA · ][<subtitle> · ]ELEVATION ×1.6". The sample note
- * only for the sample run, the subtitle only when set.
+ * The print footer's left side: "[SAMPLE DATA · ][<subtitle> · ][ELEVATION FROM TERRAIN DATA · ]
+ * ELEVATION ×1.6". The sample note only for the sample run, the subtitle only when set, the
+ * terrain note only when the terrain supplied the elevations ("PARTLY" when it filled gaps).
  */
 export function elevationNote(
-  content: Pick<PosterContent, 'isSample' | 'exaggeration'> & { subtitle?: string },
+  content: Pick<PosterContent, 'isSample' | 'exaggeration'> & {
+    subtitle?: string;
+    elevationSource?: ElevationSource | null;
+  },
 ): string {
   return [
     content.isSample ? 'SAMPLE DATA' : '',
     content.subtitle ?? '',
+    content.elevationSource === 'terrain'
+      ? TERRAIN_ELEVATION_NOTE
+      : content.elevationSource === 'mixed'
+        ? MIXED_ELEVATION_NOTE
+        : '',
     `ELEVATION ×${formatNumber(content.exaggeration, 1)}`,
   ]
     .filter(Boolean)
@@ -152,7 +178,7 @@ export function shareDateLine(content: Pick<PosterContent, 'date' | 'subtitle'>)
 
 /**
  * The poster's accessible name, e.g. "Poster: Coosa Backcountry Loop, SAT · 2026-10-03, Vogel SP.
- * Distance 21.5 km, vert +1,092 m, time 3:04:53. Sample data. By @geekplux."
+ * Distance 21.5 km, vert +1,102 m, time 3:04:58. Sample data. By @geekplux."
  */
 export function posterAriaLabel(content: PosterContent): string {
   const head = [content.title, content.date, content.subtitle].filter(Boolean).join(', ');
@@ -165,6 +191,8 @@ export function posterAriaLabel(content: PosterContent): string {
   const parts = [`Poster: ${head}.`];
   if (stats) parts.push(`${stats}.`);
   if (content.isSample) parts.push('Sample data.');
+  if (content.elevationSource === 'terrain') parts.push('Elevation from terrain data.');
+  if (content.elevationSource === 'mixed') parts.push('Elevation partly from terrain data.');
   if (content.signature) parts.push(`By ${content.signature}.`);
   return parts.join(' ');
 }

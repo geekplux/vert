@@ -253,7 +253,7 @@ describe('PosterState', () => {
         screen={{ name: 'poster', runId: SAMPLE_RUN.id, notice: null }}
         prefs={{
           ...state.prefs,
-          poster: { ...state.prefs.poster, size: 'a3', title: 'Côte Loop' },
+          poster: { ...state.prefs.poster, size: 'a3', title: 'Côte Loop', style: 'B' },
         }}
         dispatch={dispatch}
         exporter={exporter}
@@ -263,13 +263,13 @@ describe('PosterState', () => {
     expect(dispatch.mock.calls.map(([action]) => action)).toEqual([
       {
         type: 'EXPORT_STARTED',
-        fileName: 'vert-coosa-backcountry-trail-18x24.png',
+        fileName: 'vert-coosa-backcountry-trail-trail-sign-18x24.png',
       },
       {
         type: 'EXPORT_STARTED',
-        fileName: 'vert-coosa-backcountry-trail-18x24.pdf',
+        fileName: 'vert-coosa-backcountry-trail-trail-sign-18x24.pdf',
       },
-      { type: 'EXPORT_STARTED', fileName: 'vert-cote-loop-a3.png' },
+      { type: 'EXPORT_STARTED', fileName: 'vert-cote-loop-night-ridge-a3.png' },
     ]);
   });
 

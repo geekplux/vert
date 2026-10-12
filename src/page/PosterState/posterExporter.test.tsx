@@ -232,7 +232,7 @@ describe('posterExporter', () => {
 
     const result = await t.exporter(job, (p) => progress.push(p), new AbortController().signal);
 
-    expect(result).toEqual({ fileName: 'vert-coosa-backcountry-trail-18x24.png' });
+    expect(result).toEqual({ fileName: 'vert-coosa-backcountry-trail-trail-sign-18x24.png' });
     const [options] = t.engine.calls;
     if (!options) throw new Error('exportPoster was not called');
     expect(options).toMatchObject({
@@ -285,7 +285,9 @@ describe('posterExporter', () => {
     expect(t.renderer.scenes[0]?.heightfield).toBe(own);
     expect(t.renderer.scenes[0]?.track?.lat.length).toBe(drawn.lat.length);
     expect(t.engine.calls[0]?.format).toBe('pdf');
-    expect(t.engine.downloads[0]?.fileName).toBe('vert-coosa-backcountry-trail-18x24.pdf');
+    expect(t.engine.downloads[0]?.fileName).toBe(
+      'vert-coosa-backcountry-trail-trail-sign-18x24.pdf',
+    );
     // The View's grid was not needed.
     expect(t.loadTerrain).not.toHaveBeenCalled();
   });
@@ -352,7 +354,7 @@ describe('posterExporter', () => {
     await t.exporter(job, () => undefined, new AbortController().signal);
     const element = t.engine.calls[0]?.element;
     expect(element && props(element).exportScale).toBe(1);
-    expect(t.engine.downloads[0]?.fileName).toBe('vert-coosa-backcountry-trail-4x5.png');
+    expect(t.engine.downloads[0]?.fileName).toBe('vert-coosa-backcountry-trail-trail-sign-4x5.png');
   });
 
   it('stops on Cancel while the figure is still loading: no download, renderer released', async () => {

@@ -107,7 +107,7 @@ describe('nightRidgeFigureData', () => {
     expect(data.ridges).toBeNull();
     expect(data.startClock).toBe('07:10');
     expect(data.sunrise?.clock).toMatch(/^07:3[0-4]$/);
-    // ~22 min into an even 3:04:53 over 21.48 km: about km 2.6.
+    // ~22 min into an even 3:04:58 over 21.48 km: about km 2.6.
     expect(data.sunrise?.distance).toBeGreaterThan(2000);
     expect(data.sunrise?.distance).toBeLessThan(3200);
   });

@@ -67,6 +67,7 @@ export function handleMessage(request: ParseRequest): HandledMessage {
       points.cumulative.buffer,
     ];
     if (points.ele) transfer.push(points.ele.buffer);
+    if (points.partialEle) transfer.push(points.partialEle.buffer);
     if (points.time) transfer.push(points.time.buffer);
     return { response: { id, ok: true, run, points }, transfer };
   } catch (error) {
@@ -129,6 +130,7 @@ export function buildRun(
     isSample,
     hasTime: stats.time !== null,
     hasElevation: stats.hasElevation,
+    elevationSource: stats.hasElevation ? 'gpx' : null,
     distance: stats.distance,
     vert: orNaN(stats.ascent),
     descent: orNaN(stats.descent),
@@ -147,6 +149,7 @@ export function buildRun(
       // Continuous across the antimeridian, in the same representation as `bounds` (lib/geo).
       lon: unwrapLongitudes(points.map((p) => p.lon)),
       ele: stats.elevation,
+      partialEle: stats.partialElevation,
       cumulative: stats.cumulative,
       time: stats.time,
     },

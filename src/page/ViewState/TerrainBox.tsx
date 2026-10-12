@@ -52,8 +52,8 @@ export interface TerrainBoxProps {
   exaggeration: number;
   /** The canvas's accessible name (`terrainLabel`). */
   ariaLabel: string;
-  /** Legend's summit entry, e.g. "Summit 1,267 m". */
-  summit: string;
+  /** Legend's summit entry, e.g. "Summit 1,267 m"; `null` when the run has no summit (no ▲). */
+  summit: string | null;
   /** Legend's exaggeration entry, e.g. "Vertical ×1.6". */
   exaggerationLabel: string;
   /** Whether the flat (top-down) map is showing; the Flat map button's pressed state. */
@@ -188,10 +188,12 @@ export function TerrainBox({
           </span>
         </>
       )}
-      <span className={styles.entry}>
-        <Marker kind="summit" size={12} />
-        {summit}
-      </span>
+      {summit !== null && (
+        <span className={styles.entry}>
+          <Marker kind="summit" size={12} />
+          {summit}
+        </span>
+      )}
       <span className={styles.entry}>{exaggerationLabel}</span>
     </p>
   );

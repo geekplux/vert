@@ -15,7 +15,8 @@ import {
 } from '../../lib/format';
 import type { Units } from '../../lib/format';
 import { haversine } from '../../lib/geo';
-import type { ProfilePoint, Run, RunTrack } from '../types';
+import { hasSummit } from '../../lib/summit';
+import type { ProfilePoint, Run, RunTrack, TerrainStatus } from '../types';
 
 /** Half the window the readout's grade is measured over: ±50 m around the scrub point. */
 export const GRADE_HALF_WINDOW = 50;
@@ -101,9 +102,45 @@ export function readoutParts(
   return parts;
 }
 
-/** "Summit 1,267 m" for the legend chip. */
-export function summitText(run: Run, units: Units): string {
+/**
+ * "Summit 1,267 m" for the legend chip, or `null` when the run has no summit to mark (`hasSummit`:
+ * elevation unknown, or a high point under 10 m above the low point): the terrain draws no ▲ then.
+ */
+export function summitText(run: Run, units: Units): string | null {
+  if (!hasSummit(run.highPoint, run.lowPoint)) return null;
   return `Summit ${formatElevation(run.highPoint, units).text}`;
+}
+
+/** Under the stats when the terrain supplied every elevation (the file has none it can use). */
+export const TERRAIN_ELEVATION_TEXT =
+  'Elevation from terrain data. This file has no usable elevation.';
+/** …when the terrain filled long gaps in the file's own elevations. */
+export const MIXED_ELEVATION_TEXT = 'Elevation partly from terrain data, where this file has gaps.';
+/** …while the terrain is still loading. */
+export const PENDING_ELEVATION_TEXT =
+  'This file has no usable elevation. Reading it from the terrain…';
+export const PENDING_GAPS_TEXT = "This file's elevation has gaps. Filling them from the terrain…";
+/** …when the terrain could not load. */
+export const MISSING_ELEVATION_TEXT =
+  "This file has no usable elevation, and the terrain couldn't load.";
+export const MISSING_GAPS_TEXT =
+  "This file's elevation has gaps, and the terrain couldn't load to fill them.";
+
+/**
+ * The plain-words note under the stats about where the elevations come from: `null` for a file
+ * with complete elevations of its own; otherwise whether the terrain supplied all or part of them,
+ * is on its way, or failed (no usable elevation, or gaps in it: `track.partialEle`).
+ */
+export function elevationSourceText(
+  run: Pick<Run, 'elevationSource'> & { readonly track: Pick<RunTrack, 'partialEle'> },
+  terrainStatus: TerrainStatus,
+): string | null {
+  if (run.elevationSource === 'gpx') return null;
+  if (run.elevationSource === 'terrain') return TERRAIN_ELEVATION_TEXT;
+  if (run.elevationSource === 'mixed') return MIXED_ELEVATION_TEXT;
+  const gaps = run.track.partialEle != null;
+  if (terrainStatus === 'error') return gaps ? MISSING_GAPS_TEXT : MISSING_ELEVATION_TEXT;
+  return gaps ? PENDING_GAPS_TEXT : PENDING_ELEVATION_TEXT;
 }
 
 /** "Vertical ×1.6" for the legend chip. */
@@ -133,13 +170,15 @@ export function isLoop(track: Pick<RunTrack, 'lat' | 'lon'>): boolean {
  * The terrain's accessible name, describing the markers the terrain draws (src/terrain/markers.ts).
  * A loop: "3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and finish marked with a
  * circle, summit 1,267 m marked with a triangle". A point-to-point run: "…: 21.5 km from start to
- * finish, start marked with a circle, finish with a dotted circle, summit … with a triangle".
+ * finish, start marked with a circle, finish with a dotted circle, summit … with a triangle". A run
+ * with no summit to mark (`summitText` is null) leaves the summit out.
  */
 export function terrainLabel(run: Run, units: Units): string {
   const distance = formatDistance(run.distance, units).text;
-  const summit = formatElevation(run.highPoint, units).text;
   const route = isLoop(run.track)
     ? `${distance} loop, start and finish marked with a circle`
     : `${distance} from start to finish, start marked with a circle, finish with a dotted circle`;
+  if (!hasSummit(run.highPoint, run.lowPoint)) return `3D terrain of ${run.name}: ${route}`;
+  const summit = formatElevation(run.highPoint, units).text;
   return `3D terrain of ${run.name}: ${route}, summit ${summit} marked with a triangle`;
 }

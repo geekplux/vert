@@ -3,7 +3,7 @@ import { Dropzone } from '../../components';
 import { formatDistance, formatElevation } from '../../lib/format';
 import type { Units } from '../../lib/format';
 import { UploadLayout } from '../PageShell/UploadLayout';
-import { SAMPLE_RUN } from '../sample';
+import { SAMPLE_TOTALS } from '../sample';
 import type { UploadBusy, UploadScreen } from '../state';
 import sampleTerrain from './sample-terrain.svg';
 import styles from './UploadState.module.css';
@@ -21,10 +21,13 @@ export interface UploadStateProps {
   headingRef?: Ref<HTMLHeadingElement>;
 }
 
-/** "SAMPLE · 21.5 km · +1,092 m", from the sample run's data (not the canvas copy). */
+/**
+ * "SAMPLE · 21.5 km · +1,102 m": the loaded sample's own figures (`SAMPLE_TOTALS`, checked against
+ * the parsed GPX), so the chip matches the View; not the canvas copy.
+ */
 export function sampleChipText(units: Units): string {
-  const distance = formatDistance(SAMPLE_RUN.distance, units).text;
-  const vert = formatElevation(SAMPLE_RUN.vert, units, { signed: true }).text;
+  const distance = formatDistance(SAMPLE_TOTALS.distance, units).text;
+  const vert = formatElevation(SAMPLE_TOTALS.vert, units, { signed: true }).text;
   return `SAMPLE · ${distance} · ${vert}`;
 }
 

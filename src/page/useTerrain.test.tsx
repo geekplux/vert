@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HeightfieldError } from '../terrain/heightfield';
 import { TileDecodeError } from '../terrain/tiles';
 import type { Heightfield } from '../terrain/heightfield';
-import { hills } from '../terrain/testing';
+import { hills, makeTrack } from '../terrain/testing';
 import {
   RunProvider,
   TERRAIN_DECODE_ERROR,
@@ -238,5 +238,91 @@ describe('useTerrain lifecycle', () => {
     await settle();
     expect(result.current.terrain.status).toBe('loading');
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('elevations from the terrain', () => {
+  // 61 points over the hills, through the hill's top (34.714, -83.972) at index 40.
+  const corners: [number, number][] = [
+    [34.705, -83.995],
+    [34.71, -83.985],
+    [34.714, -83.972],
+    [34.71, -83.965],
+  ];
+  const track = makeTrack(
+    Array.from({ length: 61 }, (_, i): [number, number] => {
+      const k = Math.min(2, Math.floor(i / 20));
+      const f = (i - 20 * k) / 20;
+      const [aLat, aLon] = corners[k] ?? [0, 0];
+      const [bLat, bLon] = corners[k + 1] ?? [0, 0];
+      return [aLat + (bLat - aLat) * f, aLon + (bLon - aLon) * f];
+    }),
+  );
+  const NO_ELE: Run = {
+    ...SAMPLE_RUN,
+    id: 'no-ele',
+    isSample: false,
+    hasElevation: false,
+    elevationSource: null,
+    vert: NaN,
+    descent: NaN,
+    highPoint: NaN,
+    lowPoint: NaN,
+    profile: [],
+    climbs: [],
+    distance: track.cumulative.at(-1) ?? 0,
+    track,
+  };
+
+  it('fills a run without <ele> from the grid in the render that reports it ready', async () => {
+    const terrain = manualTerrain();
+    const seen: { status: string; source: string | null }[] = [];
+    function useProbe() {
+      const probe = useTerrainProbe();
+      seen.push({ status: probe.terrain.status, source: probe.run?.elevationSource ?? null });
+      return probe;
+    }
+    const { result } = renderHook(useProbe, {
+      wrapper: wrapper({ initialRun: NO_ELE, loadTerrain: terrain.loadTerrain }),
+    });
+    expect(result.current.run).toBe(NO_ELE);
+    expect(result.current.terrain.status).toBe('loading');
+
+    terrain.build(0).resolve(hills());
+    await settle();
+    const run = result.current.run;
+    expect(run?.elevationSource).toBe('terrain');
+    expect(run?.hasElevation).toBe(true);
+    expect(run?.id).toBe(NO_ELE.id);
+    expect(run?.highPoint).toBeGreaterThan(800);
+    expect(run?.vert).toBeGreaterThan(300);
+    expect(run?.profile.length).toBe(500);
+    expect(run?.track.ele).toHaveLength(61);
+    // Never "ready" with the unfilled run: the View draws the route once.
+    expect(seen.filter((s) => s.status === 'ready' && s.source !== 'terrain')).toEqual([]);
+    // The terrain is not built again for the filled run.
+    expect(terrain.builds).toHaveLength(1);
+  });
+
+  it('leaves the elevation unknown when the terrain fails', async () => {
+    const terrain = manualTerrain();
+    const { result } = renderHook(useTerrainProbe, {
+      wrapper: wrapper({ initialRun: NO_ELE, loadTerrain: terrain.loadTerrain }),
+    });
+    terrain.build(0).reject(new HeightfieldError([], new Error('offline')));
+    await settle();
+    expect(result.current.terrain.status).toBe('error');
+    expect(result.current.run).toBe(NO_ELE);
+  });
+
+  it('keeps a run with its own elevations as it is', async () => {
+    const terrain = manualTerrain();
+    const { result } = renderHook(useTerrainProbe, {
+      wrapper: wrapper({ initialRun: SAMPLE_RUN, loadTerrain: terrain.loadTerrain }),
+    });
+    terrain.build(0).resolve(hills());
+    await settle();
+    expect(result.current.terrain.status).toBe('ready');
+    expect(result.current.run).toBe(SAMPLE_RUN);
   });
 });

@@ -86,7 +86,7 @@ describe('Page', () => {
     await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
     fireEvent.click(screen.getByRole('radio', { name: 'mi' }));
     fireEvent.click(screen.getByRole('button', { name: 'New file' }));
-    expect(screen.getByText('SAMPLE · 13.3 mi · +3,583 ft')).toBeDefined();
+    expect(screen.getByText('SAMPLE · 13.3 mi · +3,615 ft')).toBeDefined();
   });
 
   it('has no axe violations in the View', async () => {

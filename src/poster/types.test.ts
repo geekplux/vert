@@ -59,15 +59,15 @@ describe('posterContentFromRun', () => {
     const content = posterContentFromRun(SAMPLE_RUN, prefs());
     expect(Object.keys(content.stats)).toEqual(['distance', 'vert', 'time']);
     expect(content.stats.distance?.text).toBe('21.5 km');
-    expect(content.stats.vert?.text).toBe('+1,092 m');
-    expect(content.stats.time).toBe('3:04:53');
+    expect(content.stats.vert?.text).toBe('+1,102 m');
+    expect(content.stats.time).toBe('3:04:58');
 
     const two = posterContentFromRun(
       SAMPLE_RUN,
       prefs({ stats: { ...ALL, time: false, distance: false } }),
     );
     expect(posterStatList(two.stats)).toEqual([
-      ['vert', 'VERT', '+1,092 m'],
+      ['vert', 'VERT', '+1,102 m'],
       ['highPoint', 'HIGH POINT', '1,267 m'],
     ]);
   });
@@ -76,7 +76,7 @@ describe('posterContentFromRun', () => {
     const content = posterContentFromRun(SAMPLE_RUN, prefs({ stats: ALL }, { units: 'imperial' }));
     expect(content.units).toBe('imperial');
     expect(content.stats.distance?.text).toBe('13.3 mi');
-    expect(content.stats.vert?.text).toBe('+3,583 ft');
+    expect(content.stats.vert?.text).toBe('+3,615 ft');
     expect(content.stats.highPoint?.text).toBe('4,157 ft');
   });
 
@@ -87,9 +87,37 @@ describe('posterContentFromRun', () => {
     expect(content.date).toBe('');
     expect(content.subtitle).toBe('');
   });
+
+  it('leaves out vert and high point while the elevation is unknown, never printing "–"', () => {
+    const run = {
+      ...SAMPLE_RUN,
+      hasElevation: false,
+      elevationSource: null,
+      vert: NaN,
+      highPoint: NaN,
+    };
+    const content = posterContentFromRun(run, prefs({ stats: ALL }));
+    expect(content.stats.vert).toBeUndefined();
+    expect(content.stats.highPoint).toBeUndefined();
+    expect(content.stats.distance?.text).toBe('21.5 km');
+    expect(content.distance).toBe(SAMPLE_RUN.distance);
+    expect(content.elevationSource).toBeNull();
+  });
 });
 
 describe('elevationNote', () => {
+  it('says when the elevations come from the terrain', () => {
+    expect(elevationNote({ isSample: false, exaggeration: 1.6, elevationSource: 'terrain' })).toBe(
+      'ELEVATION FROM TERRAIN DATA · ELEVATION ×1.6',
+    );
+    expect(elevationNote({ isSample: false, exaggeration: 1.6, elevationSource: 'mixed' })).toBe(
+      'ELEVATION PARTLY FROM TERRAIN DATA · ELEVATION ×1.6',
+    );
+    expect(elevationNote({ isSample: false, exaggeration: 1.6, elevationSource: 'gpx' })).toBe(
+      'ELEVATION ×1.6',
+    );
+  });
+
   it('adds the subtitle between the sample note and the elevation', () => {
     expect(elevationNote({ isSample: true, exaggeration: 1.6, subtitle: 'Vogel SP' })).toBe(
       'SAMPLE DATA · Vogel SP · ELEVATION ×1.6',
@@ -124,7 +152,7 @@ describe('posterAriaLabel', () => {
       prefs({ signature: '@geekplux', subtitle: 'Vogel SP' }),
     );
     expect(posterAriaLabel(content)).toBe(
-      `Poster: ${NAME}, SAT · 2026-10-03, Vogel SP. Distance 21.5 km, vert +1,092 m, time 3:04:53. Sample data. By @geekplux.`,
+      `Poster: ${NAME}, SAT · 2026-10-03, Vogel SP. Distance 21.5 km, vert +1,102 m, time 3:04:58. Sample data. By @geekplux.`,
     );
   });
 

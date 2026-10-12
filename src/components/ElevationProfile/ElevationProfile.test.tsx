@@ -13,10 +13,14 @@ import {
   defaultValueText,
   describeClimbs,
   elevationAt,
+  minimumSpan,
+  plotProfile,
   profilePaths,
   scaleProfile,
+  smoothForPlot,
 } from './profileGeometry';
 import { SAMPLE_CLIMBS, SAMPLE_POINTS, SAMPLE_TOTAL } from './sampleProfile';
+import { SAMPLE_RUN } from '../../page/sample';
 
 const labels = (ticks: { label: string }[]) => ticks.map((tick) => tick.label);
 
@@ -58,6 +62,72 @@ describe('profileGeometry', () => {
     expect(profilePaths(flat, scaleProfile(flat)).line).toBe(
       `M0,${String(Y_FLAT)} L1000,${String(Y_FLAT)}`,
     );
+  });
+
+  describe('minimum vertical span', () => {
+    /** Evenly spaced points over `total` metres with `ele(i)` elevations. */
+    const track = (total: number, ele: (i: number) => number, n = 500) =>
+      Array.from({ length: n }, (_, i) => ({ d: (total * i) / (n - 1), ele: ele(i) }));
+    const yRange = (points: readonly { d: number; ele: number }[]) => {
+      const { scale, points: drawn } = plotProfile(points);
+      const ys = drawn.map((p) => scale.y(p.ele));
+      return { top: Math.min(...ys), bottom: Math.max(...ys) };
+    };
+
+    it('is 100 m, or a 1% grade over the route when that is more', () => {
+      expect(minimumSpan(2_000)).toBe(100);
+      expect(minimumSpan(10_000)).toBe(100);
+      expect(minimumSpan(20_000)).toBe(200);
+      expect(minimumSpan(100_000)).toBe(1_000);
+    });
+
+    it('draws a flat 10 km loop with 0.8 m of noise as a flat line half-way up', () => {
+      const flat = track(10_000, (i) => 0.5 + 0.4 * Math.sin(i / 2));
+      const scale = scaleProfile(flat);
+      expect(scale.topEle - scale.bottomEle).toBe(100);
+      expect((scale.topEle + scale.bottomEle) / 2).toBeCloseTo(0.5, 1);
+      const { top, bottom } = yRange(flat);
+      expect(bottom - top).toBeLessThan(0.8); // of the 95 units a full range takes
+      expect((top + bottom) / 2).toBeCloseTo(Y_FLAT, 0);
+    });
+
+    it('draws a 2 km climb of 23 m as a gentle slope, not a wall', () => {
+      const climb = track(2_000, (i) => 1_217 + Math.round((23 * i) / 499));
+      const { top, bottom } = yRange(climb);
+      // 23 m of the 100 m span: under a quarter of the plot's 95 units.
+      expect(bottom - top).toBeGreaterThan(18);
+      expect(bottom - top).toBeLessThan(23);
+    });
+
+    it('smooths whole-metre stairs on a short span, keeping the ends', () => {
+      const stairs = track(2_000, (i) => 1_217 + Math.floor((23 * i) / 500));
+      const scale = scaleProfile(stairs);
+      const drawn = smoothForPlot(stairs, scale);
+      expect(drawn[0]?.ele).toBe(stairs[0]?.ele);
+      expect(drawn.at(-1)?.ele).toBe(stairs.at(-1)?.ele);
+      // Raw: flat runs between 1 m steps. Drawn: every interior step rises, by a fraction of a metre.
+      const steps = drawn.slice(30, -30).map((p, i, a) => (a[i + 1]?.ele ?? p.ele) - p.ele);
+      expect(Math.max(...steps.slice(0, -1))).toBeLessThan(0.2);
+      expect(Math.min(...steps.slice(0, -1))).toBeGreaterThan(0);
+    });
+
+    it('leaves normal runs exactly as they were (the sample: 651 m of range)', () => {
+      const { scale, points: drawn } = plotProfile(SAMPLE_RUN.profile);
+      expect(drawn).toBe(SAMPLE_RUN.profile);
+      expect(scale.bottomEle).toBe(SAMPLE_RUN.lowPoint);
+      expect(scale.topEle).toBe(SAMPLE_RUN.highPoint);
+      expect(scale.y(SAMPLE_RUN.lowPoint)).toBe(Y_BOTTOM);
+      expect(scale.y(SAMPLE_RUN.highPoint)).toBe(Y_TOP);
+      expect(plotProfile(SAMPLE_POINTS).points).toBe(SAMPLE_POINTS);
+    });
+
+    it('puts the scrub dot on the drawn line', () => {
+      const flat = track(10_000, () => 3);
+      const { container } = render(<ElevationProfile points={flat} scrub={5_000} onScrub={noop} />);
+      const dot = container.querySelector<HTMLElement>('span[style*="top"]');
+      // Half-way up the 140 px plot, less half the 14 px dot.
+      expect(dot?.style.top).toBe(`${String((Y_FLAT / VIEW_H) * 140 - 7)}px`);
+    });
   });
 
   it('interpolates elevation at a distance and clamps at the ends', () => {
@@ -341,7 +411,7 @@ describe('ElevationProfile', () => {
     ];
     const { container } = render(<ElevationProfile points={flat} scrub={0} onScrub={noop} />);
     const line = container.querySelectorAll('path')[1];
-    expect(line?.getAttribute('d')).toBe('M0,60 L1000,60');
+    expect(line?.getAttribute('d')).toBe('M0,62.5 L1000,62.5');
   });
 
   it('does not rebuild the paths when only the scrub changes', () => {

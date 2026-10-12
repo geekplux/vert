@@ -80,7 +80,9 @@ describe('posterCopy', () => {
     const persian = '\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645';
     const joined = '\u0645\u06CC\u062E\u0648\u0627\u0647\u0645';
     expect(slugify(persian)).toBe(joined);
-    expect(posterFileName(`${persian} Trail`, '4x5', 'png')).toBe(`vert-${joined}-trail-4x5.png`);
+    expect(posterFileName(`${persian} Trail`, 'A', '4x5', 'png')).toBe(
+      `vert-${joined}-trail-trail-sign-4x5.png`,
+    );
     // Devanagari KSSA keeps its virama, so the conjunct stays whole without the ZWJ.
     expect(slugify('\u0915\u094D\u200D\u0937')).toBe('\u0915\u094D\u0937');
     expect(
@@ -90,9 +92,9 @@ describe('posterCopy', () => {
 
   it('names a file after an emoji-laden title without invisible characters', () => {
     const title = '\u26F0\uFE0F Morning run \u{1F3C3}\u{1F3FD}\u200D\u2640\uFE0F';
-    expect(posterFileName(title, '4x5', 'png')).toBe('vert-morning-run-4x5.png');
-    expect(posterFileName('\u0301\u0302', '4x5', 'png')).toBe('vert-4x5.png');
-    expect(posterFileName('1\u0301', '4x5', 'png')).toBe('vert-1-4x5.png');
+    expect(posterFileName(title, 'A', '4x5', 'png')).toBe('vert-morning-run-trail-sign-4x5.png');
+    expect(posterFileName('\u0301\u0302', 'A', '4x5', 'png')).toBe('vert-trail-sign-4x5.png');
+    expect(posterFileName('1\u0301', 'A', '4x5', 'png')).toBe('vert-1-trail-sign-4x5.png');
   });
 
   describe('the cap', () => {
@@ -134,28 +136,46 @@ describe('posterCopy', () => {
     it(`keeps the file name within ${String(FILE_NAME_MAX_BYTES)} UTF-8 bytes, cut by grapheme`, () => {
       const bytes = (text: string) => new TextEncoder().encode(text).length;
       // 60 four-byte ideographs would make 240 bytes of slug alone.
-      const ideographs = posterFileName('\u{20000}'.repeat(70), '18x24', 'png');
-      expect(ideographs).toBe(`vert-${'\u{20000}'.repeat(46)}-18x24.png`);
-      expect(bytes(ideographs)).toBe(199);
+      const ideographs = posterFileName('\u{20000}'.repeat(70), 'A', '18x24', 'png');
+      expect(ideographs).toBe(`vert-${'\u{20000}'.repeat(43)}-trail-sign-18x24.png`);
+      expect(bytes(ideographs)).toBe(198);
       // Brahmi KA + vowel sign AA: one grapheme of 8 bytes, never split.
       const ka = '\u{11013}\u{11038}';
-      const brahmi = posterFileName(ka.repeat(30), '18x24', 'png');
-      expect(brahmi).toBe(`vert-${ka.repeat(23)}-18x24.png`);
+      const brahmi = posterFileName(ka.repeat(30), 'A', '18x24', 'png');
+      expect(brahmi).toBe(`vert-${ka.repeat(21)}-trail-sign-18x24.png`);
       expect(bytes(brahmi)).toBeLessThanOrEqual(FILE_NAME_MAX_BYTES);
     });
   });
 
-  it('names the file after the title and the size', () => {
-    expect(posterFileName('Coosa Backcountry Trail', '18x24', 'png')).toBe(
-      'vert-coosa-backcountry-trail-18x24.png',
+  it('puts the style in the name, so A, B and E downloads of one run never clash', () => {
+    expect(posterFileName('No Elevation Test', 'A', 'a3', 'png')).toBe(
+      'vert-no-elevation-test-trail-sign-a3.png',
     );
-    expect(posterFileName('Coosa Backcountry Trail', '9x16', 'png')).toBe(
-      'vert-coosa-backcountry-trail-9x16.png',
+    expect(posterFileName('No Elevation Test', 'B', 'a3', 'png')).toBe(
+      'vert-no-elevation-test-night-ridge-a3.png',
     );
-    expect(posterFileName('A3 Loop', 'a3', 'pdf')).toBe('vert-a3-loop-a3.pdf');
-    expect(posterFileName('—', '4x5', 'png')).toBe('vert-4x5.png');
-    expect(posterFileName('Żółta Góra – Ålesund Øya', '4x5', 'png')).toBe(
-      'vert-zolta-gora-alesund-oya-4x5.png',
+    expect(posterFileName('No Elevation Test', 'E', 'a3', 'pdf')).toBe(
+      'vert-no-elevation-test-survey-quad-a3.pdf',
+    );
+    const bytes = (text: string) => new TextEncoder().encode(text).length;
+    for (const style of ['A', 'B', 'E'] as const) {
+      const long = posterFileName('\u{20000}'.repeat(70), style, '18x24', 'png');
+      expect(bytes(long)).toBeLessThanOrEqual(FILE_NAME_MAX_BYTES);
+      expect(long.endsWith(`-18x24.png`)).toBe(true);
+    }
+  });
+
+  it('names the file after the title, style and size', () => {
+    expect(posterFileName('Coosa Backcountry Trail', 'A', '18x24', 'png')).toBe(
+      'vert-coosa-backcountry-trail-trail-sign-18x24.png',
+    );
+    expect(posterFileName('Coosa Backcountry Trail', 'A', '9x16', 'png')).toBe(
+      'vert-coosa-backcountry-trail-trail-sign-9x16.png',
+    );
+    expect(posterFileName('A3 Loop', 'A', 'a3', 'pdf')).toBe('vert-a3-loop-trail-sign-a3.pdf');
+    expect(posterFileName('—', 'A', '4x5', 'png')).toBe('vert-trail-sign-4x5.png');
+    expect(posterFileName('Żółta Góra – Ålesund Øya', 'A', '4x5', 'png')).toBe(
+      'vert-zolta-gora-alesund-oya-trail-sign-4x5.png',
     );
   });
 

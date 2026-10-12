@@ -27,9 +27,13 @@
  *   is at least 2 m above it (the difference is ascent) or 2 m below it (descent). Wobble under
  *   2 m never counts. This is the classic watch/Strava-style rule; on the bundled sample and the
  *   three UTMB course files it lands within 1.5% of the published profile D+, where counting
- *   every metre after a 2 m reversal (a pure dead band) runs 2–3.5% high. A file without any
- *   elevation has `hasElevation: false` and `null` elevation figures; the terrain supplies them
- *   later.
+ *   every metre after a 2 m reversal (a pure dead band) runs 2–3.5% high.
+ *   **Unusable or patchy `<ele>`** ({@link recordedElevation}): a file whose `<ele>` values are
+ *   all the same (all 0, or one value) counts as having none. Gaps without `<ele>` shorter than
+ *   {@link MAX_INTERPOLATED_GAP_M} (200 m, between the recorded points around them, or from the
+ *   route's end) are interpolated as above; longer ones are left for the terrain. Either way the
+ *   run then has `hasElevation: false` and `null` elevation figures, and `partialElevation` keeps
+ *   the usable values (`NaN` where the terrain must fill) for `terrainElevation.ts`.
  * - **High and low point**: extremes of the filtered series.
  * - **Climbs**: see {@link findClimbs}. At most {@link MAX_CLIMBS} (the biggest by gain), so the
  *   list stays readable for a 100 km ultra; exactly one is marked `steepest`.
@@ -63,6 +67,12 @@ export const STEEPEST_MIN_GAIN_M = 100;
 export const MAX_CLIMBS = 8;
 /** Points in the resampled elevation profile. */
 export const PROFILE_POINTS = 500;
+/**
+ * Gaps in `<ele>` spanning at least this far (metres) are filled from the terrain, not by a
+ * straight line. A straight line over 200 m can hide a 20–40 m bump on a trail; under it the line
+ * is within the recorder's own noise. Every-tenth-point files (≈ 40 m gaps) stay interpolated.
+ */
+export const MAX_INTERPOLATED_GAP_M = 200;
 
 /** Everything {@link computeStats} works out about a track. All SI: metres, seconds, ms epoch. */
 export interface RunStats {
@@ -74,6 +84,11 @@ export interface RunStats {
   readonly hasElevation: boolean;
   /** Per-point elevation after filling gaps and the 3-point median filter, or `null`. */
   readonly elevation: Float64Array | null;
+  /**
+   * When some `<ele>` are usable but long gaps need the terrain: per-point elevation, unfiltered,
+   * short gaps interpolated, `NaN` where the terrain must fill. `null` otherwise.
+   */
+  readonly partialElevation: Float64Array | null;
   /** Total ascent with the 2 m hysteresis, metres. */
   readonly ascent: number | null;
   /** Total descent with the 2 m hysteresis, metres (positive). */
@@ -107,24 +122,11 @@ export function computeStats(points: readonly TrackPoint[]): RunStats {
   const cumulative = cumulativeOf(points);
   const distance = cumulative.length > 0 ? (cumulative[cumulative.length - 1] ?? 0) : 0;
 
-  const elevation = filteredElevation(points, cumulative);
-  let ascent: number | null = null;
-  let descent: number | null = null;
-  let highPoint: number | null = null;
-  let lowPoint: number | null = null;
-  let climbs: Climb[] = [];
-  let profile: ProfilePoint[] = [];
-  if (elevation) {
-    ({ ascent, descent } = elevationChange(elevation));
-    highPoint = -Infinity;
-    lowPoint = Infinity;
-    for (const e of elevation) {
-      if (e > highPoint) highPoint = e;
-      if (e < lowPoint) lowPoint = e;
-    }
-    climbs = findClimbs(elevation, cumulative);
-    profile = resampleProfile(elevation, cumulative, PROFILE_POINTS);
-  }
+  const recorded = recordedElevation(points, cumulative);
+  const elevation = recorded?.complete ? median3(recorded.series) : null;
+  const { ascent, descent, highPoint, lowPoint, climbs, profile } = elevation
+    ? elevationStats(elevation, cumulative)
+    : { ...NO_ELEVATION_STATS, climbs: [], profile: [] };
 
   const time = filledTimes(points, cumulative);
   const startTime = time ? (time[0] ?? null) : null;
@@ -134,6 +136,7 @@ export function computeStats(points: readonly TrackPoint[]): RunStats {
     cumulative,
     hasElevation: elevation !== null,
     elevation,
+    partialElevation: recorded && !recorded.complete ? recorded.series : null,
     ascent,
     descent,
     highPoint,
@@ -145,6 +148,42 @@ export function computeStats(points: readonly TrackPoint[]): RunStats {
     endTime,
     climbs,
     profile,
+  };
+}
+
+/** The elevation figures of {@link RunStats}. */
+export type ElevationStats = Pick<
+  RunStats,
+  'ascent' | 'descent' | 'highPoint' | 'lowPoint' | 'climbs' | 'profile'
+>;
+
+const NO_ELEVATION_STATS = {
+  ascent: null,
+  descent: null,
+  highPoint: null,
+  lowPoint: null,
+} as const;
+
+/**
+ * Ascent, descent, high and low point, climbs and the resampled profile of a per-point elevation
+ * series (already filled and filtered). Used for the GPX's own `<ele>` and for elevations sampled
+ * from the terrain (`terrainElevation.ts`), so both follow the same rules. O(n).
+ */
+export function elevationStats(elevation: Float64Array, cumulative: Float64Array): ElevationStats {
+  const { ascent, descent } = elevationChange(elevation);
+  let highPoint = -Infinity;
+  let lowPoint = Infinity;
+  for (const e of elevation) {
+    if (e > highPoint) highPoint = e;
+    if (e < lowPoint) lowPoint = e;
+  }
+  return {
+    ascent,
+    descent,
+    highPoint,
+    lowPoint,
+    climbs: findClimbs(elevation, cumulative),
+    profile: resampleProfile(elevation, cumulative, PROFILE_POINTS),
   };
 }
 
@@ -234,16 +273,49 @@ function fillGaps(
   return out;
 }
 
-/** Elevation per point: gaps filled, then the 3-point median filter. `null` without any `<ele>`. */
-function filteredElevation(
+/**
+ * The file's usable elevations per point, unfiltered: `null` when no point has an `<ele>` or every
+ * `<ele>` is the same value (all 0, or a constant: no information). Otherwise gaps are filled
+ * along the route ({@link fillGaps}), except gaps spanning {@link MAX_INTERPOLATED_GAP_M} or more,
+ * measured between the recorded points around them (or the route's start or end), which are
+ * `NaN` and make `complete` false: the terrain fills those.
+ */
+export function recordedElevation(
   points: readonly TrackPoint[],
   cumulative: Float64Array,
-): Float64Array | null {
-  const filled = fillGaps(
+): { series: Float64Array; complete: boolean } | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of points) {
+    if (p.ele === null) continue;
+    if (p.ele < min) min = p.ele;
+    if (p.ele > max) max = p.ele;
+  }
+  if (!Number.isFinite(min)) return null;
+  // One value along a whole route (all 0, a fixed altitude, or a single <ele>) says nothing.
+  if (points.length > 1 && !(max > min)) return null;
+  const series = fillGaps(
     points.map((p) => p.ele),
     cumulative,
   );
-  return filled ? median3(filled) : null;
+  if (!series) return null;
+  const n = points.length;
+  let complete = true;
+  let previous = -1; // the last recorded index
+  for (let i = 0; i <= n; i++) {
+    if (i < n && points[i]?.ele === null) continue;
+    // i is recorded (or n, past the end): the points between previous and i are a gap.
+    if (i - previous > 1) {
+      const from = cumulative[Math.max(previous, 0)] ?? 0;
+      const to = cumulative[Math.min(i, n - 1)] ?? 0;
+      if (to - from >= MAX_INTERPOLATED_GAP_M) {
+        series.fill(NaN, previous + 1, i);
+        complete = false;
+      }
+    }
+    previous = i;
+  }
+  return { series, complete };
 }
 
 /** 3-point median filter; the two end points are kept as they are. */

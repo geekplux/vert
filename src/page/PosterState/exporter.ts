@@ -42,7 +42,7 @@ export interface ExportJob {
   /** `prefs.poster.size` resolved: the output's pixel size and use. */
   readonly size: PosterSize;
   readonly format: ExportFormat;
-  /** e.g. "vert-coosa-backcountry-trail-18x24.png" (`posterFileName`). */
+  /** e.g. "vert-coosa-backcountry-trail-trail-sign-18x24.png" (`posterFileName`). */
   readonly fileName: string;
   /** Where the figures' height grids come from: the preview's, so the export draws the same. */
   readonly sources?: ExportSources;
@@ -107,7 +107,7 @@ export function buildExportJob(
     content,
     size,
     format,
-    fileName: posterFileName(content.title, size.id, format),
+    fileName: posterFileName(content.title, prefs.poster.style, size.id, format),
     ...(sources ? { sources } : {}),
   };
 }

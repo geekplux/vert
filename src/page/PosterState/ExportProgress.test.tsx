@@ -20,7 +20,7 @@ vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'))
 
 const PNG = 'Download PNG · 5400 × 7200';
 const PDF = 'Download PDF for print';
-const FILE = 'vert-coosa-backcountry-trail-18x24.png';
+const FILE = 'vert-coosa-backcountry-trail-trail-sign-18x24.png';
 
 interface Call {
   job: ExportJob;
@@ -357,13 +357,15 @@ describe('Exporting overlay', () => {
     renderPoster(exporter);
     fireEvent.click(button(PDF));
     expect(last().job).toMatchObject({
-      fileName: 'vert-coosa-backcountry-trail-18x24.pdf',
+      fileName: 'vert-coosa-backcountry-trail-trail-sign-18x24.pdf',
       format: 'pdf',
     });
     await settle(() => {
       last().resolve({ fileName: last().job.fileName });
     });
-    expect(screen.getByText('Saved vert-coosa-backcountry-trail-18x24.pdf')).toBeDefined();
+    expect(
+      screen.getByText('Saved vert-coosa-backcountry-trail-trail-sign-18x24.pdf'),
+    ).toBeDefined();
     expect(document.activeElement).toBe(button(PDF));
 
     fireEvent.click(button(PDF));

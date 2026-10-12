@@ -14,6 +14,7 @@ import { PHONE_QUERY, useMediaQuery } from './useMediaQuery';
 import {
   defaultScrub,
   elevationRangeText,
+  elevationSourceText,
   exaggerationText,
   readoutParts,
   summitText,
@@ -84,6 +85,27 @@ export function ViewState({
   // Empty for a file without timestamps: the line then shows only the SAMPLE DATA tag, or nothing.
   const dateLine = runDateLine(run);
 
+  // A file without <ele>: say where the elevations come from (or why they are missing).
+  const sourceNote = elevationSourceText(run, terrain.status);
+  const statGrid = (
+    <StatGrid>
+      <StatTile
+        label="Distance"
+        value={run.distance}
+        unit={distance.unit}
+        format={() => distance.value}
+      />
+      <StatTile label="Vert" value={run.vert} unit={vert.unit} format={() => vert.value} emphasis />
+      <StatTile label="Moving time" value={run.movingTime} format={formatDuration} />
+      <StatTile
+        label="High point"
+        value={run.highPoint}
+        unit={highPoint.unit}
+        format={() => highPoint.value}
+      />
+    </StatGrid>
+  );
+
   const aside = (
     <>
       <div className={styles.titleBlock}>
@@ -107,28 +129,16 @@ export function ViewState({
         </h1>
       </div>
 
-      <StatGrid>
-        <StatTile
-          label="Distance"
-          value={run.distance}
-          unit={distance.unit}
-          format={() => distance.value}
-        />
-        <StatTile
-          label="Vert"
-          value={run.vert}
-          unit={vert.unit}
-          format={() => vert.value}
-          emphasis
-        />
-        <StatTile label="Moving time" value={run.movingTime} format={formatDuration} />
-        <StatTile
-          label="High point"
-          value={run.highPoint}
-          unit={highPoint.unit}
-          format={() => highPoint.value}
-        />
-      </StatGrid>
+      {sourceNote ? (
+        <div className={styles.statsBlock}>
+          {statGrid}
+          <p className={styles.elevationSource} role="status">
+            {sourceNote}
+          </p>
+        </div>
+      ) : (
+        statGrid
+      )}
 
       <section className={styles.climbs} aria-labelledby={climbsId}>
         <h2 id={climbsId} className={styles.climbsLabel}>

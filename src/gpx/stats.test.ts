@@ -8,6 +8,7 @@ import { EARTH_RADIUS_M } from '../lib/geo';
 import { parseGpx } from './parse';
 import {
   MAX_CLIMBS,
+  MAX_INTERPOLATED_GAP_M,
   PROFILE_POINTS,
   computeStats,
   elevationChange,
@@ -140,6 +141,56 @@ describe('elevation', () => {
       100, 100, 112.5, 137.5, 150, 150,
     ]);
     expect(stats.ascent).toBeCloseTo(50, 6);
+  });
+
+  describe('patchy or unusable <ele>', () => {
+    /** A point every 10 m over `metres`, with `ele(i)` (null for none). */
+    const route = (metres: number, ele: (i: number) => number | null) =>
+      Array.from({ length: metres / 10 + 1 }, (_, i) => at(i * 10, ele(i)));
+    const hill = (i: number) => 500 + 100 * Math.sin(i / 40);
+
+    it('treats all-zero or constant <ele> as none', () => {
+      for (const value of [0, 812]) {
+        const stats = computeStats(route(2_000, () => value));
+        expect(stats.hasElevation).toBe(false);
+        expect(stats.partialElevation).toBeNull();
+        expect(stats.ascent).toBeNull();
+      }
+      // A single <ele> on a long route is a constant too.
+      expect(computeStats(route(2_000, (i) => (i === 0 ? 700 : null))).partialElevation).toBeNull();
+    });
+
+    it(`interpolates gaps under ${String(MAX_INTERPOLATED_GAP_M)} m (every tenth point recorded)`, () => {
+      const stats = computeStats(route(2_000, (i) => (i % 10 === 0 ? hill(i) : null)));
+      expect(stats.hasElevation).toBe(true);
+      expect(stats.partialElevation).toBeNull();
+    });
+
+    it('leaves long gaps for the terrain: NaN there, the rest kept, no figures yet', () => {
+      const stats = computeStats(route(2_000, (i) => (i <= 100 ? hill(i) : null)));
+      expect(stats.hasElevation).toBe(false);
+      expect(stats.ascent).toBeNull();
+      const partial = stats.partialElevation;
+      expect(partial).not.toBeNull();
+      expect(partial?.[50]).toBeCloseTo(hill(50), 6);
+      expect(partial?.[100]).toBeCloseTo(hill(100), 6);
+      expect(partial?.[101]).toBeNaN();
+      expect(partial?.[200]).toBeNaN();
+    });
+
+    it('measures a gap between the recorded points around it, and from the ends', () => {
+      // Recorded points 190 m apart around a gap: interpolated. 220 m: left for the terrain.
+      const short = computeStats(route(1_000, (i) => (i > 30 && i < 49 ? null : hill(i))));
+      expect(short.hasElevation).toBe(true);
+      const long = computeStats(route(1_000, (i) => (i > 30 && i < 52 ? null : hill(i))));
+      expect(long.hasElevation).toBe(false);
+      expect(long.partialElevation?.[31]).toBeNaN();
+      expect(long.partialElevation?.[52]).toBeCloseTo(hill(52), 6);
+      // A watch that starts recording altitude 50 m in: held, as before.
+      const late = computeStats(route(1_000, (i) => (i < 5 ? null : hill(i))));
+      expect(late.hasElevation).toBe(true);
+      expect(late.elevation?.[0]).toBeCloseTo(hill(5), 6);
+    });
   });
 
   it('reports no elevation figures for a file without any', () => {
@@ -367,7 +418,7 @@ describe('the bundled sample (Coosa Backcountry Trail)', () => {
     expect(stats.ascent).toBeGreaterThan(1090 * 0.97);
     expect(stats.ascent).toBeLessThan(1090 * 1.03);
     expect(Math.abs((stats.descent ?? 0) - (stats.ascent ?? 0))).toBeLessThan(10); // a loop
-    expect(Math.abs((stats.movingTime ?? 0) - 11_093)).toBeLessThan(120); // 3:04:53 ± 2 min
+    expect(Math.abs((stats.movingTime ?? 0) - 11_098)).toBeLessThan(120); // 3:04:58 ± 2 min
     expect(stats.highPoint).toBeCloseTo(1267, -1);
     expect(stats.lowPoint).toBeCloseTo(616, -1);
     expect(stats.startTime).toBe(Date.parse('2026-10-03T11:10:00Z'));

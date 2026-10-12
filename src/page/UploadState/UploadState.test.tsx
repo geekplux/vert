@@ -71,7 +71,7 @@ describe('UploadState', () => {
 
   it('shows the sample chip from the sample run’s data, in the chosen units', () => {
     const { unmount } = render(<Page schedule={immediateSchedule} />);
-    expect(screen.getByText('SAMPLE · 21.5 km · +1,092 m')).toBeDefined();
+    expect(screen.getByText('SAMPLE · 21.5 km · +1,102 m')).toBeDefined();
     unmount();
 
     render(
@@ -80,7 +80,7 @@ describe('UploadState', () => {
         initialState={uploadState({}, { ...INITIAL_PREFS, units: 'imperial' })}
       />,
     );
-    expect(screen.getByText('SAMPLE · 13.3 mi · +3,583 ft')).toBeDefined();
+    expect(screen.getByText('SAMPLE · 13.3 mi · +3,615 ft')).toBeDefined();
   });
 
   it('has one main and an empty status region when idle', () => {

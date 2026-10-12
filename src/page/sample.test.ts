@@ -8,7 +8,9 @@ import {
   formatGrade,
   formatKmRange,
 } from '../lib/format';
-import { SAMPLE_PROFILE_POINTS, SAMPLE_RUN } from './sample';
+import { handleMessage } from '../gpx/handler';
+import { SAMPLE_PROFILE_POINTS, SAMPLE_RUN, SAMPLE_TOTALS } from './sample';
+import { sampleChipText } from './UploadState/UploadState';
 
 const { profile, climbs } = SAMPLE_RUN;
 const elevations = profile.map((point) => point.ele);
@@ -29,8 +31,8 @@ describe('SAMPLE_RUN', () => {
       name: 'Coosa Backcountry Trail',
       isSample: true,
       distance: 21_480,
-      vert: 1_092,
-      movingTime: 11_093,
+      vert: 1_102,
+      movingTime: 11_098,
       highPoint: 1_267,
       lowPoint: 616,
       lonForOffset: -83.926,
@@ -40,8 +42,8 @@ describe('SAMPLE_RUN', () => {
 
   it('formats as the spec copy', () => {
     expect(formatDistance(SAMPLE_RUN.distance, 'metric').text).toBe('21.5 km');
-    expect(formatElevation(SAMPLE_RUN.vert, 'metric', { signed: true }).text).toBe('+1,092 m');
-    expect(formatDuration(SAMPLE_RUN.movingTime)).toBe('3:04:53');
+    expect(formatElevation(SAMPLE_RUN.vert, 'metric', { signed: true }).text).toBe('+1,102 m');
+    expect(formatDuration(SAMPLE_RUN.movingTime)).toBe('3:04:58');
     expect(formatElevation(SAMPLE_RUN.highPoint, 'metric').text).toBe('1,267 m');
     expect(formatDateLine(new Date(SAMPLE_RUN.startTime), SAMPLE_RUN.lonForOffset)).toBe(
       'SAT · 2026-10-03',
@@ -161,5 +163,35 @@ describe('SAMPLE_RUN', () => {
     expect(east - Math.max(...lons)).toBeLessThan(1e-4);
     expect(Math.min(...lats) - south).toBeLessThan(1e-4);
     expect(north - Math.max(...lats)).toBeLessThan(1e-4);
+  });
+});
+
+describe('SAMPLE_TOTALS', () => {
+  // The sample exactly as the app loads it: parsed and measured by the worker's handler.
+  const response = handleMessage({
+    id: 1,
+    kind: 'text',
+    text: sampleGpx,
+    fileName: 'coosa-backcountry.gpx',
+    isSample: true,
+  }).response;
+  if (!response.ok) throw new Error(response.message);
+  const parsed = response.run;
+
+  it("are the parsed sample's distance, vert and moving time", () => {
+    expect(Math.abs(parsed.distance - SAMPLE_TOTALS.distance)).toBeLessThan(5);
+    expect(Math.round(parsed.vert)).toBe(SAMPLE_TOTALS.vert);
+    expect(Math.round(parsed.movingTime)).toBe(SAMPLE_TOTALS.movingTime);
+  });
+
+  it('give the Upload chip the figures the View shows for the loaded sample', () => {
+    for (const units of ['metric', 'imperial'] as const) {
+      const view = `SAMPLE · ${formatDistance(parsed.distance, units).text} · ${
+        formatElevation(parsed.vert, units, { signed: true }).text
+      }`;
+      expect(sampleChipText(units)).toBe(view);
+    }
+    expect(sampleChipText('metric')).toBe('SAMPLE · 21.5 km · +1,102 m');
+    expect(formatDuration(parsed.movingTime)).toBe(formatDuration(SAMPLE_TOTALS.movingTime));
   });
 });

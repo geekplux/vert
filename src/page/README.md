@@ -9,7 +9,8 @@ This is the only place that owns application state and composes `components`, `t
   plus `prefs` (units, exaggeration, poster settings) in one pure reducer. Rules in its header.
 - `types.ts`, `sample.ts`: the `Run` (with its `track` arrays) and `Terrain` shapes, and a
   placeholder sample run for tests and stories. Missing times or elevations are `NaN` (`hasTime`,
-  `hasElevation` say which).
+  `hasElevation` say which); a file without elevations gets them from the terrain grid once it
+  loads (`elevationSource: 'terrain'`, filled in `RunProvider`).
 - `hooks.ts`: `RunProvider`, `useRun()`, `useTerrain()`, `useRunChooser()` (`chooseFile`,
   `chooseSample`, `newFile`). The loader is injectable (`RunProvider loadRun`); the default is
   `realLoadRun` (`src/gpx/loadRun.ts`, the GPX parsed in a Web Worker), and passing `schedule` or

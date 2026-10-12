@@ -70,7 +70,8 @@ scrub marker. No map library, no basemap.
 - `markers.ts`: screen-size sprites (`sizeAttenuation: false`, no depth test, drawn after the
   route) from small canvas textures, shapes as the 2D `Marker`: ○ start (white fill, 3 px ink
   ring, 22 px), ▲ summit (ink, 28 × 24 px, 2.5 px white edge; centroid on the highest point of
-  the track's elevations, else the terrain's), ● scrub (route fill, 3 px white ring, 14 px, plus
+  the track's elevations, else the terrain's; none when it stands under 10 m above the lowest
+  point, `hasSummit`), ● scrub (route fill, 3 px white ring, 14 px, plus
   a 1 px ink hairline so the ring reads over the white halo). Sizes follow the canvas's terrain
   figure. A route ending within 50 m of its start is a loop and gets one ○; otherwise the finish
   is a ◉ (the start circle with an ink dot), never a second ○. `setScrub(d)` moves the scrub

@@ -1,0 +1,179 @@
+/*
+ * View state, canvas Main frame (docs/design/canvas/Main.html). The aside and main boxes (padding,
+ * column gaps 28 / 16) come from PageShell's `view` layout; this file styles what fills them.
+ */
+
+/* Canvas: date line and h1 in a column with gap 6. */
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* canvas, no token */
+  min-width: 0;
+}
+
+/* Canvas: 12px mono, letter-spacing 0.08em, --muted (DECISIONS: the date line stays 12px). */
+.dateLine {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* The real date line is longer than the canvas's "[DATE]" and wraps at 300px-wide asides. */
+.nowrap {
+  white-space: nowrap;
+}
+
+/* DECISIONS: SAMPLE DATA in --route-text (small text on --bg needs 4.5:1). */
+.sample {
+  color: var(--route-text);
+}
+
+/* Canvas: 44 / 800 / 75%, line-height 1. */
+.title {
+  margin: 0;
+  font-size: 44px; /* View frame h1, no token */
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1;
+  overflow-wrap: break-word;
+}
+
+/* DECISIONS "Focus on screen changes": programmatic focus on the h1 draws no ring. */
+.title:focus {
+  outline: none;
+}
+
+/* Climbs: label with a 2px ink rule, then the rows (canvas: column, gap 0). */
+.climbs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Canvas: 11px mono, 0.08em, --muted, padding-bottom 8, 2px --ink bottom border. */
+.climbsLabel {
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.climbList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Canvas: grid 28px 1fr auto, gap 8, padding 12 0, 1px --rule bottom border, tabular figures. */
+.climb,
+.steepest {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Canvas: the steepest row is shaded --surface, its index and gain cells padded 6px from the
+ * shading's edges (the range column stays aligned with the other rows); DECISIONS: and labelled.
+ */
+.steepest {
+  background: var(--surface);
+}
+
+.steepest .climbIndex {
+  padding-left: 6px; /* canvas, no token */
+}
+
+.steepest .climbGain {
+  padding-right: 6px; /* canvas, no token */
+}
+
+.climbIndex {
+  font-weight: 700;
+}
+
+.climbRange {
+  min-width: 0;
+}
+
+.climbGain {
+  font-family: var(--font-mono);
+}
+
+.noClimbs {
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+}
+
+/* Canvas: 14px, line-height 1.5, --muted. */
+.help {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* The phase 2 terrain: the sample illustration filling the box. */
+.terrainImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Canvas: header row, plot and ticks in a column with gap 6. */
+.elevation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* canvas, no token */
+  min-width: 0;
+}
+
+/* Canvas: flex, space-between, align baseline, wrap, gap 8. */
+.elevationHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Canvas: 11px mono, 0.08em, --muted. Only the word is uppercased, so "m" stays "m". */
+.elevationLabel {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.upper {
+  text-transform: uppercase;
+}
+
+/* Canvas: 12px mono, --ink. */
+.readout {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+}

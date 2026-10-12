@@ -24,6 +24,10 @@
   line-height: 0.95;
 }
 
+.placeholderTitle:focus {
+  outline: none; /* DECISIONS: no ring on programmatic focus */
+}
+
 .placeholderText {
   margin: 0;
   color: var(--muted);

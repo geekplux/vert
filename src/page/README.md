@@ -16,4 +16,9 @@ This is the only place that owns application state and composes `components`, `t
 - `Page.tsx`: the composition: `RunProvider`, the state machine, the header with the state's nav,
   the current state, and the About dialog. `App` renders it.
 - `UploadState/`: the Upload state (h1, intro, Dropzone, note, sample preview and chip).
+- `ViewState/`: the View state (aside: date line, route name, stats, climbs, exaggeration, help;
+  main: `TerrainBox` with legend and Rotate / Flat map, then the elevation section with its scrub
+  readout). `viewCopy.ts` holds its data-driven copy and profile maths. Phase 3 swaps the
+  placeholder terrain illustration for `TerrainView` and supplies `paceAt`.
+- Focus: on a screen change `Page` focuses the new screen's h1 (DECISIONS "Focus on screen changes").
 - `AboutDialog/`: the native modal `<dialog>` the header's About opens.

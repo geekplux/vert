@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { Dropzone } from '../../components';
 import { formatDistance, formatElevation } from '../../lib/format';
 import type { Units } from '../../lib/format';
@@ -16,6 +17,8 @@ export interface UploadStateProps {
   onFile: (file: File) => void;
   /** "try a sample run" (`useRunChooser().chooseSample`). */
   onSample: () => void;
+  /** The h1; the page focuses it when Upload opens again (DECISIONS "Focus on screen changes"). */
+  headingRef?: Ref<HTMLHeadingElement>;
 }
 
 /** "SAMPLE · 21.5 km · +1,092 m", from the sample run's data (not the canvas copy). */
@@ -41,14 +44,14 @@ export function busyAnnouncement(busy: UploadBusy): string {
  * The Upload state (DESIGN-SPEC §3 "01 Upload", canvas Upload frame): headline, intro, Dropzone
  * and note on the left; the sample terrain preview with its data chip on the right.
  */
-export function UploadState({ screen, units, onFile, onSample }: UploadStateProps) {
+export function UploadState({ screen, units, onFile, onSample, headingRef }: UploadStateProps) {
   const { busy, error } = screen;
   return (
     <UploadLayout
       left={
         <div className={styles.intro}>
           {/* The space before <br> keeps the accessible name "Your run, as terrain.". */}
-          <h1 className={styles.title}>
+          <h1 ref={headingRef} tabIndex={-1} className={styles.title}>
             Your run, <br />
             as terrain.
           </h1>

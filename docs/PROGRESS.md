@@ -7,7 +7,7 @@ when its "done when" is verified, and add the task list for the phase under its 
 | ---- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | [x]  | 0 Setup      | Repo, tooling, CLAUDE.md, design tokens as CSS variables, Worker skeleton                                                                                     | `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm build` all pass on an empty app              |
 | [x]  | 1 Components | Every UI piece in isolation with stories and tests: buttons, stat tile, dropzone, elevation profile, style picker, size picker, text fields, sliders, markers | Each component renders in Ladle, matches DESIGN-SPEC, passes a11y checks, has unit tests |
-| [ ]  | 2 Layout     | The one page in its four states (Upload, View, Poster mode, Exporting) with placeholder data and a placeholder terrain box                                    | Screenshots match the canvas frames at 1440 and 390 widths; keyboard navigation works    |
+| [x]  | 2 Layout     | The one page in its four states (Upload, View, Poster mode, Exporting) with placeholder data and a placeholder terrain box                                    | Screenshots match the canvas frames at 1440 and 390 widths; keyboard navigation works    |
 | [ ]  | 3 Features   | GPX parsing, elevation fetch, terrain mesh, route, scrub, poster rendering in 3 styles, tiled export, Worker + R2                                             | The five v1 acceptance checks in the brief pass with Sean's real GPX files               |
 
 Phase 3 order: parser → terrain → route and scrub → poster style A → export → styles B and E →
@@ -45,7 +45,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | [x]  | d. ViewState                                        | 1      | Aside (date, h1, stats, climbs, slider), terrain box + legend + Rotate/Flat, profile with readout; within 1–2px of the Main frame; focus to h1 on entry.                                   |
 | [x]  | e. PosterState with live poster preview             | 1      | Aside (style, size, text, stats, hide-ends, sticky downloads) within 0.7 px of the canvas; live 600×800 preview; focus rules.                                                              |
 | [x]  | f. ExportingState overlay                           | 3      | Progress bar + "Rendering tile N of M" + Cancel + Saved/Failed notices; controls locked during export; exporter contract (whole job, exporter-owned tile count) so phase 3 swaps one line. |
-| [ ]  | g. Playwright e2e: all four states by keyboard      |        |                                                                                                                                                                                            |
+| [x]  | g. Playwright e2e: all four states by keyboard      | 1      | Keyboard-only walk at 1440 and 390 with axe (incl. region) at every state; 30/30 repeat runs; catches focus/tab-order mutations.                                                           |
 
 ## 3 Features
 

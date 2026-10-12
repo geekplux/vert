@@ -1,0 +1,111 @@
+/* SizePicker. Values from canvas frame 03 Poster mode (SIZE section) and DECISIONS.md. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.option {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* Visually hidden but focusable: the radio keeps native keyboard behaviour and checked state. */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--touch);
+  padding: 10px var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Hidden separator, so the label reads "18 × 24 in, print · …". It stays inline: an out-of-flow or
+   inline-block span makes Chromium pad the accessible name ("18 × 24 in , print"). Clipped, it only
+   takes the comma's width at the end of the name line. */
+.hidden {
+  clip-path: inset(50%);
+}
+
+/* The line box font is the name's (600 14px Archivo, line-height normal); the sub-line is an inline
+   span inside it, so its wrapped lines keep the Archivo line height, as in the canvas. */
+.text {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.input:not(:checked) + .card:hover {
+  background: var(--surface);
+}
+
+.input:checked + .card {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--white);
+}
+
+.input:checked + .card .detail {
+  color: var(--white);
+  opacity: 0.8;
+}
+
+.input:focus-visible + .card {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    transition:
+      background-color 120ms ease-out,
+      border-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+
+  /* The sub-line sets its own colour, so it changes in step with the card. */
+  .detail {
+    transition:
+      color 120ms ease-out,
+      opacity 120ms ease-out;
+  }
+}
+
+/* Windows High Contrast drops the fill; mark the selected size with a heavier system-colour edge. */
+@media (forced-colors: active) {
+  .input:checked + .card {
+    border: 3px solid Highlight;
+    padding: 8px 10px;
+  }
+}

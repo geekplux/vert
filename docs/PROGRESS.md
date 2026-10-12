@@ -30,7 +30,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | [x]  | TextField        | 2      | Label above a 44px input with a --rule-strong (3:1) border; counter from 80% that reads 'N / M characters' to AT; 0px from the canvas.                    |
 | [x]  | Slider           | 3      | Native range with a styled 3:1 track and ink thumb, live formatted value + aria-valuetext, 44px hit area; within 1px of the canvas vertically.            |
 | [x]  | Marker           | 1      | Start ring, summit triangle, scrub dot; MarkerShape for embedding; 0px from the Tokens legend; distinct in greyscale.                                     |
-| [ ]  | SizePicker       |        |                                                                                                                                                           |
+| [x]  | SizePicker       | 2      | 2x2 native-radio cards copying the canvas line boxes (0px off); POSTER_SIZES data; names read 'A3, print · 3508 × 4961'.                                  |
 | [x]  | StylePicker      | 1      | Native radios; 3:4 swatches with a per-style terrain sketch so styles differ by shape, not just colour; within 1.3px of the canvas.                       |
 | [x]  | Dropzone         | 1      | Drop or choose a .gpx (extension-validated, 20 MB cap), sample button, dashed-to-solid drag state, alert errors, busy; within 0.03px of the Upload frame. |
 | [ ]  | ElevationProfile |        |                                                                                                                                                           |

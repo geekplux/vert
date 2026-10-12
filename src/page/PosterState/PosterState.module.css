@@ -17,6 +17,26 @@
   white-space: nowrap;
 }
 
+/*
+ * The settings above the Download block, in one fieldset so an export can disable them all at
+ * once. No box of its own: it keeps the aside's 24px gap between the blocks.
+ */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Disabled during an export: dimmed (native `disabled` tells assistive tech). */
+.controls:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Canvas: each block is a column, label then control(s), gap 10 (TEXT: gap 12). */
 .section {
   display: flex;
@@ -31,10 +51,11 @@
 
 /*
  * Focus must not hide under the sticky Download block (WCAG 2.4.11): a control scrolled into view
- * by Tab stops this far above the aside's bottom edge (the block is ≈180px tall).
+ * by Tab stops this far above the aside's bottom edge (the block is ≈180px tall, ≈210px with the
+ * "Saved <file>" line).
  */
 .section input {
-  scroll-margin-bottom: 196px; /* the Download block + 16, no token */
+  scroll-margin-bottom: 226px; /* the Download block + 16, no token */
 }
 
 /* Canvas: 11px mono, letter-spacing 0.08em, --muted. */
@@ -84,12 +105,17 @@
   color: var(--muted);
 }
 
-/* PHASE 2 PLACEHOLDER (task f replaces it): the export status and Cancel. */
-.exporting {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+/* The polite status region: read by assistive tech, not drawn, out of the block's flow. */
+.status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* The stage fills main (the grey box, padding 32 from PageShell); the preview centres in it. */

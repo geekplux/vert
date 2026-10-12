@@ -47,10 +47,11 @@ const ALL_EVENTS: readonly ScreenEvent[] = [
   { type: 'NEW_FILE' },
   { type: 'MAKE_POSTER' },
   { type: 'BACK_TO_RUN' },
-  { type: 'EXPORT_STARTED', total: 4, fileName: 'x.png' },
-  { type: 'EXPORT_PROGRESS', done: 1 },
+  { type: 'EXPORT_STARTED', fileName: 'x.png' },
+  { type: 'EXPORT_PROGRESS', done: 1, total: 4 },
   { type: 'EXPORT_CANCELLED' },
   { type: 'EXPORT_DONE', fileName: 'x.png' },
+  { type: 'EXPORT_FAILED', message: 'Nope.' },
 ];
 
 function at(screen: Screen, prefs = INITIAL_PREFS): PageState {
@@ -143,58 +144,80 @@ describe('poster', () => {
     expect(send(at(poster), { type: 'NEW_FILE' }).screen).toEqual(INITIAL_SCREEN);
   });
 
-  it('EXPORT_STARTED opens the export overlay at 0 of total', () => {
-    expect(
-      send(at(poster), { type: 'EXPORT_STARTED', total: 12, fileName: 'loop-18x24.png' }).screen,
-    ).toEqual(exporting);
-  });
-
-  it('ignores EXPORT_STARTED without a positive whole number of tiles', () => {
-    const state = at(poster);
-    for (const total of [0, -1, 2.5, Number.NaN]) {
-      expect(send(state, { type: 'EXPORT_STARTED', total, fileName: 'x.png' })).toBe(state);
-    }
+  it('EXPORT_STARTED opens the export overlay with the total not known yet', () => {
+    expect(send(at(poster), { type: 'EXPORT_STARTED', fileName: 'loop-18x24.png' }).screen).toEqual(
+      { ...exporting, progress: { done: 0, total: null } },
+    );
   });
 });
 
 describe('exporting overlay', () => {
   it('runs start → progress → done, then shows the saved notice in poster mode', () => {
-    let state = send(at(poster), { type: 'EXPORT_STARTED', total: 3, fileName: 'loop.png' });
+    let state = send(at(poster), { type: 'EXPORT_STARTED', fileName: 'loop.png' });
+    expect(state.screen).toMatchObject({ name: 'exporting', progress: { done: 0, total: null } });
+
+    // The exporter's first report sets the total.
+    state = send(state, { type: 'EXPORT_PROGRESS', done: 0, total: 3 });
     expect(state.screen).toMatchObject({ name: 'exporting', progress: { done: 0, total: 3 } });
 
-    state = send(state, { type: 'EXPORT_PROGRESS', done: 1 }, { type: 'EXPORT_PROGRESS', done: 2 });
+    state = send(
+      state,
+      { type: 'EXPORT_PROGRESS', done: 1, total: 3 },
+      { type: 'EXPORT_PROGRESS', done: 2, total: 3 },
+    );
     expect(state.screen).toMatchObject({ name: 'exporting', progress: { done: 2, total: 3 } });
 
     state = send(state, { type: 'EXPORT_DONE', fileName: 'loop.png' });
     expect(state.screen).toEqual({
       name: 'poster',
       runId: RUN_ID,
-      notice: { savedFileName: 'loop.png' },
+      notice: { kind: 'saved', fileName: 'loop.png' },
     });
   });
 
+  it('lets the exporter change the total between reports', () => {
+    const state = send(at(exporting), { type: 'EXPORT_PROGRESS', done: 5, total: 20 });
+    expect(state.screen).toMatchObject({ progress: { done: 5, total: 20 } });
+    expect(send(state, { type: 'EXPORT_PROGRESS', done: 5, total: 4 }).screen).toMatchObject({
+      progress: { done: 4, total: 4 },
+    });
+  });
+
+  it('EXPORT_FAILED returns to poster mode with the error notice', () => {
+    const state = send(at(exporting), { type: 'EXPORT_FAILED', message: 'Too large.' });
+    expect(state.screen).toEqual({
+      name: 'poster',
+      runId: RUN_ID,
+      notice: { kind: 'failed', message: 'Too large.' },
+    });
+    // The next export clears it.
+    expect(
+      send(state, { type: 'EXPORT_STARTED', fileName: 'x.png' }, { type: 'EXPORT_CANCELLED' })
+        .screen,
+    ).toEqual(poster);
+  });
+
   it('cancel returns to poster mode without a notice', () => {
-    const state = send(at(exporting), { type: 'EXPORT_PROGRESS', done: 4 });
+    const state = send(at(exporting), { type: 'EXPORT_PROGRESS', done: 4, total: 12 });
     expect(send(state, { type: 'EXPORT_CANCELLED' }).screen).toEqual(poster);
   });
 
   it('a new export clears the previous saved notice, and BACK_TO_RUN drops it', () => {
-    const saved: PosterScreen = { ...poster, notice: { savedFileName: 'old.png' } };
-    const next = send(at(saved), { type: 'EXPORT_STARTED', total: 2, fileName: 'new.png' });
+    const saved: PosterScreen = { ...poster, notice: { kind: 'saved', fileName: 'old.png' } };
+    const next = send(at(saved), { type: 'EXPORT_STARTED', fileName: 'new.png' });
     expect(send(next, { type: 'EXPORT_CANCELLED' }).screen).toEqual(poster);
     expect(send(at(saved), { type: 'BACK_TO_RUN' }).screen).toEqual(view);
   });
 
-  it('clamps progress to 0…total and ignores NaN and no-op updates', () => {
+  it('clamps progress to 0…total and ignores NaN, bad totals and no-op updates', () => {
     const state = at(exporting);
-    expect(send(state, { type: 'EXPORT_PROGRESS', done: 99 }).screen).toMatchObject({
-      progress: { done: 12, total: 12 },
-    });
-    expect(send(state, { type: 'EXPORT_PROGRESS', done: -3 })).toBe(state);
-    expect(send(state, { type: 'EXPORT_PROGRESS', done: Number.NaN })).toBe(state);
-    expect(send(state, { type: 'EXPORT_PROGRESS', done: 4.7 }).screen).toMatchObject({
-      progress: { done: 4 },
-    });
+    const progress = (done: number, total = 12) =>
+      send(state, { type: 'EXPORT_PROGRESS', done, total });
+    expect(progress(99).screen).toMatchObject({ progress: { done: 12, total: 12 } });
+    expect(progress(-3)).toBe(state);
+    expect(progress(Number.NaN)).toBe(state);
+    expect(progress(4.7).screen).toMatchObject({ progress: { done: 4 } });
+    for (const total of [0, -1, 2.5, Number.NaN]) expect(progress(1, total)).toBe(state);
   });
 
   it('counts as poster mode, as does poster', () => {
@@ -210,7 +233,7 @@ describe('invalid transitions are ignored', () => {
     upload: ['FILE_CHOSEN', 'SAMPLE_CHOSEN', 'RUN_LOADED', 'LOAD_FAILED'],
     view: ['NEW_FILE', 'MAKE_POSTER'],
     poster: ['NEW_FILE', 'BACK_TO_RUN', 'EXPORT_STARTED'],
-    exporting: ['EXPORT_PROGRESS', 'EXPORT_CANCELLED', 'EXPORT_DONE'],
+    exporting: ['EXPORT_PROGRESS', 'EXPORT_CANCELLED', 'EXPORT_DONE', 'EXPORT_FAILED'],
   };
   const screens: readonly Screen[] = [INITIAL_SCREEN, reading, view, poster, exporting];
 
@@ -350,11 +373,11 @@ describe('usePageState', () => {
     dispatch({ type: 'RUN_LOADED', runId: RUN_ID });
     dispatch({ type: 'SET_UNITS', units: 'imperial' });
     dispatch({ type: 'MAKE_POSTER' });
-    dispatch({ type: 'EXPORT_STARTED', total: 2, fileName: 'a.png' });
-    dispatch({ type: 'EXPORT_PROGRESS', done: 2 });
+    dispatch({ type: 'EXPORT_STARTED', fileName: 'a.png' });
+    dispatch({ type: 'EXPORT_PROGRESS', done: 2, total: 2 });
     dispatch({ type: 'EXPORT_DONE', fileName: 'a.png' });
     expect(result.current.state).toEqual({
-      screen: { name: 'poster', runId: RUN_ID, notice: { savedFileName: 'a.png' } },
+      screen: { name: 'poster', runId: RUN_ID, notice: { kind: 'saved', fileName: 'a.png' } },
       prefs: { ...INITIAL_PREFS, units: 'imperial' },
     });
   });

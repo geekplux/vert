@@ -7,6 +7,7 @@ import { UploadNav } from './AppHeader/UploadNav';
 import { ViewNav } from './AppHeader/ViewNav';
 import { RunProvider, useRun, useRunChooser } from './hooks';
 import type { RunProviderProps } from './hooks';
+import type { Exporter } from './PosterState/exporter';
 import { PosterState } from './PosterState/PosterState';
 import { isPosterMode, usePageState } from './state';
 import type { PageState } from './state';
@@ -19,16 +20,22 @@ export interface PageProps extends Omit<RunProviderProps, 'children'> {
   initialState?: PageState;
   /** Open the About dialog on first render (stories only). */
   initialAboutOpen?: boolean;
+  /** Renders and saves posters (tests, stories). Default: Poster mode's `defaultExporter`. */
+  exporter?: Exporter;
 }
 
 /**
  * The one page (DESIGN-SPEC §3): the header with the current state's controls, then the current
  * state. Owns the state machine (`usePageState`) inside `RunProvider`.
  */
-export function Page({ initialState, initialAboutOpen = false, ...runProps }: PageProps) {
+export function Page({ initialState, initialAboutOpen = false, exporter, ...runProps }: PageProps) {
   return (
     <RunProvider {...runProps}>
-      <PageContent initialState={initialState} initialAboutOpen={initialAboutOpen} />
+      <PageContent
+        initialState={initialState}
+        initialAboutOpen={initialAboutOpen}
+        exporter={exporter}
+      />
     </RunProvider>
   );
 }
@@ -36,9 +43,11 @@ export function Page({ initialState, initialAboutOpen = false, ...runProps }: Pa
 function PageContent({
   initialState,
   initialAboutOpen,
+  exporter,
 }: {
   initialState?: PageState;
   initialAboutOpen: boolean;
+  exporter?: Exporter;
 }) {
   const { state, dispatch } = usePageState(initialState);
   // `newFile` is ignored while a load is in flight and forgets the run (hooks.ts).
@@ -48,7 +57,7 @@ function PageContent({
   const aboutRef = useRef<HTMLButtonElement>(null);
   const { screen, prefs } = state;
   const headingRef = useRef<HTMLHeadingElement>(null);
-  // Exporting is an overlay on poster mode, not a new screen (its focus is task f's).
+  // Exporting is an overlay on poster mode, not a new screen: PosterState moves focus for it.
   useFocusOnScreenChange(isPosterMode(screen) ? 'poster' : screen.name, headingRef);
 
   return (
@@ -80,6 +89,8 @@ function PageContent({
       ) : (
         <AppHeader state="poster" routeName={run?.name ?? ''}>
           <PosterNav
+            // The state machine ignores BACK_TO_RUN while exporting; the button says so.
+            disabled={screen.name === 'exporting'}
             onBack={() => {
               dispatch({ type: 'BACK_TO_RUN' });
             }}
@@ -108,13 +119,14 @@ function PageContent({
           }}
         />
       ) : isPosterMode(screen) && run ? (
-        // Exporting is poster mode with the export overlay on top (the overlay is task f's).
+        // Exporting is poster mode with the export progress under the Download button.
         <PosterState
           run={run}
           screen={screen}
           prefs={prefs}
           dispatch={dispatch}
           headingRef={headingRef}
+          exporter={exporter}
         />
       ) : null}
 

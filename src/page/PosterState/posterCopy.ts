@@ -44,8 +44,48 @@ export function styleTitle(style: Pick<PosterStyleOption, 'id' | 'name'>): strin
   return style.name.startsWith(`${style.id} `) ? style.name.slice(style.id.length + 1) : style.name;
 }
 
+/** Tiles rendered so far out of the total, as the exporting screen carries it (null: unknown). */
+export interface ExportProgressValue {
+  readonly done: number;
+  readonly total: number | null;
+}
+
+/** Shown until the exporter reports how many tiles it will render. */
+export const PREPARING_LABEL = 'Preparing…';
+
 /**
- * PHASE 2 PLACEHOLDER: the tile count an export starts with. Phase 3 (export, task 6) computes it
- * from the size's tiling and drives the progress for real.
+ * "Rendering tile 4 of 12": the tile being rendered, which is the one after those done (the last
+ * tile once all are done). "Preparing…" until the total is known.
  */
-export const PLACEHOLDER_EXPORT_TILES = 12;
+export function exportTileLabel({ done, total }: ExportProgressValue): string {
+  if (total === null) return PREPARING_LABEL;
+  return `Rendering tile ${String(Math.min(done + 1, total))} of ${String(total)}`;
+}
+
+/** The progress bar's value for assistive tech: "3 of 12 tiles rendered", or "Preparing". */
+export function exportValueText({ done, total }: ExportProgressValue): string {
+  if (total === null) return 'Preparing';
+  return `${String(done)} of ${String(total)} tiles rendered`;
+}
+
+/**
+ * What the polite status region says while exporting. It changes only on start and at each
+ * quarter, so a screen reader hears a few updates, not one per tile: "Exporting <file>.",
+ * "Export 25% done.", "Export 50% done.", "Export 75% done." Learning the total does not change
+ * it, so "Preparing…" → tile 1 is not announced. The label carries the exact tile when focused.
+ *
+ * At done = total it returns "Rendered 12 of 12 tiles.", but in the app that is normally not
+ * heard: an exporter resolves right after its last tile, EXPORT_DONE replaces the text with
+ * "Saved <file>." (or EXPORT_FAILED with the error) before the screen reader speaks, and only the
+ * outcome is announced. It is heard only if an exporter pauses after the last tile (e.g. while
+ * encoding the file).
+ */
+export function exportAnnouncement({ done, total }: ExportProgressValue, fileName: string): string {
+  if (total === null) return `Exporting ${fileName}.`;
+  const quarter = Math.min(4, Math.floor((4 * done) / total));
+  if (quarter === 0) return `Exporting ${fileName}.`;
+  if (quarter === 4) {
+    return `Rendered ${String(total)} of ${String(total)} ${total === 1 ? 'tile' : 'tiles'}.`;
+  }
+  return `Export ${String(quarter * 25)}% done.`;
+}

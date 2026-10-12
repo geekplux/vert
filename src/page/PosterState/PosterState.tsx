@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, Ref } from 'react';
 import {
   Button,
@@ -29,8 +29,12 @@ import { PageShell } from '../PageShell/PageShell';
 import type { Run } from '../types';
 import sampleTerrain from '../UploadState/sample-terrain.svg';
 import { useMediaQuery } from '../ViewState/useMediaQuery';
+import { buildExportJob, defaultExporter } from './exporter';
+import type { ExportFormat, Exporter } from './exporter';
+import { ExportNotice, ExportProgress } from './ExportProgress';
 import { PendingStylePoster } from './PendingStylePoster';
-import { PLACEHOLDER_EXPORT_TILES, offersPdf, pngButtonLabel, posterFileName } from './posterCopy';
+import { exportAnnouncement, offersPdf, pngButtonLabel } from './posterCopy';
+import { useExport } from './useExport';
 import styles from './PosterState.module.css';
 
 /** The events Poster mode sends: poster settings, and the poster / exporting screen events. */
@@ -38,12 +42,14 @@ export type PosterStateAction = PrefsEvent | ScreenEvent<'poster'> | ScreenEvent
 
 export interface PosterStateProps {
   run: Run;
-  /** `poster`, or `exporting` (the overlay on poster mode; phase 2 task f draws it). */
+  /** `poster`, or `exporting`: Poster mode with the export overlay under the Download button. */
   screen: PosterScreen | ExportingScreen;
   prefs: Prefs;
   dispatch: Dispatch<PosterStateAction>;
   /** The screen's h1; the page focuses it when Poster mode opens (DECISIONS "Focus"). */
   headingRef?: Ref<HTMLHeadingElement>;
+  /** Renders and saves the file. Default: `defaultExporter` (exporter.ts). */
+  exporter?: Exporter;
 }
 
 /** Poster mode's preview box (canvas PosterMode frame): 600 × 800 at most. */
@@ -77,22 +83,32 @@ const metresText = (value: number) => `${String(value)} metres`;
 /**
  * Poster mode (DESIGN-SPEC §3 "03 Poster mode", canvas PosterMode frame). Aside: style, size,
  * text, stats and hide-ends, then the sticky Download block. Main: the live poster preview on the
- * grey stage. Phase 2: the figure is the sample terrain illustration and Download only starts the
- * state machine's export (phase 3 renders the terrain and the file).
+ * grey stage. Download runs `exporter`; while it runs (`exporting`, DESIGN-SPEC §3 "04 Exporting")
+ * the progress shows under the Download button and every control that could change the output is
+ * disabled. Phase 2: the figure is the sample terrain illustration and the exporter is simulated
+ * (phase 3 renders the terrain and the file).
  */
-export function PosterState({ run, screen, prefs, dispatch, headingRef }: PosterStateProps) {
+export function PosterState({
+  run,
+  screen,
+  prefs,
+  dispatch,
+  headingRef,
+  exporter = defaultExporter,
+}: PosterStateProps) {
   const { poster } = prefs;
   const size = posterSizeById(poster.size);
   const style = posterStyleById(poster.style);
   const content = posterContentFromRun(run, prefs);
   const [stageRef, stageHeight] = useStageHeight();
+  const exporting = screen.name === 'exporting';
+  const { start, cancel, cancelled } = useExport(exporter, dispatch);
+  const { labelRef, pngRef, pdfRef, rememberStarter } = useExportFocus(screen.name);
+  const busyNoteId = useId();
 
-  const download = (extension: 'png' | 'pdf') => {
-    dispatch({
-      type: 'EXPORT_STARTED',
-      total: PLACEHOLDER_EXPORT_TILES,
-      fileName: posterFileName(content.title, size.id, extension),
-    });
+  const download = (format: ExportFormat) => {
+    rememberStarter(format);
+    start(buildExportJob(run, prefs, format));
   };
 
   const aside = (
@@ -101,79 +117,85 @@ export function PosterState({ run, screen, prefs, dispatch, headingRef }: Poster
         Make a poster
       </h1>
 
-      <div className={styles.section}>
-        <h2 className={styles.label}>Style</h2>
-        <StylePicker
-          label="Style"
-          styles={POSTER_STYLES}
-          value={poster.style}
-          onChange={(id) => {
-            dispatch({ type: 'SET_POSTER_STYLE', style: id });
-          }}
-        />
-      </div>
-
-      <div className={styles.section}>
-        <h2 className={styles.label}>Size</h2>
-        <SizePicker
-          label="Size"
-          sizes={POSTER_SIZES}
-          value={poster.size}
-          onChange={(id) => {
-            dispatch({ type: 'SET_POSTER_SIZE', size: id });
-          }}
-        />
-      </div>
-
-      <div className={[styles.section, styles.textSection].join(' ')}>
-        <h2 className={styles.label}>Text</h2>
-        {TEXT_FIELDS.map(({ field, label, maxLength }) => (
-          <TextField
-            key={field}
-            label={label}
-            maxLength={maxLength}
-            value={poster[field]}
-            // An empty title prints the route name; the placeholder says so.
-            placeholder={field === 'title' ? run.name : undefined}
-            onChange={(value) => {
-              dispatch({ type: 'SET_POSTER_TEXT', field, value });
+      {/* Disabled while exporting, so the output cannot change mid-render. */}
+      <fieldset className={styles.controls} disabled={exporting}>
+        <div className={styles.section}>
+          <h2 className={styles.label}>Style</h2>
+          <StylePicker
+            label="Style"
+            styles={POSTER_STYLES}
+            value={poster.style}
+            onChange={(id) => {
+              dispatch({ type: 'SET_POSTER_STYLE', style: id });
             }}
           />
-        ))}
-      </div>
+        </div>
 
-      <div className={styles.section}>
-        <h2 className={styles.label}>Stats · privacy</h2>
-        <div className={styles.stats}>
-          {STATS.map(({ stat, label }) => (
-            <Checkbox
-              key={stat}
+        <div className={styles.section}>
+          <h2 className={styles.label}>Size</h2>
+          <SizePicker
+            label="Size"
+            sizes={POSTER_SIZES}
+            value={poster.size}
+            onChange={(id) => {
+              dispatch({ type: 'SET_POSTER_SIZE', size: id });
+            }}
+          />
+        </div>
+
+        <div className={[styles.section, styles.textSection].join(' ')}>
+          <h2 className={styles.label}>Text</h2>
+          {TEXT_FIELDS.map(({ field, label, maxLength }) => (
+            <TextField
+              key={field}
               label={label}
-              checked={poster.stats[stat]}
-              onChange={(shown) => {
-                dispatch({ type: 'SET_POSTER_STAT', stat, shown });
+              maxLength={maxLength}
+              value={poster[field]}
+              // An empty title prints the route name; the placeholder says so.
+              placeholder={field === 'title' ? run.name : undefined}
+              onChange={(value) => {
+                dispatch({ type: 'SET_POSTER_TEXT', field, value });
               }}
             />
           ))}
         </div>
-        <Slider
-          label="Hide start and end"
-          min={HIDE_ENDS.min}
-          max={HIDE_ENDS.max}
-          step={HIDE_ENDS.step}
-          value={poster.hideEnds}
-          format={formatMetres}
-          valueText={metresText}
-          onChange={(metres) => {
-            dispatch({ type: 'SET_HIDE_ENDS', metres });
-          }}
-        />
-      </div>
+
+        <div className={styles.section}>
+          <h2 className={styles.label}>Stats · privacy</h2>
+          <div className={styles.stats}>
+            {STATS.map(({ stat, label }) => (
+              <Checkbox
+                key={stat}
+                label={label}
+                checked={poster.stats[stat]}
+                onChange={(shown) => {
+                  dispatch({ type: 'SET_POSTER_STAT', stat, shown });
+                }}
+              />
+            ))}
+          </div>
+          <Slider
+            label="Hide start and end"
+            min={HIDE_ENDS.min}
+            max={HIDE_ENDS.max}
+            step={HIDE_ENDS.step}
+            value={poster.hideEnds}
+            format={formatMetres}
+            valueText={metresText}
+            onChange={(metres) => {
+              dispatch({ type: 'SET_HIDE_ENDS', metres });
+            }}
+          />
+        </div>
+      </fieldset>
 
       <div className={styles.downloads}>
         <Button
+          ref={pngRef}
           variant="primary"
           size="lg"
+          disabled={exporting}
+          aria-describedby={exporting ? busyNoteId : undefined}
           onClick={() => {
             download('png');
           }}
@@ -182,7 +204,10 @@ export function PosterState({ run, screen, prefs, dispatch, headingRef }: Poster
         </Button>
         {offersPdf(size) ? (
           <Button
+            ref={pdfRef}
             variant="secondary"
+            disabled={exporting}
+            aria-describedby={exporting ? busyNoteId : undefined}
             onClick={() => {
               download('pdf');
             }}
@@ -192,25 +217,21 @@ export function PosterState({ run, screen, prefs, dispatch, headingRef }: Poster
         ) : (
           <p className={styles.note}>PDF is offered for the print sizes, 18 × 24 in and A3.</p>
         )}
+        {screen.name === 'exporting' ? (
+          <ExportProgress progress={screen.progress} labelRef={labelRef} onCancel={cancel} />
+        ) : screen.notice ? (
+          <ExportNotice notice={screen.notice} />
+        ) : null}
         <p className={styles.note}>
           Rendered in your browser in tiles. Large sizes take a few seconds.
         </p>
-        {screen.name === 'exporting' ? (
-          // PHASE 2 PLACEHOLDER: task f replaces this with the export overlay (progress, Cancel).
-          <div className={styles.exporting}>
-            <p className={styles.note} role="status">
-              Exporting {screen.fileName}. Placeholder: the export overlay is built in a later task.
-            </p>
-            <Button
-              variant="quiet"
-              onClick={() => {
-                dispatch({ type: 'EXPORT_CANCELLED' });
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        ) : null}
+        <span id={busyNoteId} hidden>
+          Unavailable while the poster exports.
+        </span>
+        {/* Polite announcements: on start, at each quarter, and when the export ends. */}
+        <p role="status" className={styles.status}>
+          {statusText(screen, cancelled)}
+        </p>
       </div>
     </>
   );
@@ -238,6 +259,42 @@ export function PosterState({ run, screen, prefs, dispatch, headingRef }: Poster
       </div>
     </PageShell>
   );
+}
+
+/** The status region's text: the export's milestones, then how it ended. */
+function statusText(screen: PosterScreen | ExportingScreen, cancelled: boolean): string {
+  if (screen.name === 'exporting') return exportAnnouncement(screen.progress, screen.fileName);
+  if (screen.notice?.kind === 'saved') return `Saved ${screen.notice.fileName}.`;
+  if (screen.notice?.kind === 'failed') return screen.notice.message;
+  return cancelled ? 'Export cancelled.' : '';
+}
+
+/**
+ * DECISIONS "Focus": when an export starts, focus moves to the progress label; when it ends
+ * (Cancel, done or failed), back to the Download button that started it.
+ */
+function useExportFocus(screenName: 'poster' | 'exporting') {
+  const labelRef = useRef<HTMLParagraphElement>(null);
+  const pngRef = useRef<HTMLButtonElement>(null);
+  const pdfRef = useRef<HTMLButtonElement>(null);
+  const startedBy = useRef<ExportFormat>('png');
+  const previous = useRef(screenName);
+
+  useEffect(() => {
+    if (previous.current === screenName) return;
+    previous.current = screenName;
+    if (screenName === 'exporting') {
+      labelRef.current?.focus();
+    } else {
+      (startedBy.current === 'pdf' && pdfRef.current ? pdfRef : pngRef).current?.focus();
+    }
+  }, [screenName]);
+
+  const rememberStarter = useCallback((format: ExportFormat) => {
+    startedBy.current = format;
+  }, []);
+
+  return { labelRef, pngRef, pdfRef, rememberStarter };
 }
 
 /**

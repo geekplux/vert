@@ -6,8 +6,7 @@ import type { Units } from '../../lib/format';
 import { PageShell } from '../PageShell/PageShell';
 import { runDateLine, runPaceAt } from '../runCopy';
 import { EXAGGERATION } from '../state';
-import type { Run } from '../types';
-import sampleTerrain from '../UploadState/sample-terrain.svg';
+import type { Run, Terrain } from '../types';
 import { TerrainBox } from './TerrainBox';
 import { PHONE_QUERY, useMediaQuery } from './useMediaQuery';
 import {
@@ -28,6 +27,10 @@ export interface ViewStateProps {
   /** Vertical exaggeration, 1–3 (the `exaggeration` pref). */
   exaggeration: number;
   onExaggerationChange: (value: number) => void;
+  /** The terrain under the run (`useTerrain()`): loading, ready or an error. */
+  terrain: Terrain;
+  /** Builds the terrain again after an error (`useRetryTerrain()`). */
+  onRetryTerrain: () => void;
   /** The route-name h1; the page focuses it when the View opens (DECISIONS "Focus"). */
   headingRef?: Ref<HTMLHeadingElement>;
   /**
@@ -40,14 +43,17 @@ const formatExaggeration = (value: number) => `${value.toFixed(1)}×`;
 
 /**
  * The View state (DESIGN-SPEC §3 "02 View", canvas Main frame). Aside: date line, route name,
- * stats, climbs, exaggeration and help. Main: the terrain box (phase 2: the sample illustration)
- * and the elevation profile with its header and scrub readout.
+ * stats, climbs, exaggeration and help. Main: the terrain box (the live `TerrainView`, legend,
+ * Rotate / Flat map) and the elevation profile with its header and scrub readout. The scrub is one
+ * value: dragging or keying the profile moves the marker on the terrain too.
  */
 export function ViewState({
   run,
   units,
   exaggeration,
   onExaggerationChange,
+  terrain,
+  onRetryTerrain,
   headingRef,
   paceAt: paceAtProp,
 }: ViewStateProps) {
@@ -158,17 +164,20 @@ export function ViewState({
   return (
     <PageShell asideLabel="Run details" asideWidth="view" aside={aside}>
       <TerrainBox
+        terrain={terrain}
+        onRetry={onRetryTerrain}
+        track={run.track}
+        scrub={scrub}
+        exaggeration={exaggeration}
+        ariaLabel={terrainLabel(run, units)}
         summit={summitText(run, units)}
-        exaggeration={exaggerationText(exaggeration)}
+        exaggerationLabel={exaggerationText(exaggeration)}
         flat={flat}
-        onRotate={() => undefined /* PHASE 3: TerrainView turns the camera. */}
         onToggleFlat={() => {
           setFlat((on) => !on);
         }}
-      >
-        {/* PHASE 3: TerrainView replaces this illustration. */}
-        <img className={styles.terrainImage} src={sampleTerrain} alt={terrainLabel(run, units)} />
-      </TerrainBox>
+        overlaysBelow={phone}
+      />
 
       <section className={styles.elevation} aria-labelledby={elevationId}>
         <div className={styles.elevationHeader}>

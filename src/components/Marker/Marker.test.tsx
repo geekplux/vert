@@ -22,6 +22,28 @@ describe('Marker', () => {
     expect(circle?.style.stroke).toBe('var(--ink)');
   });
 
+  it('draws finish as the start circle with a solid ink dot in the middle', () => {
+    const { container } = render(<Marker kind="finish" />);
+    const [ring, dot, extra] = Array.from(svgOf(container).querySelectorAll('circle'));
+    expect(extra).toBeUndefined();
+    expect(svgOf(container).querySelector('path')).toBeNull();
+    expect(ring?.getAttribute('r')).toBe('6');
+    expect(ring?.getAttribute('stroke-width')).toBe('2.5');
+    expect(ring?.style.fill).toBe('var(--white)');
+    expect(ring?.style.stroke).toBe('var(--ink)');
+    expect(dot?.getAttribute('cx')).toBe('9');
+    expect(dot?.getAttribute('cy')).toBe('9');
+    expect(dot?.style.fill).toBe('var(--ink)');
+    expect(dot?.hasAttribute('stroke-width')).toBe(false);
+    // The terrain's proportions: a 7 px dot in a 22 px ring.
+    expect((2 * Number(dot?.getAttribute('r'))) / 14.5).toBeCloseTo(7 / 22, 2);
+  });
+
+  it('keeps start a single circle, so finish never reads as a second start', () => {
+    const { container } = render(<Marker kind="start" />);
+    expect(svgOf(container).querySelectorAll('circle')).toHaveLength(1);
+  });
+
   it('draws summit as a solid ink triangle', () => {
     const { container } = render(<Marker kind="summit" />);
     const path = svgOf(container).querySelector('path');
@@ -67,12 +89,17 @@ describe('Marker', () => {
   it('applies poster colour overrides', () => {
     const colors = { ink: '#E8F1F5', paper: '#0F2233', accent: '#FFD9A0' };
     const { container: start } = render(<Marker kind="start" {...colors} />);
+    const { container: finish } = render(<Marker kind="finish" {...colors} />);
     const { container: summit } = render(<Marker kind="summit" {...colors} />);
     const { container: scrub } = render(<Marker kind="scrub" {...colors} />);
     const startCircle = svgOf(start).querySelector('circle');
     const scrubCircle = svgOf(scrub).querySelector('circle');
     expect(startCircle?.style.fill).toBe('rgb(15, 34, 51)');
     expect(startCircle?.style.stroke).toBe('rgb(232, 241, 245)');
+    const [finishRing, finishDot] = Array.from(svgOf(finish).querySelectorAll('circle'));
+    expect(finishRing?.style.fill).toBe('rgb(15, 34, 51)');
+    expect(finishRing?.style.stroke).toBe('rgb(232, 241, 245)');
+    expect(finishDot?.style.fill).toBe('rgb(232, 241, 245)');
     expect(svgOf(summit).querySelector('path')?.style.fill).toBe('rgb(232, 241, 245)');
     expect(scrubCircle?.style.fill).toBe('rgb(255, 217, 160)');
     expect(scrubCircle?.style.stroke).toBe('rgb(15, 34, 51)');
@@ -81,7 +108,8 @@ describe('Marker', () => {
   it('has no axe violations, decorative or labelled', async () => {
     const { container } = render(
       <p>
-        <Marker kind="start" /> Start / finish <Marker kind="summit" label="Summit" />
+        <Marker kind="start" /> Start / finish <Marker kind="finish" label="Finish" />
+        <Marker kind="summit" label="Summit" />
         <Marker kind="scrub" label="Scrub position" />
       </p>,
     );

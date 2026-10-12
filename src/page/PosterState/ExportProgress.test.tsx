@@ -15,6 +15,9 @@ import {
   simulateExport,
 } from './simulateExport';
 
+// jsdom has no WebGL: the View's lazy TerrainView is a fake (src/test/fakeTerrainView.tsx).
+vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'));
+
 const PNG = 'Download PNG · 5400 × 7200';
 const PDF = 'Download PDF for print';
 const FILE = 'vert-coosa-backcountry-trail-18x24.png';

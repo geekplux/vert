@@ -8,7 +8,8 @@
  * that need them are then `NaN` rather than `null`, so every formatter in `lib/format.ts` shows
  * "–" for them without a special case; `hasTime` and `hasElevation` say which is which.
  */
-import type { Bounds } from '../lib/geo';
+import type { Bounds, TileCoord } from '../lib/geo';
+import type { Heightfield } from '../terrain/heightfield';
 
 /** One point of the elevation profile: distance from the start and elevation, both in metres. */
 export interface ProfilePoint {
@@ -99,10 +100,23 @@ export interface Run {
 export type TerrainStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 /**
- * The terrain under the run. Phase 2 has no terrain: `placeholder: true` tells the page to draw
- * the grey placeholder box. Phase 3 replaces this with the mesh state (tiles, errors).
+ * The terrain under the run (`useTerrain()`): the height grid built from elevation tiles as soon as
+ * a run loads (`RunProvider`), or why it could not be built.
+ *
+ * - `idle`: no run.
+ * - `loading`: tiles are on their way.
+ * - `ready`: `heightfield` is the grid; `failedTiles` lists tiles that did not load (their area is
+ *   filled from neighbouring tiles; `totalTiles` is how many were asked for), empty when all loaded.
+ * - `error`: no tile loaded (offline, server down) or the grid could not be built; `error` is the
+ *   message to show. `useRetryTerrain()` tries again.
  */
-export interface Terrain {
-  readonly status: TerrainStatus;
-  readonly placeholder: true;
-}
+export type Terrain =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading' }
+  | {
+      readonly status: 'ready';
+      readonly heightfield: Heightfield;
+      readonly failedTiles: readonly TileCoord[];
+      readonly totalTiles: number;
+    }
+  | { readonly status: 'error'; readonly error: string };

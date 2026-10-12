@@ -1,3 +1,11 @@
+/* The box, then (below 600px) the overlay row, then the failed-tiles note. */
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 /*
  * Main frame (docs/design/canvas/Main.html): relative, --surface, radius 6, overflow hidden. The
  * frame's box is as tall as its 1000×680 terrain image at the column's width; below 600px the
@@ -14,6 +22,98 @@
 .content {
   position: absolute;
   inset: 0;
+  border-radius: inherit;
+}
+
+/*
+ * The terrain's focus ring (2px --route, offset 2) is the box's own outline: an element's outline
+ * is drawn outside it and never clipped by its own overflow, whereas the view's outline would sit
+ * outside the view, inside the box's rounded clip, and be cut away entirely.
+ */
+.box:has(.terrain:focus-visible) {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+.box .terrain:focus-visible {
+  outline: none;
+}
+
+/* Loading text or error, centred in the box over the (still clear) canvas. */
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 12px mono, --muted (4.54:1 on --surface). */
+.loading,
+.error {
+  max-width: 44ch;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.loading {
+  color: var(--muted);
+}
+
+/*
+ * A calm breath while loading, --muted to --ink and back: every step stays at least 4.54:1 on
+ * --surface (an opacity pulse would not). None with reduced motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .loading:not(:empty) {
+    animation: breathe 1.6s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes breathe {
+  from {
+    color: var(--muted);
+  }
+
+  to {
+    color: var(--ink);
+  }
+}
+
+.error {
+  color: var(--ink);
+}
+
+/* Focus waits on the status text after Try again while the terrain loads. */
+.loading:focus-visible,
+.error:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* "Terrain loaded.": read out, not shown. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.retry {
+  pointer-events: auto;
 }
 
 /* Canvas: top 16, left 16, flex wrap, gap 16, 12px mono, --bg, padding 8×12, radius 4. */
@@ -50,6 +150,19 @@
   gap: var(--space-2);
 }
 
+/*
+ * Not ready (loading, error, no WebGL): aria-disabled keeps them focusable and described by the
+ * status text; they look like the Button's disabled state.
+ */
+.controls [aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.controls [aria-disabled='true']:hover {
+  background: var(--bg);
+}
+
 /* Pressed (Flat map on): filled, so the state reads by lightness, not hue. */
 .controls [aria-pressed='true'] {
   border-color: var(--ink);
@@ -59,6 +172,49 @@
 
 .controls [aria-pressed='true']:hover:not(:disabled) {
   background: var(--ink);
+}
+
+/*
+ * Below 600px (DECISIONS "Terrain overlays"): the chip and the buttons leave the box for a row
+ * under it, chip left, buttons right, wrapping when they do not fit side by side.
+ */
+.overlayRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.below .legend,
+.below .controls {
+  position: static;
+}
+
+/*
+ * On the page background the chip needs no panel of its own. It shrinks beside the buttons (its
+ * entries wrap) down to 12rem, then the buttons wrap to their own line.
+ */
+.below .legend {
+  flex: 1 1 12rem;
+  min-width: 0;
+  gap: var(--space-1) var(--space-4);
+  max-width: none;
+  padding: 0;
+  background: none;
+}
+
+.below .controls {
+  margin-left: auto;
+}
+
+/* Some tiles failed and were filled from neighbours: 11px mono, --muted. */
+.note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 @media (max-width: 599.98px) {

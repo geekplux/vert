@@ -28,11 +28,14 @@ import {
   MIN_POLAR,
   OVERLAY_GAP_PX,
   TerrainStage,
+  escapeShift,
   fitMargins,
   frameModel,
+  overlayRects,
   placeCamera,
   ringPoints,
   setLensShift,
+  type ScreenRect,
 } from './stage';
 import { markerExtent, type TerrainMarkerKind } from './markers';
 import { makeTrack } from './testing';
@@ -41,8 +44,8 @@ import type { RouteLayer } from './route';
 const DEG = Math.PI / 180;
 const WIDTH = 1060;
 const HEIGHT = 700;
-/** The clearance the page needs at the box's corners (legend chip, icon buttons). */
-const SAFE_INSET = 56;
+/** The default clearance at the box's edges, less the few pixels the subgrid centring may lose. */
+const SAFE_INSET = FIT_INSET_PX - 4;
 
 /** jsdom has no WebGL: a renderer that records calls. */
 function fakeRenderer() {
@@ -179,9 +182,9 @@ describe('fitMargins', () => {
   });
 
   it('shrinks the inset on a small box', () => {
-    const margins = fitMargins(300, 240);
-    expect(((1 - margins.x) / 2) * 300).toBeCloseTo(36);
-    expect(((1 - margins.y) / 2) * 240).toBeCloseTo(28.8);
+    const margins = fitMargins(100, 80);
+    expect(((1 - margins.x) / 2) * 100).toBeCloseTo(12);
+    expect(((1 - margins.y) / 2) * 80).toBeCloseTo(9.6);
   });
 });
 
@@ -230,8 +233,8 @@ describe('TerrainStage framing', () => {
         distances.push(s.radius);
         stage.rotateBy(Math.PI / 4); // reduced motion: jumps
       }
-      // Only the walls' bottom depends on the azimuth: turning zooms in or out only a little.
-      expect(Math.max(...distances) / Math.min(...distances)).toBeLessThan(1.15);
+      // The distance fits each azimuth's view within the zoom band: turning barely zooms.
+      expect(Math.max(...distances) / Math.min(...distances)).toBeLessThanOrEqual(1.15);
       stage.dispose();
     },
   );
@@ -370,6 +373,66 @@ describe('TerrainStage camera moves', () => {
     stage.dispose();
   });
 
+  /** The azimuth's distance from north-up, radians (any whole number of turns is north-up). */
+  const offNorth = (stage: TerrainStage) => {
+    const theta = spherical(stage).theta;
+    return Math.abs(Math.atan2(Math.sin(theta), Math.cos(theta)));
+  };
+
+  it.each([false, true])(
+    'turns exactly north-up for Flat map right after arrow keys, damping still going (reduced motion %s)',
+    (reducedMotion) => {
+      const hf = hills();
+      const { stage } = makeStage();
+      stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion });
+      vi.advanceTimersByTime(2000);
+      expect(stage.controls.enableDamping).toBe(true);
+      for (let k = 0; k < 3; k++) {
+        expect(stage.handleKey('ArrowLeft', true)).toBe(true);
+        vi.advanceTimersByTime(16);
+      }
+      stage.setView('flat');
+      vi.advanceTimersByTime(2000);
+      expect(offNorth(stage)).toBeLessThan(0.5 * DEG);
+      expect(spherical(stage).phi).toBeLessThan(0.5 * DEG);
+      // And it stays there: nothing left over moves it on later frames.
+      stage.requestRender();
+      vi.advanceTimersByTime(2000);
+      expect(offNorth(stage)).toBeLessThan(0.5 * DEG);
+      stage.dispose();
+    },
+  );
+
+  it('turns exactly north-up for Flat map right after a drag flung the model', () => {
+    const hf = hills();
+    const { stage } = makeStage();
+    stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion: false });
+    vi.advanceTimersByTime(2000);
+    // A drag: pointer moves add to the controls' rotation, which damping plays out over frames.
+    stage.controls.rotateLeft(1.2);
+    stage.requestRender();
+    vi.advanceTimersByTime(16);
+    stage.setView('flat');
+    vi.advanceTimersByTime(2000);
+    expect(offNorth(stage)).toBeLessThan(0.5 * DEG);
+    stage.dispose();
+  });
+
+  it('turns Rotate view by exactly an eighth of a turn after arrow keys, with nothing added', () => {
+    const hf = hills();
+    const { stage } = makeStage();
+    stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion: false });
+    vi.advanceTimersByTime(2000);
+    stage.handleKey('ArrowRight', true);
+    vi.advanceTimersByTime(16);
+    const before = spherical(stage).theta;
+    stage.rotateBy(Math.PI / 4);
+    vi.advanceTimersByTime(2000);
+    const turned = spherical(stage).theta - before;
+    expect(Math.atan2(Math.sin(turned), Math.cos(turned))).toBeCloseTo(Math.PI / 4, 4);
+    stage.dispose();
+  });
+
   it('loses the GL context before disposing the renderer, and stops drawing', () => {
     const hf = hills();
     const { stage, renderer } = makeStage();
@@ -389,14 +452,14 @@ describe('TerrainStage camera moves', () => {
 
 describe('fitMargins with insets', () => {
   it('keeps the larger of the default inset and the overlay plus a gap on each side', () => {
-    const margins = fitMargins(WIDTH, HEIGHT, { top: 62, right: 0, bottom: 44, left: 0 });
-    // Top: 62 + 12 = 74 px; bottom: max(60, 44 + 12) = 60 px; left and right: 60 px.
-    expect(((1 - margins.y) * HEIGHT) / 2).toBeCloseTo((74 + 60) / 2);
-    expect(margins.cy).toBeCloseTo((60 - 74) / HEIGHT);
+    const margins = fitMargins(WIDTH, HEIGHT, { top: 62, right: 0, bottom: 2, left: 0 });
+    // Top: 62 + 12 = 74 px; bottom: max(16, 2 + 12) = 16 px; left and right: 16 px.
+    expect(((1 - margins.y) * HEIGHT) / 2).toBeCloseTo((74 + 16) / 2);
+    expect(margins.cy).toBeCloseTo((16 - 74) / HEIGHT);
     expect(margins.x).toBeCloseTo(fitMargins(WIDTH, HEIGHT).x);
     expect(margins.cx).toBeCloseTo(0);
     const right = fitMargins(WIDTH, HEIGHT, { top: 0, right: 200, bottom: 0, left: 0 });
-    expect(right.cx).toBeCloseTo((60 - 212) / WIDTH);
+    expect(right.cx).toBeCloseTo((16 - 212) / WIDTH);
   });
 
   it('never leaves the model less than 30% of a side', () => {
@@ -408,7 +471,12 @@ describe('fitMargins with insets', () => {
 
 describe('TerrainStage framing with insets', () => {
   const insets = { top: 62, right: 0, bottom: 60, left: 120 };
-  const clear = { top: 62 + OVERLAY_GAP_PX, right: 60, bottom: 60 + OVERLAY_GAP_PX, left: 132 };
+  const clear = {
+    top: 62 + OVERLAY_GAP_PX,
+    right: FIT_INSET_PX,
+    bottom: 60 + OVERLAY_GAP_PX,
+    left: 132,
+  };
 
   it.each([0, 45, 90, 135, 180, 225, 270, 315])(
     'fits the model inside the box minus the insets, centred in what is left (azimuth %s°)',
@@ -441,6 +509,414 @@ describe('TerrainStage framing with insets', () => {
     expect(before.top).toBeLessThan(150);
     expect(after.top).toBeGreaterThanOrEqual(150 + OVERLAY_GAP_PX - 4);
     stage.dispose();
+  });
+});
+
+describe('overlayRects', () => {
+  it('turns box rectangles into NDC, grown by the 12 px gap and a pixel', () => {
+    const [rect] = overlayRects([{ x: 16, y: 16, width: 400, height: 31 }], 1000, 500);
+    expect(rect?.minX).toBeCloseTo(((16 - 13) / 1000) * 2 - 1);
+    expect(rect?.maxX).toBeCloseTo(((416 + 13) / 1000) * 2 - 1);
+    expect(rect?.maxY).toBeCloseTo(1 - ((16 - 13) / 500) * 2);
+    expect(rect?.minY).toBeCloseTo(1 - ((47 + 13) / 500) * 2);
+    expect(overlayRects([{ x: 0, y: 0, width: 0, height: 10 }], 100, 100)).toEqual([]);
+  });
+});
+
+describe('frameModel with obstacles', () => {
+  it('backs off until the model clears a corner rectangle it cannot shift away from', () => {
+    const points = ringPoints(1, 0);
+    const margins = fitMargins(1000, 500);
+    const viewport = { width: 1000, height: 500 };
+    const plain = frameModel(points, points, 0, DEFAULT_POLAR, 0, 30, 2, margins, [], viewport);
+    // A rectangle in the top-left corner that the plain fit's ellipse reaches into.
+    const [corner] = overlayRects([{ x: 300, y: 0, width: 150, height: 60 }], 1000, 500);
+    if (!corner) throw new Error('no rect');
+    const clear = frameModel(points, points, 0, DEFAULT_POLAR, 0, 30, 2, margins, [], viewport, {
+      obstacles: [corner],
+    });
+    expect(clear.distance).toBeGreaterThan(plain.distance);
+    const camera = new PerspectiveCamera(30, 2, 0.01, 100);
+    placeCamera(camera, new Vector3(), clear.distance, DEFAULT_POLAR, 0);
+    setLensShift(camera, 1000, 500, clear.shiftX, clear.shiftY);
+    camera.updateMatrixWorld();
+    // Densely along the rim: nothing inside the grown rectangle.
+    for (let k = 0; k < 720; k++) {
+      const angle = (k / 720) * 2 * Math.PI;
+      const p = new Vector3(Math.sin(angle), 0, Math.cos(angle)).project(camera);
+      const inside =
+        p.x > corner.minX && p.x < corner.maxX && p.y > corner.minY && p.y < corner.maxY;
+      expect(inside).toBe(false);
+    }
+    // A rectangle far from the model changes nothing; a floor above the fit is kept.
+    const [away] = overlayRects([{ x: 0, y: 440, width: 40, height: 40 }], 1000, 500);
+    const same = frameModel(points, points, 0, DEFAULT_POLAR, 0, 30, 2, margins, [], viewport, {
+      obstacles: away ? [away] : [],
+    });
+    expect(same.distance).toBeCloseTo(plain.distance, 6);
+    const floored = frameModel(points, points, 0, DEFAULT_POLAR, 0, 30, 2, margins, [], viewport, {
+      minDistance: plain.distance * 1.5,
+    });
+    expect(floored.distance).toBeCloseTo(plain.distance * 1.5, 9);
+  });
+});
+
+describe('frameModel with room to shift', () => {
+  it('moves the model off centre, away from an overlay, before backing off', () => {
+    const points = ringPoints(1, 0);
+    // A square box: the ellipse fills the width and leaves room above and below.
+    const margins = fitMargins(1000, 1000);
+    const viewport = { width: 1000, height: 1000 };
+    const plain = frameModel(points, points, 0, DEFAULT_POLAR, 0, 30, 1, margins, [], viewport);
+    const [chip] = overlayRects([{ x: 300, y: 0, width: 400, height: 330 }], 1000, 1000);
+    if (!chip) throw new Error('no rect');
+    const moved = frameModel(points, points, 0, DEFAULT_POLAR, 0, 30, 1, margins, [], viewport, {
+      obstacles: [chip],
+    });
+    expect(moved.distance).toBeCloseTo(plain.distance, 6);
+    expect(moved.shiftY).toBeGreaterThan(plain.shiftY + 0.05); // the model moves down
+    const camera = new PerspectiveCamera(30, 1, 0.01, 100);
+    placeCamera(camera, new Vector3(), moved.distance, DEFAULT_POLAR, 0);
+    setLensShift(camera, 1000, 1000, moved.shiftX, moved.shiftY);
+    camera.updateMatrixWorld();
+    for (let k = 0; k < 720; k++) {
+      const angle = (k / 720) * 2 * Math.PI;
+      const p = new Vector3(Math.sin(angle), 0, Math.cos(angle)).project(camera);
+      const inside = p.x > chip.minX && p.x < chip.maxX && p.y > chip.minY && p.y < chip.maxY;
+      expect(inside).toBe(false);
+      expect(p.y).toBeGreaterThanOrEqual(margins.cy - margins.y - 1e-6);
+    }
+  });
+});
+
+/** The page's overlays on the terrain box at three widths (TerrainBox measures them). */
+const BOXES: [string, number, number, ScreenRect[]][] = [
+  // 1440: a one-line legend chip top-left, two 44 px buttons bottom-right.
+  [
+    '1440',
+    1060,
+    720,
+    [
+      { x: 16, y: 16, width: 400, height: 31 },
+      { x: 1060 - 16 - 96, y: 720 - 16 - 44, width: 96, height: 44 },
+    ],
+  ],
+  // 900: the chip wraps to two lines across most of the narrow box.
+  [
+    '900',
+    520,
+    354,
+    [
+      { x: 16, y: 16, width: 488, height: 52 },
+      { x: 520 - 16 - 96, y: 354 - 16 - 44, width: 96, height: 44 },
+    ],
+  ],
+  // 390: the overlays sit under the box.
+  ['390', 358, 268, []],
+];
+
+/** Shortest distance, px, from a projected model point to a rectangle (0 inside it). */
+function gapTo(
+  stage: TerrainStage,
+  points: Vector3[],
+  width: number,
+  height: number,
+  r: ScreenRect,
+) {
+  stage.camera.updateMatrixWorld();
+  const ndc = new Vector3();
+  let gap = Infinity;
+  for (const point of points) {
+    ndc.copy(point).project(stage.camera);
+    const px = ((ndc.x + 1) / 2) * width;
+    const py = ((1 - ndc.y) / 2) * height;
+    const dx = Math.max(r.x - px, 0, px - (r.x + r.width));
+    const dy = Math.max(r.y - py, 0, py - (r.y + r.height));
+    gap = Math.min(gap, Math.hypot(dx, dy));
+  }
+  return gap;
+}
+
+/** The model's projected extent, px: its width and its clearance from each side of the box. */
+function extentIn(stage: TerrainStage, points: Vector3[], width: number, height: number) {
+  stage.camera.updateMatrixWorld();
+  const ndc = new Vector3();
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    ndc.copy(point).project(stage.camera);
+    const px = ((ndc.x + 1) / 2) * width;
+    const py = ((1 - ndc.y) / 2) * height;
+    minX = Math.min(minX, px);
+    maxX = Math.max(maxX, px);
+    minY = Math.min(minY, py);
+    maxY = Math.max(maxY, py);
+  }
+  return {
+    width: maxX - minX,
+    edge: Math.min(minX, width - maxX, minY, height - maxY),
+  };
+}
+
+describe('TerrainStage framing with overlays', () => {
+  it.each(
+    BOXES.flatMap(([name, w, h, rects]) => [1.6, 3].map((ex) => [name, w, h, rects, ex] as const)),
+  )(
+    'keeps 12 px clear of the legend chip and the buttons at every azimuth (%s box, ×%s)',
+    (_name, width, height, rects, exaggeration) => {
+      const hf = hills();
+      const { stage } = makeStage();
+      stage.resize(width, height);
+      stage.setOverlays(rects);
+      stage.show(hf, { exaggeration, view: 'oblique', reducedMotion: true });
+      for (let k = 0; k < 8; k++) {
+        const points = modelPoints(hf, exaggeration, edgeLevelOf(stage));
+        for (const rect of rects) {
+          expect(gapTo(stage, points, width, height, rect)).toBeGreaterThanOrEqual(OVERLAY_GAP_PX);
+        }
+        expect(extentIn(stage, points, width, height).edge).toBeGreaterThanOrEqual(
+          Math.min(FIT_INSET_PX, 0.12 * Math.min(width, height)) - 4,
+        );
+        stage.rotateBy(Math.PI / 4); // reduced motion: jumps
+      }
+      stage.dispose();
+    },
+  );
+
+  it('fills at least 80% of the 1440 box’s width in the default view, still clear of the overlays', () => {
+    const [, width, height, rects] = BOXES[0] ?? ['', 1, 1, []];
+    const hf = hills();
+    const { stage } = makeStage();
+    stage.resize(width, height);
+    stage.setOverlays(rects);
+    stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion: true });
+    const points = modelPoints(hf, 1.6, edgeLevelOf(stage));
+    expect(extentIn(stage, points, width, height).width / width).toBeGreaterThanOrEqual(0.8);
+    stage.dispose();
+  });
+
+  it('refits when the overlays change, and leaves them out of an exported image', () => {
+    const hf = hills();
+    const { stage, renderer } = makeStage();
+    stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion: true });
+    const free = spherical(stage).radius;
+    // A chip across the whole top: the model has to back off below it.
+    stage.setOverlays([{ x: 0, y: 0, width: WIDTH, height: 200 }]);
+    const below = spherical(stage).radius;
+    expect(below).toBeGreaterThan(free);
+    const points = modelPoints(hf, 1.6, edgeLevelOf(stage));
+    expect(
+      gapTo(stage, points, WIDTH, HEIGHT, { x: 0, y: 0, width: WIDTH, height: 200 }),
+    ).toBeGreaterThanOrEqual(OVERLAY_GAP_PX);
+    // The export (same size) is framed as if there were none; the view keeps them.
+    const drawn: number[] = [];
+    renderer.render.mockImplementation(() => {
+      drawn.push(spherical(stage).radius);
+    });
+    stage.renderToCanvas(WIDTH, HEIGHT);
+    expect(drawn[0]).toBeCloseTo(free, 6);
+    expect(spherical(stage).radius).toBeCloseTo(below, 9);
+    stage.setOverlays([]);
+    expect(spherical(stage).radius).toBeCloseTo(free, 6);
+    stage.dispose();
+  });
+});
+
+/** A heightfield of `width` × `height` samples `metres` apart, elevations from `f(x, y)` on [0, 1]². */
+function field(
+  width: number,
+  height: number,
+  metres: number,
+  f: (x: number, y: number) => number,
+): Heightfield {
+  const elevations = new Float32Array(width * height);
+  let min = Infinity;
+  let max = -Infinity;
+  for (let j = 0; j < height; j++) {
+    for (let i = 0; i < width; i++) {
+      const e = f(i / (width - 1), j / (height - 1));
+      elevations[j * width + i] = e;
+      min = Math.min(min, e);
+      max = Math.max(max, e);
+    }
+  }
+  return {
+    bounds: { west: -84, south: 34.7, east: -83.96, north: 34.72 },
+    zoom: 13,
+    width,
+    height,
+    elevations,
+    min,
+    max,
+    metresPerSample: { x: metres, y: metres },
+    failedTiles: [],
+  };
+}
+
+/** Synthetic models of different shapes: square hills, a long ridge, a lone peak in a corner. */
+const MODELS: [string, () => Heightfield][] = [
+  ['hills', hills],
+  [
+    'ridge',
+    () => field(160, 40, 30, (x, y) => 300 + 500 * Math.exp(-((y - 0.4) ** 2) / 0.02) * (0.6 + x)),
+  ],
+  [
+    'peak',
+    () =>
+      field(
+        90,
+        90,
+        30,
+        (x, y) => 200 + 1200 * Math.exp(-((x - 0.85) ** 2 + (y - 0.1) ** 2) / 0.01),
+      ),
+  ],
+];
+
+/** Overlay layouts: none, the page's at 1440 and 900, and a tall chip down the left side. */
+const LAYOUTS: [string, number, number, ScreenRect[]][] = [
+  ...BOXES,
+  [
+    'side chip',
+    800,
+    600,
+    [
+      { x: 16, y: 16, width: 140, height: 300 },
+      { x: 800 - 16 - 44, y: 600 - 16 - 96, width: 44, height: 96 },
+    ],
+  ],
+];
+
+describe('TerrainStage zoom while turning', () => {
+  it.each(
+    MODELS.flatMap(([model, make]) =>
+      LAYOUTS.map(([layout, w, h, rects]) => [model, layout, make, w, h, rects] as const),
+    ),
+  )(
+    'keeps the distance within 1.15× over a 72-step turn, clear of the overlays (%s, %s box)',
+    (_model, _layout, make, width, height, rects) => {
+      const hf = make();
+      const { stage } = makeStage();
+      stage.resize(width, height);
+      stage.setOverlays(rects);
+      stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion: true });
+      stage.controls.enableDamping = false;
+      const distances: number[] = [];
+      const edge = Math.min(FIT_INSET_PX, 0.12 * Math.min(width, height)) - 4;
+      for (let k = 0; k < 72; k++) {
+        const s = spherical(stage);
+        expect(s.phi).toBeCloseTo(DEFAULT_POLAR, 6);
+        distances.push(s.radius);
+        const points = modelPoints(hf, 1.6, edgeLevelOf(stage));
+        for (const rect of rects) {
+          expect(gapTo(stage, points, width, height, rect)).toBeGreaterThanOrEqual(OVERLAY_GAP_PX);
+        }
+        expect(extentIn(stage, points, width, height).edge).toBeGreaterThanOrEqual(edge);
+        expect(stage.handleKey('ArrowRight')).toBe(true);
+      }
+      expect(Math.max(...distances) / Math.min(...distances)).toBeLessThanOrEqual(1.15);
+      // Each step moves the camera only a little (no jumps between neighbouring azimuths).
+      for (let k = 1; k < distances.length; k++) {
+        const step = (distances[k] ?? 0) / (distances[k - 1] ?? 1);
+        expect(Math.max(step, 1 / step)).toBeLessThan(1.08);
+      }
+      stage.dispose();
+    },
+  );
+
+  it('holds the band with the route and markers on, and on a Rotate view press', () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const [, width, height, rects] = BOXES[1] ?? ['', 1, 1, []];
+    const { stage } = makeStage();
+    stage.resize(width, height);
+    stage.setOverlays(rects);
+    stage.show(hills(), { exaggeration: 3, view: 'oblique', reducedMotion: true });
+    stage.setTrack(
+      makeTrack([
+        [34.7001, -83.9999],
+        [34.71, -83.98],
+        [34.7199, -83.9601],
+      ]),
+    );
+    const distances: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      distances.push(spherical(stage).radius);
+      stage.rotateBy(Math.PI / 4); // reduced motion: jumps
+    }
+    for (let degrees = 0; degrees < 360; degrees += 5) {
+      distances.push(stage.fittedPose(DEFAULT_POLAR, degrees * DEG).distance);
+    }
+    expect(Math.max(...distances) / Math.min(...distances)).toBeLessThanOrEqual(1.15);
+    stage.dispose();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the band at a polar angle between the steps it is computed at (after a drag)', () => {
+    const [, width, height, rects] = BOXES[0] ?? ['', 1, 1, []];
+    const { stage } = makeStage();
+    stage.resize(width, height);
+    stage.setOverlays(rects);
+    stage.show(hills(), { exaggeration: 1.6, view: 'oblique', reducedMotion: true });
+    for (const phi of [33.7 * DEG, 47.2 * DEG, 71.9 * DEG]) {
+      const distances: number[] = [];
+      for (let degrees = 0; degrees < 360; degrees += 5) {
+        distances.push(stage.fittedPose(phi, degrees * DEG).distance);
+      }
+      expect(Math.max(...distances) / Math.min(...distances)).toBeLessThanOrEqual(1.15);
+    }
+    stage.dispose();
+  });
+
+  it('lets the flat map fill the box (no band where nothing turns)', () => {
+    const hf = field(160, 40, 30, (x, y) => 300 + 200 * Math.sin(x * 6) * y);
+    const { stage } = makeStage();
+    stage.show(hf, { exaggeration: 1.6, view: 'flat', reducedMotion: true });
+    const c = clearance(stage, modelPoints(hf, 1.6, edgeLevelOf(stage)));
+    // The long model fills the width at north-up, whatever a turn would need.
+    expect(Math.min(c.left, c.right)).toBeLessThan(FIT_INSET_PX + 4);
+    stage.dispose();
+  });
+});
+
+describe('escapeShift', () => {
+  const fit = { minX: -0.9, maxX: 0.9, minY: -0.9, maxY: 0.9 };
+  const allowed = { minX: -0.5, maxX: 0.5, minY: -0.5, maxY: 0.5 };
+  // A chip in the top-left corner, as the legend.
+  const chip = { minX: -1, maxX: -0.2, minY: 0.6, maxY: 1 };
+  const square = (cx: number, cy: number, r: number) => [
+    { x: cx - r, y: cy - r },
+    { x: cx + r, y: cy - r },
+    { x: cx + r, y: cy + r },
+    { x: cx - r, y: cy + r },
+  ];
+
+  it('moves the model down and away from a corner chip, smoothly as it slides past the chip', () => {
+    let previous: { x: number; y: number } | null = null;
+    for (let k = 0; k <= 400; k++) {
+      // A square sliding from under the chip to the right of it, its top above the chip's bottom.
+      const cx = -0.6 + k * 0.002;
+      const shift = escapeShift(square(cx, 0.35, 0.35), allowed, [chip], fit, { x: 0, y: 0 });
+      expect(shift).not.toBeNull();
+      if (!shift) continue;
+      // Clear: the moved square's top-left part is out of the chip.
+      const top = 0.7 - shift.y;
+      const left = cx - 0.35 - shift.x;
+      expect(top <= chip.minY + 1e-9 || left >= chip.maxX - 1e-9).toBe(true);
+      if (previous) {
+        expect(Math.hypot(shift.x - previous.x, shift.y - previous.y)).toBeLessThan(0.02);
+      }
+      previous = shift;
+    }
+  });
+
+  it('gives up (the camera backs off) when holding the margins leaves the model on the chip', () => {
+    const tight = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    expect(escapeShift(square(-0.4, 0.4, 0.35), tight, [chip], fit, { x: 0, y: 0 })).toBeNull();
+    expect(escapeShift(square(0.5, -0.5, 0.2), tight, [chip], fit, { x: 0, y: 0 })).toEqual({
+      x: 0,
+      y: 0,
+    });
   });
 });
 

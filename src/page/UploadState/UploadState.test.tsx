@@ -1,11 +1,14 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
 import { immediateSchedule } from '../hooks';
 import type { Schedule } from '../hooks';
 import { Page } from '../Page';
 import { INITIAL_PREFS, INITIAL_SCREEN } from '../state';
 import type { PageState, UploadScreen } from '../state';
+
+// jsdom has no WebGL: the View's lazy TerrainView is a fake (src/test/fakeTerrainView.tsx).
+vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'));
 
 /** A scheduler the test fires by hand, so the busy state can be seen before the run loads. */
 function manualSchedule() {

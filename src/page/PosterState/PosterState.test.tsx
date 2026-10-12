@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
 import { immediateSchedule } from '../hooks';
@@ -8,6 +8,9 @@ import { INITIAL_PREFS, posterTextFor } from '../state';
 import type { PageState, PosterPrefs } from '../state';
 import { PosterState } from './PosterState';
 import type { PosterStateAction } from './PosterState';
+
+// jsdom has no WebGL: the View's lazy TerrainView is a fake (src/test/fakeTerrainView.tsx).
+vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'));
 
 function posterState(poster: Partial<PosterPrefs> = {}): PageState {
   return {
@@ -288,8 +291,10 @@ describe('PosterState', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
       await Promise.resolve();
     });
-    const heading = screen.getByRole('heading', { level: 1, name: 'Make a poster' });
-    expect(document.activeElement).toBe(heading);
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Make a poster' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(heading);
+    });
     expect(heading.getAttribute('tabindex')).toBe('-1');
     // RUN_LOADED seeded the title with the route name and left the subtitle empty.
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveProperty(
@@ -299,9 +304,13 @@ describe('PosterState', () => {
     expect(screen.getByRole('textbox', { name: 'Subtitle' })).toHaveProperty('value', '');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
-    expect(document.activeElement).toBe(
-      screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
-    );
+    const viewHeading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Coosa Backcountry Trail',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(viewHeading);
+    });
   });
 
   it('keeps reading order: style, size, text, stats, hide ends, then Download', () => {

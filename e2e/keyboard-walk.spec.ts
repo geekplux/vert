@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
+import { serveSyntheticTiles } from './tiles';
 
 /**
  * Phase 2 task (g): walk all four states (Upload, View, Poster mode, Exporting) with the keyboard
@@ -58,13 +59,31 @@ function describeFocus(page: Page) {
   });
 }
 
+/** Where the focused element's ring is drawn, what it looks like and whether a clip cuts it. */
+interface FocusRing {
+  /** On the element itself, on a wrapper that `:has(:focus-visible)`, or on the next sibling. */
+  readonly kind: 'self' | 'wrapper' | 'sibling';
+  /** The ring-bearing element's border box, CSS px. */
+  readonly rect: { x: number; y: number; width: number; height: number };
+  /** How far the outline reaches outside that box (offset + width; negative: inside). */
+  readonly reach: number;
+  readonly width: number;
+  /** The outline colour, [r, g, b]. */
+  readonly rgb: [number, number, number];
+  /** An ancestor whose `overflow: hidden | clip` cuts the outline, or null. */
+  readonly clippedBy: string | null;
+}
+
 /**
  * The focused element draws a visible indicator: a non-"none" outline on itself, on a wrapper that
- * `:has(:focus-visible)` (Segmented, StylePicker, Slider), or on the card right after a
- * `:focus-visible` radio (SizePicker's `.input:focus-visible + .card`).
+ * `:has(:focus-visible)` (Segmented, StylePicker, Slider, the terrain box), or on the card right
+ * after a `:focus-visible` radio (SizePicker's `.input:focus-visible + .card`). The outline must
+ * also survive clipping: no ancestor with `overflow: hidden | clip` may cut it (a computed outline
+ * that is clipped away entirely is invisible). With `pixels`, the ring is also counted in a
+ * screenshot: ring-coloured pixels on every side of the box that is on screen.
  */
-async function expectVisibleFocus(page: Page) {
-  const ring = await page.evaluate(() => {
+async function expectVisibleFocus(page: Page, { pixels = false }: { pixels?: boolean } = {}) {
+  const ring = await page.evaluate((): FocusRing | null => {
     const element = document.activeElement;
     if (!element || element === document.body) return null;
     const outlined = (node: Element) => {
@@ -72,15 +91,128 @@ async function expectVisibleFocus(page: Page) {
       return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
     };
     if (!element.matches(':focus-visible')) return null;
-    if (outlined(element)) return 'self';
-    for (let node = element.parentElement; node; node = node.parentElement) {
-      if (node.matches(':has(:focus-visible)') && outlined(node)) return 'wrapper';
+    let bearer: Element | null = null;
+    let kind: FocusRing['kind'] = 'self';
+    if (outlined(element)) bearer = element;
+    for (let node = element.parentElement; !bearer && node; node = node.parentElement) {
+      if (node.matches(':has(:focus-visible)') && outlined(node)) {
+        bearer = node;
+        kind = 'wrapper';
+      }
     }
     const next = element.nextElementSibling;
-    if (next && outlined(next)) return 'sibling';
-    return null;
+    if (!bearer && next && outlined(next)) {
+      bearer = next;
+      kind = 'sibling';
+    }
+    if (!bearer) return null;
+    const style = getComputedStyle(bearer);
+    const width = parseFloat(style.outlineWidth);
+    const reach = parseFloat(style.outlineOffset) + width;
+    const box = bearer.getBoundingClientRect();
+    // An element's own overflow never clips its outline; an ancestor's does.
+    const clips = (value: string) => value === 'hidden' || value === 'clip';
+    let clippedBy: string | null = null;
+    for (let node = bearer.parentElement; node && !clippedBy; node = node.parentElement) {
+      const ancestor = getComputedStyle(node);
+      const x = clips(ancestor.overflowX);
+      const y = clips(ancestor.overflowY);
+      if (!x && !y) continue;
+      const outer = node.getBoundingClientRect();
+      const left = outer.left + node.clientLeft;
+      const top = outer.top + node.clientTop;
+      const cut =
+        (x &&
+          (box.left - reach < left - 0.5 || box.right + reach > left + node.clientWidth + 0.5)) ||
+        (y && (box.top - reach < top - 0.5 || box.bottom + reach > top + node.clientHeight + 0.5));
+      if (cut) clippedBy = `${node.tagName.toLowerCase()}.${node.getAttribute('class') ?? ''}`;
+    }
+    const rgb = (style.outlineColor.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+    return {
+      kind,
+      rect: { x: box.x, y: box.y, width: box.width, height: box.height },
+      reach,
+      width,
+      rgb: [rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0],
+      clippedBy,
+    };
   });
-  expect(ring, `no visible focus indicator on ${await describeFocus(page)}`).not.toBeNull();
+  const name = await describeFocus(page);
+  expect(ring, `no visible focus indicator on ${name}`).not.toBeNull();
+  if (!ring) return;
+  expect(ring.clippedBy, `the focus ring on ${name} is clipped`).toBeNull();
+  if (pixels) await expectRingPixels(page, ring, name);
+}
+
+/**
+ * Counts ring-coloured pixels in the band the outline occupies on each side of `ring.rect`: every
+ * side that is on screen must show the ring along at least a quarter of its length.
+ */
+async function expectRingPixels(page: Page, ring: FocusRing, name: string) {
+  const viewport = page.viewportSize() ?? { width: 0, height: 0 };
+  const { rect, reach } = ring;
+  const pad = Math.max(0, reach) + 2;
+  const x0 = Math.max(0, Math.floor(rect.x - pad));
+  const y0 = Math.max(0, Math.floor(rect.y - pad));
+  const x1 = Math.min(viewport.width, Math.ceil(rect.x + rect.width + pad));
+  const y1 = Math.min(viewport.height, Math.ceil(rect.y + rect.height + pad));
+  const clip = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  const png = await page.screenshot({ clip });
+  const counts = await page.evaluate(
+    async ({ b64, clip, ring }) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('no 2D context');
+      context.drawImage(bitmap, 0, 0);
+      const data = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+      const scale = bitmap.width / clip.width;
+      const { rect, reach, width, rgb } = ring;
+      // The outline's band: from (reach − width) to reach outside the box, ±1 px for antialiasing.
+      const inner = reach - width - 1;
+      const outer = reach + 1;
+      const counts = { top: 0, right: 0, bottom: 0, left: 0 };
+      for (let py = 0; py < bitmap.height; py++) {
+        for (let px = 0; px < bitmap.width; px++) {
+          const i = (py * bitmap.width + px) * 4;
+          const near =
+            Math.abs((data[i] ?? 0) - rgb[0]) <= 48 &&
+            Math.abs((data[i + 1] ?? 0) - rgb[1]) <= 48 &&
+            Math.abs((data[i + 2] ?? 0) - rgb[2]) <= 48;
+          if (!near) continue;
+          const x = clip.x + (px + 0.5) / scale;
+          const y = clip.y + (py + 0.5) / scale;
+          const inX = x >= rect.x && x <= rect.x + rect.width;
+          const inY = y >= rect.y && y <= rect.y + rect.height;
+          const above = rect.y - y;
+          const below = y - (rect.y + rect.height);
+          const before = rect.x - x;
+          const after = x - (rect.x + rect.width);
+          if (inX && above >= inner && above <= outer) counts.top += 1;
+          else if (inX && below >= inner && below <= outer) counts.bottom += 1;
+          else if (inY && before >= inner && before <= outer) counts.left += 1;
+          else if (inY && after >= inner && after <= outer) counts.right += 1;
+        }
+      }
+      return counts;
+    },
+    { b64: png.toString('base64'), clip, ring },
+  );
+  const sides = {
+    top: rect.y - reach >= 0 ? rect.width : 0,
+    bottom: rect.y + rect.height + reach <= viewport.height ? rect.width : 0,
+    left: rect.x - reach >= 0 ? rect.height : 0,
+    right: rect.x + rect.width + reach <= viewport.width ? rect.height : 0,
+  };
+  const visible = Object.entries(sides).filter(([, length]) => length > 0);
+  expect(visible.length, `no side of the focus ring on ${name} is on screen`).toBeGreaterThan(0);
+  for (const [side, length] of visible) {
+    expect(
+      counts[side as keyof typeof counts],
+      `ring pixels on the ${side} of ${name}: ${JSON.stringify(counts)}`,
+    ).toBeGreaterThanOrEqual(length / 4);
+  }
 }
 
 /** axe with every rule (including `region`), then the 390 rule: no horizontal page scroll. */
@@ -108,6 +240,8 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
   const downloads: string[] = [];
   page.on('download', (download) => downloads.push(download.suggestedFilename()));
 
+  // Elevation tiles come from a local synthetic source, so the live terrain needs no network.
+  await serveSyntheticTiles(page);
   await page.goto('/');
   const uploadHeading = page.getByRole('heading', { level: 1, name: 'Your run, as terrain.' });
   await expect(uploadHeading).toBeVisible();
@@ -186,9 +320,21 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     await expect(exaggeration).toHaveValue('1.7');
     await expect(page.getByText('Vertical ×1.7')).toBeVisible();
 
+    // The live terrain: focusable once drawn (arrow keys orbit), then Rotate view, Flat map.
+    await page.waitForFunction(() => performance.getEntriesByName('vert:first-frame').length > 0);
+    const terrain = page.locator('div:has(> canvas[role="img"])');
+    await tabUntil(page, isFocused(terrain));
+    // The terrain box clips its rounded corners: count the ring in a screenshot, not just styles.
+    await expectVisibleFocus(page, { pixels: true });
+    await page.keyboard.press('ArrowRight');
+    await expect(terrain).toBeFocused();
+
     const rotate = page.getByRole('button', { name: 'Rotate view' });
-    await tabUntil(page, isFocused(rotate));
+    await page.keyboard.press('Tab');
+    await expect(rotate).toBeFocused();
     await expectVisibleFocus(page);
+    await page.keyboard.press('Enter');
+    await expect(rotate).toBeFocused();
 
     const flat = page.getByRole('button', { name: 'Flat map' });
     await page.keyboard.press('Tab');

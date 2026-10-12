@@ -129,14 +129,6 @@
   color: var(--muted);
 }
 
-/* The phase 2 terrain: the sample illustration filling the box. */
-.terrainImage {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 /* Canvas: header row, plot and ticks in a column with gap 6. */
 .elevation {
   display: flex;

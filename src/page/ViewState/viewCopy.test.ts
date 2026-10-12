@@ -5,9 +5,13 @@ import {
   elevationAt,
   elevationRangeText,
   gradeAt,
+  isLoop,
+  LOOP_DISTANCE_M,
   readoutParts,
   terrainLabel,
 } from './viewCopy';
+import { LOOP_DISTANCE_M as MARKERS_LOOP_DISTANCE_M } from '../../terrain/markers';
+import { makeTrack } from '../../terrain/testing';
 
 const ramp = [
   { d: 0, ele: 100 },
@@ -53,6 +57,41 @@ describe('viewCopy', () => {
     ]);
     expect(terrainLabel(SAMPLE_RUN, 'metric')).toBe(
       '3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and finish marked with a circle, summit 1,267 m marked with a triangle',
+    );
+  });
+
+  it('calls a track a loop when it ends within 50 m of its start, like the terrain markers', () => {
+    expect(LOOP_DISTANCE_M).toBe(MARKERS_LOOP_DISTANCE_M);
+    // 0.0004° of latitude ≈ 44 m; 0.0005° ≈ 56 m.
+    expect(
+      isLoop(
+        makeTrack([
+          [46, 10],
+          [46.01, 10],
+          [46.0004, 10],
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      isLoop(
+        makeTrack([
+          [46, 10],
+          [46.01, 10],
+          [46.0005, 10],
+        ]),
+      ),
+    ).toBe(false);
+    expect(isLoop(makeTrack([[46, 10]]))).toBe(true);
+    expect(isLoop(SAMPLE_RUN.track)).toBe(true);
+  });
+
+  it('names a point-to-point run "from start to finish" with its dotted-circle finish', () => {
+    const track = makeTrack([
+      [34.7, -84],
+      [34.75, -83.95],
+    ]);
+    expect(terrainLabel({ ...SAMPLE_RUN, track }, 'imperial')).toBe(
+      '3D terrain of Coosa Backcountry Trail: 13.3 mi from start to finish, start marked with a circle, finish with a dotted circle, summit 4,157 ft marked with a triangle',
     );
   });
 });

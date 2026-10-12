@@ -14,7 +14,8 @@ import {
   mToFt,
 } from '../../lib/format';
 import type { Units } from '../../lib/format';
-import type { ProfilePoint, Run } from '../types';
+import { haversine } from '../../lib/geo';
+import type { ProfilePoint, Run, RunTrack } from '../types';
 
 /** Half the window the readout's grade is measured over: ±50 m around the scrub point. */
 export const GRADE_HALF_WINDOW = 50;
@@ -111,18 +112,34 @@ export function exaggerationText(exaggeration: number): string {
 }
 
 /**
- * The terrain's accessible name: "3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and
- * finish marked with a circle, summit 1,267 m marked with a triangle".
- *
- * The legend's "Start / finish" (Main frame) treats every run as a loop, so the label does too.
- * PHASE 3: `TerrainView` replaces this box; once the track's ends are known, a point-to-point run
- * should say "route" and name its finish separately.
+ * A route that ends within this many metres of its start is a loop. Same rule as the terrain's
+ * markers (`LOOP_DISTANCE_M` in src/terrain/markers.ts, which this module cannot import without
+ * pulling three.js into the main bundle; a test keeps the two equal).
+ */
+export const LOOP_DISTANCE_M = 50;
+
+/** Whether the track ends within {@link LOOP_DISTANCE_M} of its start (one ○ marks both). */
+export function isLoop(track: Pick<RunTrack, 'lat' | 'lon'>): boolean {
+  const last = track.lat.length - 1;
+  if (last < 1) return true;
+  const gap = haversine(
+    { lat: track.lat[0] ?? 0, lon: track.lon[0] ?? 0 },
+    { lat: track.lat[last] ?? 0, lon: track.lon[last] ?? 0 },
+  );
+  return gap <= LOOP_DISTANCE_M;
+}
+
+/**
+ * The terrain's accessible name, describing the markers the terrain draws (src/terrain/markers.ts).
+ * A loop: "3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and finish marked with a
+ * circle, summit 1,267 m marked with a triangle". A point-to-point run: "…: 21.5 km from start to
+ * finish, start marked with a circle, finish with a dotted circle, summit … with a triangle".
  */
 export function terrainLabel(run: Run, units: Units): string {
   const distance = formatDistance(run.distance, units).text;
   const summit = formatElevation(run.highPoint, units).text;
-  return (
-    `3D terrain of ${run.name}: ${distance} loop, start and finish marked with a circle, ` +
-    `summit ${summit} marked with a triangle`
-  );
+  const route = isLoop(run.track)
+    ? `${distance} loop, start and finish marked with a circle`
+    : `${distance} from start to finish, start marked with a circle, finish with a dotted circle`;
+  return `3D terrain of ${run.name}: ${route}, summit ${summit} marked with a triangle`;
 }

@@ -39,7 +39,7 @@ Approved in PLAN.md: `react`, `react-dom`, `three`, `@react-three/fiber` (option
 Installed in phase 0 because the setup prompt's tooling needs them: `@vitejs/plugin-react`,
 `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, `jsdom`,
 `@testing-library/dom` (peer of Testing Library), `@types/react`, `@types/react-dom`,
-`@types/node`. Not yet installed: `three`.
+`@types/node`. `three` is installed (with `@types/three`); load the terrain module lazily.
 
 Pinned on purpose:
 

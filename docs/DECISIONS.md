@@ -104,6 +104,10 @@ everything.
   screen-reader users start at the top of the new content. Opening/closing the export overlay moves
   focus to its progress label / back to the Download button.
 
+- Terrain overlays: below 600px the View moves the legend chip and the Rotate / Flat map buttons
+  out of the terrain box into a row under it, so nothing covers the model on phones. TerrainView
+  takes `insets` so the page reserves room for any overlay that stays on top.
+
 ## Posters (phase 3)
 
 - Fonts per the canvas, all self-hosted and loaded only in poster mode: B = Big Shoulders Display
@@ -119,6 +123,8 @@ everything.
 ## Architecture
 
 - **three.js directly**, no `@react-three/fiber`: one renderer, explicit lifecycle, fewer deps.
+  `three` (approved) and `@types/three` (its types) are the only additions. The terrain module is
+  lazy-loaded so the Upload state stays light.
 - **Hosting**: Cloudflare connected the repo as a Worker with static assets
   (`vert.fum.workers.dev`), not Pages. So the app and the tile proxy ship as **one Worker**: static
   assets from `dist/`, with `/tiles/*` routed to Worker code (`run_worker_first`) and R2 bound as

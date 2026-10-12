@@ -69,6 +69,10 @@ everything.
 - **Slider**: the drawn layout matches the canvas (native track directly under the label row,
   gap 6px). The 44px hit area may extend invisibly over the slider's own label row (clicking a
   label focuses its input anyway) and into the space below, never over another control.
+  The track spans the column exactly (the canvas's native input overflows its column by the UA's
+  2px margin; that is a mockup artefact). The track is styled, not native, so it is visible to a
+  colour-weak user: 4px tall, radius 2, unfilled part `--rule-strong` (3:1), filled part `--ink`;
+  thumb 16px `--ink` circle with a 2px `--white` ring, centred where the native thumb sits.
 - **ElevationProfile**: climbs shaded `--surface`, the steepest one `--surface-strong`; the scrub
   is an ARIA `slider` (`aria-valuetext` like "km 12.2, 640 m"); arrow keys ±1%, Shift+arrow ±10%,
   Home/End to the ends; pointer drag scrubs. km ticks under it: "0 km", round steps, total.

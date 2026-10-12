@@ -9,10 +9,12 @@
   /* Color */
   --bg: #f4f6f8; /* page */
   --surface: #e6eaee; /* terrain canvas background, poster paper */
+  --surface-strong: #dce2e8; /* steepest climb shading (docs/DECISIONS.md) */
   --ink: #1b2a3a; /* text, primary buttons, terrain lines */
   --muted: #5b6b7a; /* secondary text, labels */
   --rule: #c9d1d9; /* borders, dividers */
-  --route: #d9480f; /* the route, scrub marker, vert number */
+  --route: #d9480f; /* the route, scrub marker, vert number; as text only at >= 24px */
+  --route-text: #bb3e0d; /* route-coloured text under 24px: 5.09:1 on --bg (docs/DECISIONS.md) */
   --white: #ffffff;
 
   /* Type. Archivo is variable: wdth 62–125, wght 400–800. Metric-matched fallbacks come next. */

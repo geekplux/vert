@@ -43,7 +43,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | [x]  | b. AppHeader and responsive page shell              | 2      | Header pixel-identical to the canvas in all 3 states; aside 300/380; stacks under main < 900; no h-scroll at 390.                                        |
 | [x]  | c. UploadState                                      | 2      | 0px from the Upload frame at 1440; About dialog with focus return; Page composition; axe clean incl. region.                                             |
 | [x]  | d. ViewState                                        | 1      | Aside (date, h1, stats, climbs, slider), terrain box + legend + Rotate/Flat, profile with readout; within 1–2px of the Main frame; focus to h1 on entry. |
-| [ ]  | e. PosterState with live poster preview box         |        |                                                                                                                                                          |
+| [x]  | e. PosterState with live poster preview             | 1      | Aside (style, size, text, stats, hide-ends, sticky downloads) within 0.7 px of the canvas; live 600×800 preview; focus rules.                            |
 | [ ]  | f. ExportingState overlay                           |        |                                                                                                                                                          |
 | [ ]  | g. Playwright e2e: all four states by keyboard      |        |                                                                                                                                                          |
 

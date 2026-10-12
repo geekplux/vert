@@ -23,7 +23,7 @@ describe('Page', () => {
     expect(screen.getByRole('banner').textContent).toContain('TRAIL RUNS AS TERRAIN');
 
     fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
-    expect(h1('Poster mode')).toBeDefined();
+    expect(h1('Make a poster')).toBeDefined();
     expect(screen.getByRole('banner').textContent).toContain('POSTER · COOSA BACKCOUNTRY TRAIL');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
@@ -32,21 +32,6 @@ describe('Page', () => {
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
     expect(h1('Your run, as terrain.')).toBeDefined();
     expect(screen.getAllByRole('main')).toHaveLength(1);
-  });
-
-  it('leaves Poster mode for Upload with the placeholder’s New file', () => {
-    render(
-      <Page
-        schedule={immediateSchedule}
-        initialRun={SAMPLE_RUN}
-        initialState={{
-          screen: { name: 'poster', runId: SAMPLE_RUN.id, notice: null },
-          prefs: INITIAL_PREFS,
-        }}
-      />,
-    );
-    fireEvent.click(within(screen.getByRole('main')).getByRole('button', { name: 'New file' }));
-    expect(h1('Your run, as terrain.')).toBeDefined();
   });
 
   it('ignores New file while a run is loading: none is offered, and the load still lands in View', async () => {
@@ -89,7 +74,7 @@ describe('Page', () => {
     );
     expect(screen.queryByRole('button', { name: 'New file' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(h1('Poster mode')).toBeDefined();
+    expect(h1('Make a poster')).toBeDefined();
   });
 
   it('keeps the units preference: switched in View, shown on the sample chip after New file', async () => {

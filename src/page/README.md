@@ -26,5 +26,11 @@ This is the only place that owns application state and composes `components`, `t
   main: `TerrainBox` with legend and Rotate / Flat map, then the elevation section with its scrub
   readout). `viewCopy.ts` holds its data-driven copy and profile maths. Phase 3 swaps the
   placeholder terrain illustration for `TerrainView` and supplies `paceAt`.
+- `PosterState/`: Poster mode, also shown under the export overlay (aside: style, size, text,
+  stats, hide ends, then the sticky Download block; main: the live `PosterPreview` of
+  `TrailSignPoster`, fitted to the stage). At ≥ 900px the page is one viewport tall and the aside
+  scrolls. `posterCopy.ts` holds the file name and button copy. Phase 2 placeholders, marked in
+  the code: the sample terrain illustration as the figure, a plain card for styles B and E, and
+  Download only sends `EXPORT_STARTED` (12 tiles); the exporting status + Cancel is task f's.
 - Focus: on a screen change `Page` focuses the new screen's h1 (DECISIONS "Focus on screen changes").
 - `AboutDialog/`: the native modal `<dialog>` the header's About opens.

@@ -5,36 +5,12 @@
   min-height: 100dvh;
 }
 
-/* Phase 2 placeholder for the View, Poster and Exporting states (tasks d–f replace it). */
-.placeholder {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-8) var(--space-10);
-}
-
-.placeholderTitle {
-  margin: 0;
-  font-size: 44px; /* View frame h1, no token */
-  font-weight: 800;
-  font-stretch: 75%;
-  line-height: 0.95;
-}
-
-.placeholderTitle:focus {
-  outline: none; /* DECISIONS: no ring on programmatic focus */
-}
-
-.placeholderText {
-  margin: 0;
-  color: var(--muted);
-}
-
-@media (max-width: 599.98px) {
-  .placeholder {
-    padding-inline: var(--space-4);
+/*
+ * Poster mode, side by side (≥ 900px): the page is one viewport tall, so the aside scrolls on its
+ * own with the Download block stuck to its bottom and the preview stays in view (PosterMode frame).
+ */
+@media (min-width: 900px) {
+  .posterMode {
+    height: 100dvh;
   }
 }

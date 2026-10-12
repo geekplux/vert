@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Dispatch, Ref, RefObject } from 'react';
-import { Button } from '../components';
+import type { RefObject } from 'react';
 import { AboutDialog } from './AboutDialog/AboutDialog';
 import { AppHeader } from './AppHeader/AppHeader';
 import { PosterNav } from './AppHeader/PosterNav';
@@ -8,8 +7,9 @@ import { UploadNav } from './AppHeader/UploadNav';
 import { ViewNav } from './AppHeader/ViewNav';
 import { RunProvider, useRun, useRunChooser } from './hooks';
 import type { RunProviderProps } from './hooks';
+import { PosterState } from './PosterState/PosterState';
 import { isPosterMode, usePageState } from './state';
-import type { PageAction, PageState, Screen } from './state';
+import type { PageState } from './state';
 import { UploadState } from './UploadState/UploadState';
 import { ViewState } from './ViewState/ViewState';
 import styles from './Page.module.css';
@@ -52,7 +52,9 @@ function PageContent({
   useFocusOnScreenChange(isPosterMode(screen) ? 'poster' : screen.name, headingRef);
 
   return (
-    <div className={styles.page}>
+    <div
+      className={[styles.page, isPosterMode(screen) && styles.posterMode].filter(Boolean).join(' ')}
+    >
       {screen.name === 'upload' ? (
         <AppHeader state="upload">
           <UploadNav
@@ -105,13 +107,14 @@ function PageContent({
             dispatch({ type: 'SET_EXAGGERATION', value });
           }}
         />
-      ) : screen.name !== 'view' ? (
-        // (View always has a run: RUN_LOADED brings it, and New file leaves View as it clears it.)
-        <Placeholder
-          headingRef={headingRef}
+      ) : isPosterMode(screen) && run ? (
+        // Exporting is poster mode with the export overlay on top (the overlay is task f's).
+        <PosterState
+          run={run}
           screen={screen}
+          prefs={prefs}
           dispatch={dispatch}
-          onNewFile={newFile}
+          headingRef={headingRef}
         />
       ) : null}
 
@@ -142,47 +145,4 @@ function useFocusOnScreenChange(screenKey: string, headingRef: RefObject<HTMLEle
     if (root) root.scrollTop = 0;
     headingRef.current?.focus({ preventScroll: true });
   }, [screenKey, headingRef]);
-}
-
-const PLACEHOLDER_NAMES = { poster: 'Poster mode', exporting: 'Exporting' } as const;
-
-/**
- * PHASE 2 PLACEHOLDER for the Poster and Exporting states (tasks e–f replace it): the screen's
- * name and a way on (Poster mode: New file here; Exporting: Cancel), so the flow can be clicked
- * through.
- */
-function Placeholder({
-  headingRef,
-  screen,
-  dispatch,
-  onNewFile,
-}: {
-  headingRef: Ref<HTMLHeadingElement>;
-  screen: Exclude<Screen, { name: 'upload' | 'view' }>;
-  dispatch: Dispatch<PageAction>;
-  onNewFile: () => void;
-}) {
-  return (
-    <main className={styles.placeholder}>
-      <h1 ref={headingRef} tabIndex={-1} className={styles.placeholderTitle}>
-        {PLACEHOLDER_NAMES[screen.name]}
-      </h1>
-      <p className={styles.placeholderText}>Placeholder: this state is built in a later task.</p>
-      {/* Poster mode's header only goes back. */}
-      {screen.name === 'poster' ? (
-        <Button variant="secondary" onClick={onNewFile}>
-          New file
-        </Button>
-      ) : (
-        <Button
-          variant="quiet"
-          onClick={() => {
-            dispatch({ type: 'EXPORT_CANCELLED' });
-          }}
-        >
-          Cancel
-        </Button>
-      )}
-    </main>
-  );
 }

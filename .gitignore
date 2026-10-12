@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# test output
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Cloudflare
+.wrangler/
+.dev.vars*
+
+# local
+*.local
+.env
+.env.*
+.DS_Store

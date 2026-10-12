@@ -1,0 +1,120 @@
+/*
+ * Canvas frame "Main", <section aria-label="Elevation profile">: plot and ticks 6px apart.
+ * The plot is the slider (pointer + keyboard); the SVG is stretched (preserveAspectRatio none),
+ * so anything that must not stretch (dot, climb numbers, tick labels) is HTML positioned in %.
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.plot {
+  position: relative;
+  /* Only the plot swallows touch gestures; the page still scrolls everywhere else. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: ew-resize;
+}
+
+.plot:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.band {
+  fill: var(--surface);
+}
+
+.bandSteepest {
+  fill: var(--surface-strong);
+}
+
+.area {
+  fill: var(--ink);
+  fill-opacity: 0.12;
+}
+
+.line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.scrubLine {
+  stroke: var(--route);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+/*
+ * Climb numbers: 11px mono in the top-left corner of each band, so the shading is labelled, not
+ * colour-only. A climb starts in a valley, so the corner stays clear of the profile line.
+ */
+.climbLabel,
+.climbLabelSteepest {
+  position: absolute;
+  top: var(--space-1);
+  margin-left: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/*
+ * --muted on --surface-strong is 4.20:1, under the 4.5:1 small-text floor (CLAUDE.md beats the
+ * spec's --muted here), so the steepest band's number is --ink (11.18:1).
+ */
+.climbLabelSteepest {
+  color: var(--ink);
+}
+
+/* Scrub dot: 14px, 3px white ring, route fill; centred on the line at the profile's height. */
+.dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border: 3px solid var(--white);
+  border-radius: 50%;
+  background: var(--route);
+  pointer-events: none;
+}
+
+/* Ticks: the first label sits in flow (it gives the row its height), the rest are positioned. */
+.ticks {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.start {
+  display: inline-block;
+}
+
+.center {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.end {
+  position: absolute;
+  top: 0;
+  right: 0;
+}

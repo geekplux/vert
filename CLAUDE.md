@@ -1,0 +1,88 @@
+# Vert
+
+Vert turns one GPX file into a 3D terrain visualization on a web page, then into a poster in a few
+styles. Nothing else in v1.
+
+Read before working: `docs/PLAN.md` (decisions, phases, roles), `docs/DESIGN-SPEC.md` (tokens,
+components, page states, poster styles, accessibility), `docs/PROGRESS.md` (where the build is).
+The design canvas (https://claude.ai/artifact/NdsPXbrWdZh6Kujww7LFZm) wins over DESIGN-SPEC.md on
+visual detail when you can open it.
+
+## Non-negotiables
+
+**Accessibility.** Sean is color-weak.
+
+- Every piece of information carried by color is also carried by shape, position or a label
+  (start ○, summit ▲, scrub ● with a white ring; climbs shaded _and_ labelled).
+- Everything is keyboard operable; focus is always visible (2px `--route` outline, offset 2).
+- Text contrast ≥ 4.5:1; large display text ≥ 3:1. Touch targets ≥ 44px.
+- The terrain canvas has an `aria-label`, and the aside carries a text alternative (stats, climbs).
+- `prefers-reduced-motion`: the intro animation becomes a fade.
+
+**Privacy.**
+
+- The GPX is parsed, rendered and exported in the browser. It never leaves the client.
+- No network request carries GPX data or coordinates, except elevation tile requests, which carry
+  tile z/x/y only. No analytics, no CDN at runtime (fonts are self-hosted in `public/fonts`).
+- Keep the repo private until BlackRock's outside-activity and IP policy has been checked.
+
+## Dependencies
+
+**Ask before adding a dependency.** That includes dev dependencies and type packages.
+
+Approved in PLAN.md: `react`, `react-dom`, `three`, `@react-three/fiber` (optional), `vite`,
+`typescript`, `vitest`, `@testing-library/react`, `axe-core`, `@playwright/test`, `@ladle/react`,
+`eslint`, `prettier`, `wrangler`. No map library, no PMTiles.
+
+Installed in phase 0 because the setup prompt's tooling needs them: `@vitejs/plugin-react`,
+`@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, `jsdom`,
+`@testing-library/dom` (peer of Testing Library), `@types/react`, `@types/react-dom`,
+`@types/node`. Not yet installed: `three`, `axe-core`.
+
+Pinned on purpose:
+
+- `typescript` ~6.0: typescript-eslint supports `<6.1`.
+- `eslint` 9: eslint-plugin-jsx-a11y does not declare ESLint 10 support yet.
+
+## Commands
+
+```sh
+pnpm dev            # Vite dev server
+pnpm build          # typecheck, then production build to dist/
+pnpm test           # Vitest, once (app and worker unit tests)
+pnpm test:e2e       # Playwright against the production build, at 1440 and 390 widths
+pnpm lint           # ESLint + Prettier check
+pnpm format         # Prettier write
+pnpm typecheck      # tsc -b (app, node configs, worker)
+pnpm stories        # Ladle on http://localhost:61000
+pnpm stories:build  # static Ladle build to build/
+pnpm worker:dev     # run the tile Worker locally
+pnpm worker:types   # regenerate worker/worker-configuration.d.ts after editing wrangler.toml
+```
+
+Before reporting work as done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
+
+## Layout
+
+```
+src/components  UI pieces from DESIGN-SPEC §2, one folder each (tsx, module.css, stories, test)
+src/page        the one page and its four states; the only place that owns app state
+src/gpx         GPX parser and stats (runs in a Web Worker: no DOMParser there)
+src/terrain     three.js mesh, shaders, route, camera
+src/poster      poster styles A, B, E and tiled export
+src/lib         pure shared maths (geodesy, tile maths, Terrarium decoding, units, formatting)
+src/styles      tokens.css (DESIGN-SPEC §1), fonts.css, base.css
+worker/         Cloudflare Worker: /tiles/:z/:x/:y.png proxy for AWS Terrain Tiles, cached in R2
+e2e/            Playwright tests
+docs/           plan, spec, brief, prompts, PROGRESS.md
+```
+
+## Conventions
+
+- Style with CSS modules and the variables in `src/styles/tokens.css`. No hard-coded colors or
+  sizes unless the spec gives a px value that has no token.
+- Tests sit next to the code (`*.test.ts(x)`); Vitest runs without globals, so import
+  `describe`/`it`/`expect`. Query by role and label, not class names.
+- No `div` with `onClick`: use `<button>`, `<a href>`, native inputs.
+- The Worker's main module (`worker/src/index.ts`) exports only the default handler; workerd treats
+  every named export as an entrypoint and fails to start. Put helpers in their own modules.

@@ -32,10 +32,45 @@ scrub marker. No map library, no basemap.
   cubic; Flat map; rotate); arrow-key orbit. It renders only while something moves: no frames when
   idle. `dispose` forces the WebGL context loss before disposing the renderer, so remounts never
   pile up live contexts.
+- `route.ts`: `createRouteLayer(heightfield, track, { palette, exaggeration, lift = 2 })`. The
+  track is resampled evenly by distance (≤ 10 m apart, ≤ 4,000 points) and draped: y is the
+  terrain's own elevation (`elevationAt`, not the GPX's) plus 2 m. Two `Line2`s share one
+  `LineGeometry`: a 9 px `--white` halo under a 4 px `--route` core, CSS-px widths
+  (`worldUnits: false`). Positions are stored at exaggeration 1 and the patched vertex shader
+  scales y by a shared `uExaggeration`, so the slider never rebuilds. **Visibility:** ridges in
+  front of the route hide it, decided per route point, not per fragment: the stage renders the
+  terrain's depth into a texture first, then `visibility.ts` runs a few tiny GPU passes (one texel
+  per point, no readback): each point is hidden if terrain is more than 16 px worth of depth in
+  front of it, then hidden gaps under 3 px are filled and shown runs under 4 px dropped, by screen
+  distance along the route. The line draws with no depth test: a segment between shown points
+  whole, between hidden points not at all, a mixed one up to its middle (the core 2.5 px shorter,
+  so the halo closes around it). Halo and core read the same verdicts, so side-on slopes never
+  thin the halo, crests leave no slivers, and the core never shows without its halo.
+  `pointAtDistance` (binary search) maps metres along the track to lon/lat.
+- `markers.ts`: screen-size sprites (`sizeAttenuation: false`, no depth test, drawn after the
+  route) from small canvas textures, shapes as the 2D `Marker`: ○ start (white fill, 3 px ink
+  ring, 22 px), ▲ summit (ink, 28 × 24 px, 2.5 px white edge; centroid on the highest point of
+  the track's elevations, else the terrain's), ● scrub (route fill, 3 px white ring, 14 px, plus
+  a 1 px ink hairline so the ring reads over the white halo). Sizes follow the canvas's terrain
+  figure. A route ending within 50 m of its start is a loop and gets one ○; otherwise the finish
+  is a ◉ (the start circle with an ink dot), never a second ○. `setScrub(d)` moves the scrub
+  marker without rebuilding. Before each frame `updateOcclusion` marches a ray from each marker
+  to the eye over the height grid and fades markers behind a ridge to 35% opacity.
+- The stage builds both layers once it has a heightfield and a track (`setTrack`, `setScrub`,
+  `setRoutePalette`), and `setInsets` reserves room for overlays: each side keeps
+  max(60 px rule, inset + 12 px), and the model is centred in what is left. Every render goes
+  through `renderNow()`, which refits first (OrbitControls' own methods move the camera and call
+  `update()` before the stage follows; key handling also refits at once). The fit includes the
+  markers' drawn boxes (○ 22 px, ▲ 28 × 24 with its edge) and the scrub marker's 16 px box along
+  the route, so overlays keep their full gap. `renderToCanvas(w, h)` renders the current view
+  (mid-tween or mid-damping as it is) framed for a `w × h` image into a 2D canvas, the start of
+  the poster export: it never steps the controls, and puts the camera, controls and fit back
+  exactly, so exports in a row match and the visible view does not move.
 - `TerrainView.tsx`: the React wrapper. Canvas is `role="img"` with the page's `aria-label`; the
   wrapper is focusable (arrow keys orbit, Shift for larger steps, + / − zoom; a visually hidden hint
-  says so). Reduced motion: no camera move, the canvas fades in. A ref handle exposes `rotateBy`,
-  `resetView`, `requestRender` and the stage (scene, camera) for the route layer.
+  says so). Reduced motion: no camera move, the canvas fades in. Props `track`, `scrub`
+  (metres), `insets` and `routePalette` drive the route layer. A ref handle exposes `rotateBy`,
+  `resetView`, `requestRender` and the stage.
 - three.js is ~150 kB gzipped: the page should load `TerrainView` with `lazy(() => import(...))`
   so the Upload state stays light.
 - Decoding and tile maths are pure and live in `src/lib`, so they test without WebGL.

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import type { Heightfield } from './heightfield';
 import type { StageRenderer } from './stage';
+import { makeTrack } from './testing';
 import { TerrainView, type TerrainViewHandle } from './TerrainView';
 
 /** jsdom has no WebGL: a renderer that records calls. */
@@ -163,5 +164,47 @@ describe('TerrainView', () => {
     renderer.render.mockClear();
     await flushFrames();
     expect(renderer.render).not.toHaveBeenCalled();
+  });
+
+  it('drapes the track, moves the scrub marker without rebuilding, and takes insets', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const { factory } = fakeRenderer();
+    const ref = { current: null as TerrainViewHandle | null };
+    const hf = heightfield();
+    const track = makeTrack([
+      [46.002, 10.002],
+      [46.005, 10.005],
+      [46.008, 10.004],
+    ]);
+    const props = {
+      heightfield: hf,
+      exaggeration: 1,
+      ariaLabel: 'Terrain',
+      createRenderer: factory,
+    };
+    const { rerender } = render(<TerrainView ref={ref} {...props} track={track} scrub={100} />);
+    await flushFrames();
+    const scene = ref.current?.stage?.scene;
+    const route = scene?.getObjectByName('route');
+    const scrub = scene?.getObjectByName('marker-scrub');
+    expect(route).toBeDefined();
+    expect(scrub?.visible).toBe(true);
+    const before = scrub?.position.clone();
+    rerender(
+      <TerrainView
+        ref={ref}
+        {...props}
+        track={track}
+        scrub={500}
+        insets={{ top: 62, right: 0, bottom: 60, left: 0 }}
+      />,
+    );
+    await flushFrames();
+    expect(scene?.getObjectByName('route')).toBe(route);
+    expect(scene?.getObjectByName('marker-scrub')).toBe(scrub);
+    expect(before && scrub?.position.equals(before)).toBe(false);
+    rerender(<TerrainView ref={ref} {...props} track={null} />);
+    expect(scene?.getObjectByName('route')).toBeUndefined();
+    vi.restoreAllMocks();
   });
 });

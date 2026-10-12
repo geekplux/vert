@@ -18,6 +18,7 @@ docs/verify/
 .dev.vars*
 
 # local
+.claude/worktrees/
 *.local
 .env
 .env.*

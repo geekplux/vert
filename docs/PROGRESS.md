@@ -31,7 +31,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | [ ]  | Slider           |        |                                                                                                                                        |
 | [x]  | Marker           | 1      | Start ring, summit triangle, scrub dot; MarkerShape for embedding; 0px from the Tokens legend; distinct in greyscale.                  |
 | [ ]  | SizePicker       |        |                                                                                                                                        |
-| [ ]  | StylePicker      |        |                                                                                                                                        |
+| [x]  | StylePicker      | 1      | Native radios; 3:4 swatches with a per-style terrain sketch so styles differ by shape, not just colour; within 1.3px of the canvas.    |
 | [ ]  | Dropzone         |        |                                                                                                                                        |
 | [ ]  | ElevationProfile |        |                                                                                                                                        |
 

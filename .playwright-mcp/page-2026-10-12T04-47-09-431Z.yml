@@ -1,0 +1,15 @@
+- generic [ref=f1e5]:
+    - heading "Story not found" [level=1] [ref=f1e6]
+    - paragraph [ref=f1e7]:
+        - text: The story id
+        - code [ref=f1e8]: components--dropzone--error-wrong-type
+        - text: you are trying to open does not exist. Typo?
+    - paragraph [ref=f1e9]:
+        - link "Back to home" [ref=f1e10] [cursor=pointer]:
+            - /url: /
+    - paragraph [ref=f1e11]:
+        - link "GitHub" [ref=f1e12] [cursor=pointer]:
+            - /url: https://github.com/tajo/ladle
+    - paragraph [ref=f1e13]:
+        - link "Docs" [ref=f1e14] [cursor=pointer]:
+            - /url: https://www.ladle.dev

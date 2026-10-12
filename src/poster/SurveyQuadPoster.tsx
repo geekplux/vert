@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
-import { SURVEY_QUAD_TITLE_FACE, useFaceMeasure } from './faceMeasure';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { SURVEY_QUAD_LABEL_FACE, SURVEY_QUAD_TITLE_FACE, useFaceMeasure } from './faceMeasure';
 import type { SurveyQuadFigureData, SurveyQuadMap } from './figures';
-import { CONTOUR_INTERVAL_M } from './contours';
+import { contourIntervalText, defaultContourInterval } from './contours';
 import type { ScaleBar } from './contours';
 import { posterLayout } from './layout';
 import type { PosterLayoutKind } from './layout';
@@ -101,7 +101,11 @@ export function SurveyQuadPoster({
   const stats = quadStats(content);
   const map = figureData?.map ?? null;
   const coordinates = figureData?.coordinates ?? null;
-  const interval = map?.interval ?? CONTOUR_INTERVAL_M;
+  const intervalText = contourIntervalText(
+    map?.interval ?? defaultContourInterval(content.units),
+    content.units,
+  );
+  const [keyRef, scaleRoom] = useScaleRoom(k);
   // The Caslon italic is only needed (and fetched) for a subtitle.
   const { subtitle } = content;
   useEffect(() => {
@@ -175,11 +179,18 @@ export function SurveyQuadPoster({
             ))}
           </div>
         )}
-        <div className={styles.key}>
+        <div className={styles.key} ref={keyRef}>
           <Legend k={k} />
           <div className={styles.scale} data-slot="scale">
-            {map && <ScaleBarGraphic bar={map.scaleBar} k={k} labelPx={SCALE_LABEL_PX[kind]} />}
-            <div className={styles.label}>CONTOUR INTERVAL {interval} METRES</div>
+            {map && (
+              <ScaleBarGraphic
+                bar={map.scaleBar}
+                k={k}
+                labelPx={SCALE_LABEL_PX[kind]}
+                room={scaleRoom}
+              />
+            )}
+            <div className={styles.label}>CONTOUR INTERVAL {intervalText}</div>
           </div>
         </div>
       </div>
@@ -304,34 +315,183 @@ function Legend({ k }: { k: number }) {
   );
 }
 
-/** Alternating ink / paper segments with tick labels under them ("0 1 2 3 4 km"). */
 /** Scale-bar tick labels, logical px (as in the CSS): social text is at least 18 px. */
 const SCALE_LABEL_PX: Readonly<Record<PosterLayoutKind, number>> = { print: 10, social: 18 };
 
+/** Least space between two shown scale labels, em. */
+const SCALE_LABEL_GAP_EM = 0.5;
+
+/** Least space kept between the legend and the scale block, logical px at 720 wide. */
+const KEY_GAP_PX = 24;
+
+export type ScaleLabelAlign = 'start' | 'centre' | 'end' | 'flush';
+
 /**
- * Which tick labels fit under a bar `lengthPx` long at `labelPx`: all of them when they fit, else
- * every other one (always the first and the last, which carries the unit), else only those two.
- * Widths are estimated at 0.55 em per character plus a 0.6 em gap (Archivo Narrow digits are
- * ~0.5 em).
+ * How tick label `i` of `count` sits on its tick: the first starts at the bar's start; the last
+ * ("4 km") has its number centred on the tick and the unit after it ('end'), or, with
+ * `endFlush`, ends flush with the bar's end as in the canvas ('flush'); the rest are centred.
  */
-export function scaleLabelsShown(labels: readonly string[], lengthPx: number, labelPx: number) {
-  const width = (shown: readonly string[]) =>
-    shown.reduce((sum, label) => sum + (label.length * 0.55 + 0.6) * labelPx, 0);
-  const all = labels.map(() => true);
-  if (width(labels) <= lengthPx) return all;
+export function scaleLabelAlign(i: number, count: number, endFlush = false): ScaleLabelAlign {
+  if (i === 0) return 'start';
+  if (i < count - 1) return 'centre';
+  return endFlush ? 'flush' : 'end';
+}
+
+/** "4 km" → ["4", " km"]: the number, then the unit with its space ("" when there is none). */
+export function splitScaleLabel(label: string): [string, string] {
+  const space = label.indexOf(' ');
+  return space < 0 ? [label, ''] : [label.slice(0, space), label.slice(space)];
+}
+
+/**
+ * The [left, right] of tick label `i` of `labels` on its tick at `tickX` (bar px: the bar starts
+ * at 0), with `measurePx` giving a text's width.
+ */
+export function scaleLabelExtent(
+  labels: readonly string[],
+  i: number,
+  tickX: number,
+  measurePx: (text: string) => number,
+  endFlush = false,
+): [number, number] {
+  const label = labels[i] ?? '';
+  const align = scaleLabelAlign(i, labels.length, endFlush);
+  if (align === 'start') return [0, measurePx(label)];
+  if (align === 'centre') return [tickX - measurePx(label) / 2, tickX + measurePx(label) / 2];
+  if (align === 'flush') return [tickX - measurePx(label), tickX];
+  const [number, unit] = splitScaleLabel(label);
+  const left = tickX - measurePx(number) / 2;
+  return [left, left + measurePx(number) + (unit ? measurePx(unit) : 0)];
+}
+
+/**
+ * Which tick labels to show, each on its tick (`scaleLabelAlign`) at its real width: all of them
+ * when no two come closer than `gap`, else every other one (always the first and the last, which
+ * carries the unit), else only those two.
+ */
+export function scaleLabelsShown(
+  labels: readonly string[],
+  tickXs: readonly number[],
+  measurePx: (text: string) => number,
+  gap: number,
+  endFlush = false,
+): boolean[] {
   const last = labels.length - 1;
+  const fits = (shown: readonly boolean[]) => {
+    let right = -Infinity;
+    for (let i = 0; i <= last; i++) {
+      if (!shown[i]) continue;
+      const [l, r] = scaleLabelExtent(labels, i, tickXs[i] ?? 0, measurePx, endFlush);
+      if (l < right + gap) return false;
+      right = r;
+    }
+    return true;
+  };
+  const all = labels.map(() => true);
+  if (fits(all)) return all;
   const alternate = labels.map((_, i) => i % 2 === 0 || i === last);
   if (alternate[last - 1] && last - 1 > 0) alternate[last - 1] = false;
-  if (width(labels.filter((_, i) => alternate[i])) <= lengthPx) return alternate;
+  if (fits(alternate)) return alternate;
   return labels.map((_, i) => i === 0 || i === last);
 }
 
-function ScaleBarGraphic({ bar, k, labelPx }: { bar: ScaleBar; k: number; labelPx: number }) {
-  const shown = scaleLabelsShown(bar.labels, bar.lengthPx, labelPx);
+export interface ScaleLabelLayout {
+  /** Each tick's x, bar px: the left edge of segment i (the last, the last segment's right edge). */
+  readonly ticks: readonly number[];
+  readonly shown: readonly boolean[];
+  /** The last label ends flush with the bar instead of centring its number on the tick. */
+  readonly endFlush: boolean;
+  /**
+   * Room kept after the bar's length, px: the bar's stroke and the unit hanging past the last
+   * tick. The scale block is this much wider than the bar, so nothing in it crosses the column.
+   */
+  readonly reserve: number;
+}
+
+/**
+ * Lays out the scale bar's labels: the last label centres its number on its tick with the unit
+ * after it, and its overhang past the bar is reserved in the scale block, unless the bar plus that
+ * overhang is wider than `room` (the space the key leaves for the scale), in which case the last
+ * label ends flush with the bar's end.
+ */
+export function scaleLabelLayout(
+  bar: Pick<ScaleBar, 'labels' | 'segmentPx' | 'lengthPx'>,
+  k: number,
+  measurePx: (text: string) => number,
+  gap: number,
+  room = Infinity,
+): ScaleLabelLayout {
+  const { labels } = bar;
+  const ticks = labels.map((_, i) => sc(i * bar.segmentPx + k / 2, 1));
+  const last = labels.length - 1;
+  const centredRight = scaleLabelExtent(labels, last, ticks[last] ?? 0, measurePx)[1];
+  const hanging = Math.max(k, Math.ceil(centredRight - bar.lengthPx));
+  const endFlush = bar.lengthPx + hanging > room;
+  return {
+    ticks,
+    shown: scaleLabelsShown(labels, ticks, measurePx, gap, endFlush),
+    endFlush,
+    reserve: endFlush ? k : hanging,
+  };
+}
+
+/**
+ * The width the key leaves for the scale block: the key's width less the legend's and a gap.
+ * `undefined` until laid out (and in jsdom, which has no layout).
+ */
+function useScaleRoom(k: number): [RefObject<HTMLDivElement | null>, number | undefined] {
+  const keyRef = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<number>();
+  useLayoutEffect(() => {
+    const key = keyRef.current;
+    const legend = key?.firstElementChild;
+    if (!key || !(legend instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return;
+    const update = () => {
+      setRoom(
+        key.clientWidth > 0 ? key.clientWidth - legend.offsetWidth - KEY_GAP_PX * k : undefined,
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(key);
+    observer.observe(legend);
+    return () => {
+      observer.disconnect();
+    };
+  }, [k]);
+  return [keyRef, room];
+}
+
+/**
+ * Alternating ink / paper segments with tick labels under them ("0 1 2 3 4 km"), each label on
+ * its tick (`scaleLabelLayout`): the labels share one grid cell and are moved there with a margin
+ * and a transform, so they stay on their ticks whatever their real widths.
+ */
+function ScaleBarGraphic({
+  bar,
+  k,
+  labelPx,
+  room,
+}: {
+  bar: ScaleBar;
+  k: number;
+  labelPx: number;
+  room: number | undefined;
+}) {
+  const measure = useFaceMeasure(SURVEY_QUAD_LABEL_FACE);
+  const count = bar.labels.length;
+  const { ticks, shown, endFlush, reserve } = scaleLabelLayout(
+    bar,
+    k,
+    (text) => measure(text) * labelPx,
+    SCALE_LABEL_GAP_EM * labelPx,
+    room,
+  );
   const height = sc(8, k);
   const width = bar.lengthPx;
   return (
-    <div className={styles.scaleBar} style={{ width }}>
+    // Border-box: the padding (the reserve) comes on top of the bar's length.
+    <div className={styles.scaleBar} style={{ width: width + reserve, paddingRight: reserve }}>
       <svg width={width + k} height={height + sc(2, k)} data-scale-bar={bar.text}>
         {Array.from({ length: bar.segments }, (_, i) => (
           <rect
@@ -347,9 +507,23 @@ function ScaleBarGraphic({ bar, k, labelPx }: { bar: ScaleBar; k: number; labelP
         ))}
       </svg>
       <div className={styles.scaleLabels}>
-        {bar.labels.map((label, i) => (
-          <span key={i}>{shown[i] ? label : ''}</span>
-        ))}
+        {bar.labels.map((label, i) => {
+          const align = scaleLabelAlign(i, count, endFlush);
+          if (!shown[i]) return <span key={i} />;
+          if (align === 'start') return <span key={i}>{label}</span>;
+          const [number, unit] = align === 'end' ? splitScaleLabel(label) : [label, ''];
+          return (
+            <span
+              key={i}
+              className={align === 'flush' ? styles.scaleFlush : styles.scaleTick}
+              style={{ marginLeft: ticks[i] ?? 0 }}
+              data-align={align}
+            >
+              {number}
+              {unit && <span className={styles.scaleUnit}>{unit}</span>}
+            </span>
+          );
+        })}
       </div>
     </div>
   );

@@ -172,5 +172,9 @@ describe('surveyQuadFigureData', () => {
     expect(data.map?.markers.map((marker) => marker.kind)).toEqual(['start', 'finish']);
     expect(data.map?.scaleBar.lengthPx).toBeLessThanOrEqual(300);
     expect(data.map?.scaleBar.text).toMatch(/ (mi|ft)$/);
+    // Contours every 50 ft (or a coarser step in feet), never a metric interval.
+    const feet = (data.map?.interval ?? NaN) / 0.3048;
+    expect([50, 100, 200, 500, 1000, 2000, 5000]).toContain(Math.round(feet));
+    expect(feet).toBeCloseTo(Math.round(feet), 6);
   });
 });

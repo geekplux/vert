@@ -12,8 +12,25 @@ import { METRES_PER_FOOT, METRES_PER_MILE } from '../lib/format';
 
 /** Contour interval, metres (DESIGN-SPEC §4). */
 export const CONTOUR_INTERVAL_M = 20;
-/** Every 5th contour (100 m at the 20 m interval) is an index contour, drawn thicker. */
+/** Contour interval in imperial units, feet (DECISIONS: 50 ft, index lines every 250 ft). */
+export const CONTOUR_INTERVAL_FT = 50;
+/**
+ * Every 5th contour is an index contour, drawn thicker: 100 m at the 20 m interval, 250 ft at
+ * 50 ft.
+ */
 export const INDEX_EVERY = 5;
+
+/** The usual contour interval for `units`, metres: 20 m, or 50 ft (15.24 m). */
+export function defaultContourInterval(units: Units = 'metric'): number {
+  return units === 'imperial' ? CONTOUR_INTERVAL_FT * METRES_PER_FOOT : CONTOUR_INTERVAL_M;
+}
+
+/** The interval as the map's label states it: "20 METRES", "50 FEET". */
+export function contourIntervalText(intervalMetres: number, units: Units = 'metric'): string {
+  return units === 'imperial'
+    ? `${String(Math.round(intervalMetres / METRES_PER_FOOT))} FEET`
+    : `${String(Math.round(intervalMetres * 100) / 100)} METRES`;
+}
 
 export interface ContourLine {
   /** Elevation, metres. */
@@ -529,15 +546,16 @@ export function chaikin(points: ArrayLike<number>, closed: boolean, passes = 1):
 }
 
 /**
- * Contour interval for a heightfield drawn at `pxPerMetre`: 20 m (DESIGN-SPEC §4), or the next of
- * 40 / 50 / 100 / 200 / 500 m when 20 m lines would be packed closer than `minSpacingPx` on
- * average (the mean slope of the grid sets the spacing), so big mountains on a small map stay
- * legible. The map's label always states the interval actually used.
+ * Contour interval, metres, for a heightfield drawn at `pxPerMetre`: 20 m (DESIGN-SPEC §4), or
+ * the next of 40 / 50 / 100 / 200 / 500 / 1000 m when 20 m lines would be packed closer than
+ * `minSpacingPx` on average (the mean slope of the grid sets the spacing), so big mountains on a
+ * small map stay legible. In imperial units the steps are 50 / 100 / 200 / 500 / 1000 / 2000 /
+ * 5000 ft. The map's label always states the interval actually used (`contourIntervalText`).
  */
 export function chooseContourInterval(
   heightfield: Pick<Heightfield, 'width' | 'height' | 'elevations' | 'metresPerSample'>,
   pxPerMetre: number,
-  minSpacingPx = 2.5,
+  { units = 'metric', minSpacingPx = 2.5 }: { units?: Units; minSpacingPx?: number } = {},
 ): number {
   const { width: w, height: h, elevations: z, metresPerSample: mps } = heightfield;
   let sum = 0;
@@ -553,10 +571,14 @@ export function chooseContourInterval(
     }
   }
   const slope = count > 0 ? sum / count : 0;
-  for (const interval of [CONTOUR_INTERVAL_M, 40, 50, 100, 200, 500]) {
+  const steps =
+    units === 'imperial'
+      ? [CONTOUR_INTERVAL_FT, 100, 200, 500, 1000, 2000, 5000].map((ft) => ft * METRES_PER_FOOT)
+      : [CONTOUR_INTERVAL_M, 40, 50, 100, 200, 500, 1000];
+  for (const interval of steps) {
     if (slope === 0 || (interval / slope) * pxPerMetre >= minSpacingPx) return interval;
   }
-  return 1000;
+  return steps.at(-1) ?? CONTOUR_INTERVAL_M;
 }
 
 // ---------------------------------------------------------------------------------------------

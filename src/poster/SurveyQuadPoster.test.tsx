@@ -6,11 +6,20 @@ import { INITIAL_PREFS } from '../page/state';
 import type { PosterPrefs } from '../page/state';
 import { expectNoAxeViolations } from '../test/axe';
 import { scaleBarFor } from './contours';
+import { SURVEY_QUAD_LABEL_FACE, faceTableMeasure } from './faceMeasure';
+import { SCALE_BAR_MAX_PX } from './figures';
 import type { SurveyQuadFigureData } from './figures';
+import { posterLayout } from './layout';
 import { posterSizeById } from './sizes';
 import type { PosterSizeId } from './sizes';
 import { SURVEY_QUAD_PALETTE } from './styles';
-import { SurveyQuadPoster, scaleLabelsShown } from './SurveyQuadPoster';
+import {
+  SurveyQuadPoster,
+  scaleLabelExtent,
+  scaleLabelLayout,
+  scaleLabelsShown,
+  splitScaleLabel,
+} from './SurveyQuadPoster';
 import { posterContentFromRun } from './types';
 
 const NAME = SAMPLE_RUN.name;
@@ -53,6 +62,25 @@ function renderPoster(
       figureData={data}
       figure={figure}
     />,
+  );
+  const root = screen.getByRole('img', { name: /^Poster: / });
+  const slot = (name: string) => root.querySelector<HTMLElement>(`[data-slot="${name}"]`);
+  return { ...result, root, slot };
+}
+
+/** Renders with other display units (the content's units drive the interval label). */
+function renderWithUnits(
+  size: PosterSizeId,
+  data: SurveyQuadFigureData,
+  units: 'metric' | 'imperial',
+) {
+  const content = posterContentFromRun(SAMPLE_RUN, {
+    ...INITIAL_PREFS,
+    units,
+    poster: { ...INITIAL_PREFS.poster, stats: ALL },
+  });
+  const result = render(
+    <SurveyQuadPoster content={content} size={posterSizeById(size)} figureData={data} />,
   );
   const root = screen.getByRole('img', { name: /^Poster: / });
   const slot = (name: string) => root.querySelector<HTMLElement>(`[data-slot="${name}"]`);
@@ -176,11 +204,156 @@ describe('SurveyQuadPoster', () => {
     expect(slot('stats')?.style.getPropertyValue('--stat-columns')).toBe('2');
   });
 
-  it('thins the scale labels when they would not fit under the bar', () => {
+  it('thins the scale labels by their real widths on their ticks', () => {
     const labels = ['0', '0.25', '0.5', '0.75', '1 km'];
-    expect(scaleLabelsShown(labels, 300, 18)).toEqual([true, true, true, true, true]);
-    expect(scaleLabelsShown(labels, 120, 18)).toEqual([true, false, true, false, true]);
-    expect(scaleLabelsShown(labels, 60, 18)).toEqual([true, false, false, false, true]);
+    const measure = faceTableMeasure(SURVEY_QUAD_LABEL_FACE);
+    const px = (text: string) => measure(text) * 18;
+    const ticks = (segment: number) => labels.map((_, i) => i * segment);
+    expect(scaleLabelsShown(labels, ticks(75), px, 9)).toEqual([true, true, true, true, true]);
+    expect(scaleLabelsShown(labels, ticks(30), px, 9)).toEqual([true, false, true, false, true]);
+    expect(scaleLabelsShown(labels, ticks(12), px, 9)).toEqual([true, false, false, false, true]);
+    // Narrow digits fit where wide ones would not.
+    const narrow = (text: string) => px(text) / 2;
+    expect(scaleLabelsShown(labels, ticks(30), narrow, 9)).toEqual([true, true, true, true, true]);
+  });
+
+  it('places each scale label on its tick at every size', () => {
+    const measure = faceTableMeasure(SURVEY_QUAD_LABEL_FACE);
+    for (const size of ['18x24', 'a3', '4x5', '9x16'] as const) {
+      const kind = posterLayout(posterSizeById(size)).kind;
+      const labelPx = kind === 'print' ? 10 : 18;
+      // The sample's map scale at this size (about 0.073 px/m in print, 0.092 on the share card).
+      const bar = scaleBarFor(kind === 'print' ? 0.073 : 0.092, {
+        maxPx: SCALE_BAR_MAX_PX[kind],
+      });
+      const map = DATA.map;
+      if (!map) throw new Error('fixture');
+      const { slot, unmount } = renderPoster(size, {
+        data: { ...DATA, map: { ...map, scaleBar: bar } },
+      });
+      const svg = slot('scale')?.querySelector('[data-scale-bar]');
+      const rects = Array.from(svg?.querySelectorAll('rect') ?? []);
+      // Ticks: each segment's left edge, then the last one's right edge.
+      const ticks = [
+        ...rects.map((rect) => Number(rect.getAttribute('x'))),
+        Number(rects.at(-1)?.getAttribute('x')) + Number(rects.at(-1)?.getAttribute('width')),
+      ];
+      const spans = Array.from(svg?.nextElementSibling?.children ?? []) as HTMLElement[];
+      expect(spans).toHaveLength(bar.labels.length);
+      const px = (text: string) => measure(text) * labelPx;
+      spans.forEach((span, i) => {
+        if (!span.textContent) return;
+        expect(span.textContent).toBe(bar.labels[i]);
+        if (i === 0) {
+          // Documented exception: the first label starts at the bar's start.
+          expect(span.style.marginLeft).toBe('');
+          expect(scaleLabelExtent(bar.labels, 0, ticks[0] ?? 0, px)[0]).toBe(0);
+          return;
+        }
+        // Anchored at the tick and centred there (the last: its number, the unit after it).
+        expect(Math.abs(parseFloat(span.style.marginLeft) - (ticks[i] ?? NaN))).toBeLessThan(1);
+        const [left, right] = scaleLabelExtent(bar.labels, i, ticks[i] ?? 0, px);
+        const [number, unit] = splitScaleLabel(bar.labels[i] ?? '');
+        const centre = i === bar.labels.length - 1 ? left + px(number) / 2 : (left + right) / 2;
+        expect(Math.abs(centre - (ticks[i] ?? NaN))).toBeLessThan(1);
+        expect(span.getAttribute('data-align')).toBe(
+          i === bar.labels.length - 1 ? 'end' : 'centre',
+        );
+        if (i === bar.labels.length - 1) expect(unit).toMatch(/^ (km|m)$/);
+      });
+      // No two shown labels overlap.
+      const shown = spans.flatMap((span, i) =>
+        span.textContent ? [scaleLabelExtent(bar.labels, i, ticks[i] ?? 0, px)] : [],
+      );
+      for (let j = 1; j < shown.length; j++) {
+        expect(shown[j]?.[0]).toBeGreaterThan((shown[j - 1]?.[1] ?? 0) + 0.4 * labelPx);
+      }
+      unmount();
+    }
+  });
+
+  it('keeps every scale-bar text inside the scale block, so none crosses the column edge', () => {
+    // The scale block sits at the right end of the key, ending at the column's (the map frame's)
+    // right edge; its width is the bar plus the reserve. Every label must end inside it, at every
+    // size and in imperial units, with the bar as long as it gets (SCALE_BAR_MAX_PX).
+    const measure = faceTableMeasure(SURVEY_QUAD_LABEL_FACE);
+    const cases = [
+      ['18x24', 'metric'],
+      ['a3', 'metric'],
+      ['4x5', 'metric'],
+      ['9x16', 'metric'],
+      ['4x5', 'imperial'],
+      ['18x24', 'imperial'],
+    ] as const;
+    for (const [size, units] of cases) {
+      const layout = posterLayout(posterSizeById(size));
+      const k = layout.width / 720;
+      const labelPx = layout.kind === 'print' ? 10 : 18;
+      const px = (text: string) => measure(text) * labelPx;
+      for (const pxPerMetre of [0.06, 0.073, 0.0835, 0.092, 0.11]) {
+        const bar = scaleBarFor(pxPerMetre, { maxPx: SCALE_BAR_MAX_PX[layout.kind], units });
+        for (const room of [Infinity, bar.lengthPx + k]) {
+          const placed = scaleLabelLayout(bar, k, px, 0.5 * labelPx, room);
+          const blockRight = bar.lengthPx + placed.reserve;
+          expect(placed.endFlush).toBe(room !== Infinity);
+          bar.labels.forEach((_, i) => {
+            if (!placed.shown[i]) return;
+            const [left, right] = scaleLabelExtent(
+              bar.labels,
+              i,
+              placed.ticks[i] ?? 0,
+              px,
+              placed.endFlush,
+            );
+            expect(left).toBeGreaterThanOrEqual(0);
+            expect(right).toBeLessThanOrEqual(blockRight + 1e-9);
+          });
+          // The bar's own stroke is inside too.
+          expect(placed.reserve).toBeGreaterThanOrEqual(k);
+          if (room !== Infinity) expect(blockRight).toBeLessThanOrEqual(room + 1e-9);
+        }
+      }
+      // The rendered block reserves that room (width = bar + reserve, the reserve as padding).
+      const bar = scaleBarFor(0.073, { maxPx: SCALE_BAR_MAX_PX[layout.kind], units });
+      const map = DATA.map;
+      if (!map) throw new Error('fixture');
+      const { slot, unmount } = renderPoster(size, {
+        data: { ...DATA, map: { ...map, scaleBar: bar } },
+      });
+      const block = slot('scale')?.querySelector<HTMLElement>('[data-scale-bar]')?.parentElement;
+      const placed = scaleLabelLayout(bar, k, px, 0.5 * labelPx);
+      expect(parseFloat(block?.style.width ?? '')).toBeCloseTo(bar.lengthPx + placed.reserve, 6);
+      expect(parseFloat(block?.style.paddingRight ?? '')).toBeCloseTo(placed.reserve, 6);
+      unmount();
+    }
+  });
+
+  it('ends the last label flush with the bar when the hanging unit has no room', () => {
+    const bar = scaleBarFor(200 / 4500, { maxPx: 200 });
+    const px = (text: string) => faceTableMeasure(SURVEY_QUAD_LABEL_FACE)(text) * 10;
+    const roomy = scaleLabelLayout(bar, 1, px, 5);
+    expect(roomy.endFlush).toBe(false);
+    expect(roomy.reserve).toBeGreaterThan(10); // " km" hangs past the bar
+    const tight = scaleLabelLayout(bar, 1, px, 5, bar.lengthPx + 5);
+    expect(tight.endFlush).toBe(true);
+    expect(tight.reserve).toBe(1);
+    const last = bar.labels.length - 1;
+    const [, right] = scaleLabelExtent(bar.labels, last, tight.ticks[last] ?? 0, px, true);
+    expect(right).toBeCloseTo(bar.lengthPx + 0.5, 1); // the tick, rounded to 0.01 px
+  });
+
+  it('states the contour interval in feet in imperial units', () => {
+    const map = DATA.map;
+    if (!map) throw new Error('fixture');
+    const withMap = renderWithUnits(
+      '18x24',
+      { ...DATA, map: { ...map, interval: 15.24 } },
+      'imperial',
+    );
+    expect(withMap.slot('scale')?.lastElementChild?.textContent).toBe('CONTOUR INTERVAL 50 FEET');
+    withMap.unmount();
+    const without = renderWithUnits('18x24', { map: null, coordinates: null }, 'imperial');
+    expect(without.slot('scale')?.textContent).toBe('CONTOUR INTERVAL 50 FEET');
   });
 
   it('has no axe violations', async () => {

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Heightfield } from '../terrain/heightfield';
+import { METRES_PER_FOOT } from '../lib/format';
 import {
   chooseContourInterval,
+  contourIntervalText,
   contourLevels,
+  defaultContourInterval,
   contourPaths,
   extractContours,
   isIndexLevel,
@@ -268,6 +271,50 @@ describe('chooseContourInterval', () => {
     expect(chooseContourInterval(ramp, 0.1)).toBe(20); // 20 px apart
     expect(chooseContourInterval(ramp, 0.01)).toBe(40); // 2 px at 20 m, 4 px at 40 m
     expect(chooseContourInterval(ramp, 0.001)).toBe(500);
+  });
+
+  it('uses 50 ft in imperial units, and coarser steps in feet when that packs too tight', () => {
+    const ramp = field(101, 101, (x) => 0.1 * 10 * x, { x: 10, y: 10 });
+    const ft = (feet: number) => feet * METRES_PER_FOOT;
+    expect(chooseContourInterval(ramp, 0.1, { units: 'imperial' })).toBeCloseTo(ft(50), 9);
+    // 50 ft lines would be 1.5 px apart; 100 ft lines are 3 px apart.
+    expect(chooseContourInterval(ramp, 0.01, { units: 'imperial' })).toBeCloseTo(ft(100), 9);
+    expect(chooseContourInterval(ramp, 0.001, { units: 'imperial' })).toBeCloseTo(ft(1000), 9);
+  });
+});
+
+describe('contour interval in each unit system', () => {
+  it('is 20 m (index 100 m) in metric and 50 ft (index 250 ft) in imperial', () => {
+    expect(defaultContourInterval('metric')).toBe(20);
+    expect(defaultContourInterval('imperial')).toBeCloseTo(15.24, 9);
+    expect(contourIntervalText(20)).toBe('20 METRES');
+    expect(contourIntervalText(40, 'metric')).toBe('40 METRES');
+    expect(contourIntervalText(defaultContourInterval('imperial'), 'imperial')).toBe('50 FEET');
+    expect(contourIntervalText(100 * METRES_PER_FOOT, 'imperial')).toBe('100 FEET');
+  });
+
+  it('puts imperial index contours at multiples of 250 ft', () => {
+    // 0 → 600 m eastward (0 → 1,968 ft): 50 ft levels, every 5th an index line.
+    const ramp = extractContours(
+      field(301, 3, (x) => 2 * x),
+      { interval: defaultContourInterval('imperial') },
+    );
+    const feet = ramp.map((line) => line.level / METRES_PER_FOOT);
+    expect(feet.length).toBe(39); // 50 … 1,950 ft
+    for (const [i, line] of ramp.entries()) {
+      const level = feet[i] ?? NaN;
+      expect(level / 50).toBeCloseTo(Math.round(level / 50), 6);
+      const onIndex = Math.abs(level / 250 - Math.round(level / 250)) < 1e-6;
+      expect(line.index).toBe(onIndex);
+    }
+    expect(feet.filter((_, i) => ramp[i]?.index).map(Math.round)).toEqual([
+      250, 500, 750, 1000, 1250, 1500, 1750,
+    ]);
+    // Metric stays at 20 m with 100 m index lines.
+    const metric = extractContours(field(301, 3, (x) => 2 * x));
+    expect(metric.filter((line) => line.index).map((line) => line.level)).toEqual([
+      100, 200, 300, 400, 500,
+    ]);
   });
 });
 

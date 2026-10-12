@@ -179,9 +179,35 @@
 }
 
 .scaleLabels {
-  display: flex;
-  justify-content: space-between;
+  /* Every label in the one cell, moved onto its tick (inline margin and transform). */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   white-space: nowrap;
+}
+
+.scaleLabels > span {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+
+/*
+ * Centred on its tick (the inline margin-left); the last label's unit hangs after its number, in
+ * room the scale bar reserves (its padding-right).
+ */
+.scaleTick {
+  position: relative;
+  transform: translateX(-50%);
+}
+
+.scaleUnit {
+  position: absolute;
+  left: 100%;
+  white-space: pre;
+}
+
+/* Ends at the bar's end (when a hanging unit would not fit). */
+.scaleFlush {
+  transform: translateX(-100%);
 }
 
 /* ---- Print: 18×24 and A3, 720 wide ---- */

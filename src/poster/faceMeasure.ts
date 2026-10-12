@@ -61,6 +61,24 @@ export const SURVEY_QUAD_TITLE_FACE: TitleFace = {
   unknown: 0.85,
 };
 
+/**
+ * Archivo Narrow 400 advance widths in em, for the Survey Quad scale-bar labels ("0 0.5 1 1.5 2 km",
+ * "0 1 2 mi", "0 500 1000 ft"): canvas `measureText` on the self-hosted face.
+ */
+const ARCHIVO_NARROW_400: Readonly<Record<string, number>> = {
+  '0': 0.456, '1': 0.456, '2': 0.456, '3': 0.456, '4': 0.456, '5': 0.456, '6': 0.456,
+  '7': 0.456, '8': 0.456, '9': 0.456,
+  '.': 0.228, ' ': 0.228, k: 0.41, m: 0.683, i: 0.228, f: 0.228, t: 0.228,
+}; // prettier-ignore
+
+/** The Survey Quad scale-bar labels' face (measured like a title face). */
+export const SURVEY_QUAD_LABEL_FACE: TitleFace = {
+  style: 'E',
+  font: "400 100px 'Archivo Narrow', 'Arial Narrow', sans-serif",
+  table: ARCHIVO_NARROW_400,
+  unknown: 0.7,
+};
+
 const tableMeasures = new WeakMap<TitleFace, MeasureEm>();
 
 /** The table measure of a face. */

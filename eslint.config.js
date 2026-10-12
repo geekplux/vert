@@ -13,6 +13,7 @@ export default defineConfig(
     'test-results',
     '.wrangler',
     '.claude/worktrees',
+    'docs/verify',
     'worker/worker-configuration.d.ts',
   ]),
   {

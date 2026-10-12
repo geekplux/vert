@@ -88,6 +88,9 @@ everything.
 
 ## Page (phase 2)
 
+- Below 600px wide the elevation profile is 100px tall (DESIGN-SPEC §3). `Main-390.png` is the fluid
+  View frame rendered at 390 for reference; the canvas has no designed phone frame, so the spec wins.
+
 - Climbs list: the steepest row is shaded `--surface` **and** says "· steepest".
 - A loaded sample shows "SAMPLE DATA" in the date line, in `--route-text`.
 - "About" opens a short in-page dialog (what Vert is, privacy, credits); "GitHub" links to

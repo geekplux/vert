@@ -28,7 +28,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | [x]  | Segmented        | 2      | Native radios in a radiogroup; 40px drawn, 44x44 hit area per segment; NoInfer value typing; 0.4px from the canvas.                                       |
 | [x]  | Checkbox         | 1      | Native checkbox in a 44px label row; within 0px of the PosterMode stats row; keyboard verified.                                                           |
 | [x]  | TextField        | 2      | Label above a 44px input with a --rule-strong (3:1) border; counter from 80% that reads 'N / M characters' to AT; 0px from the canvas.                    |
-| [ ]  | Slider           |        |                                                                                                                                                           |
+| [x]  | Slider           | 3      | Native range with a styled 3:1 track and ink thumb, live formatted value + aria-valuetext, 44px hit area; within 1px of the canvas vertically.            |
 | [x]  | Marker           | 1      | Start ring, summit triangle, scrub dot; MarkerShape for embedding; 0px from the Tokens legend; distinct in greyscale.                                     |
 | [ ]  | SizePicker       |        |                                                                                                                                                           |
 | [x]  | StylePicker      | 1      | Native radios; 3:4 swatches with a per-style terrain sketch so styles differ by shape, not just colour; within 1.3px of the canvas.                       |

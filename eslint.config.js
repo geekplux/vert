@@ -12,7 +12,7 @@ export default defineConfig(
     'playwright-report',
     'test-results',
     '.wrangler',
-    '.claude/worktrees',
+    '.claude',
     'docs/verify',
     'worker/worker-configuration.d.ts',
   ]),

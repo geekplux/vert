@@ -20,6 +20,7 @@ docs/verify/
 
 # local
 .claude/worktrees/
+.claude/tmp-*/
 *.local
 .env
 .env.*

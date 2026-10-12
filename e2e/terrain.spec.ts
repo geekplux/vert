@@ -105,6 +105,54 @@ test('a file the user drops never leaves the browser: only assets and tile z/x/y
   expect(requests.some((request) => request.url().includes('/samples/'))).toBe(false);
 });
 
+/** A ~13 km loop on Taveuni, Fiji, centred on 180°: longitudes as a GPX stores them, ±180. */
+function antimeridianGpx(): Buffer {
+  const points: string[] = [];
+  for (let i = 0; i <= 600; i++) {
+    const a = (i / 600) * 2 * Math.PI;
+    const lat = -16.86 + 0.0165 * Math.sin(a);
+    let lon = 180 + 0.0225 * Math.cos(a);
+    if (lon >= 180) lon -= 360;
+    points.push(`<trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><ele>300</ele></trkpt>`);
+  }
+  return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="e2e" xmlns="http://www.topografix.com/GPX/1/1">
+<trk><name>Taveuni Dateline</name><trkseg>${points.join('')}</trkseg></trk></gpx>`);
+}
+
+test('a run across the antimeridian gets its own few tiles, on both sides of 180°', async ({
+  page,
+  baseURL,
+}) => {
+  const requests = recordRequests(page);
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'taveuni.gpx',
+    mimeType: 'application/gpx+xml',
+    buffer: antimeridianGpx(),
+  });
+  await waitForFirstFrame(page);
+  await expect(
+    page.getByRole('img', { name: /^3D terrain of Taveuni Dateline: 13\.\d km loop, / }),
+  ).toBeVisible();
+  const tiles = requests
+    .map((request) => /\/tiles\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(new URL(request.url()).pathname))
+    .filter((match) => match !== null)
+    .map((match) => match.slice(1).map(Number) as [number, number, number]);
+  // Not the whole world at z2 (the box used to span the globe): a run-sized area, x in range.
+  expect(tiles.length).toBeGreaterThan(0);
+  expect(tiles.length).toBeLessThanOrEqual(32);
+  for (const [z, x] of tiles) {
+    expect(z).toBeGreaterThanOrEqual(12);
+    expect(x).toBeGreaterThanOrEqual(0);
+    expect(x).toBeLessThan(2 ** z);
+  }
+  const n = 2 ** (tiles[0]?.[0] ?? 0);
+  expect(tiles.some(([, x]) => x === 0)).toBe(true);
+  expect(tiles.some(([, x]) => x === n - 1)).toBe(true);
+  expectPrivate(requests, baseURL);
+});
+
 test('legend and buttons overlay the terrain on wide screens and sit under it on phones', async ({
   page,
 }) => {

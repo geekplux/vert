@@ -5,8 +5,12 @@
  * difference from the ellipsoid (up to ~0.5%) is far below GPS noise, and every consumer in Vert
  * compares distances along the same track, so the bias cancels.
  *
- * Antimeridian: Vert assumes a single run never crosses ±180° longitude. Bounds are a plain
- * min/max over longitudes; a track that did cross would get a bbox spanning the whole globe.
+ * Antimeridian: longitudes are continuous, not confined to ±180°. A track that crosses 180° is
+ * unwrapped ({@link unwrapLongitudes}) into the representation with the smallest span, e.g.
+ * 179.95…180.05 rather than −179.95…179.95, and its bounds are taken in that space
+ * ({@link boundsOf}), so `east` may exceed 180 (or `west` fall below −180). World and tile x then
+ * run past [0, 1) and [0, 2^z) the same way; {@link wrapTile} folds a tile back into range before
+ * it is fetched, and {@link normalizeLon} folds a longitude back for display.
  */
 
 /** A WGS 84 position in degrees. */
@@ -15,7 +19,10 @@ export interface LatLon {
   readonly lon: number;
 }
 
-/** A lon/lat bounding box in degrees; `west <= east` (see the antimeridian note above). */
+/**
+ * A lon/lat bounding box in degrees; `west <= east`, `east − west <= 360`. Across the antimeridian
+ * one edge lies past ±180 (see the note above).
+ */
 export interface Bounds {
   readonly west: number;
   readonly south: number;
@@ -135,18 +142,31 @@ export function metresPerPixel(lat: number, z: number, tileSize = 256): number {
  */
 const TILE_EDGE_EPSILON = 1e-9;
 
-/** Inclusive tile index ranges covering a bbox at zoom `z`, clamped to the valid tile range. */
+/**
+ * Inclusive tile index ranges covering a bbox at zoom `z`. Rows are clamped to the valid range
+ * (the Mercator limits); columns are not, so a bbox past ±180° gets columns below 0 or from 2^z
+ * up, contiguous with the rest, and at most 2^z of them.
+ */
 function tileRange(bbox: Bounds, z: number) {
   const n = 2 ** z;
   const topLeft = lonLatToTile(bbox.west, bbox.north, z);
   const bottomRight = lonLatToTile(bbox.east, bbox.south, z);
-  const index = (v: number) => clamp(Math.floor(v), 0, n - 1);
+  const row = (v: number) => clamp(Math.floor(v), 0, n - 1);
   // An edge that lies on a tile boundary (within float noise) does not pull in the next tile.
-  const minX = index(topLeft.x + TILE_EDGE_EPSILON);
-  const minY = index(topLeft.y + TILE_EDGE_EPSILON);
-  const maxX = Math.max(minX, index(Math.ceil(bottomRight.x - TILE_EDGE_EPSILON) - 1));
-  const maxY = Math.max(minY, index(Math.ceil(bottomRight.y - TILE_EDGE_EPSILON) - 1));
+  const minX = Math.floor(topLeft.x + TILE_EDGE_EPSILON);
+  const minY = row(topLeft.y + TILE_EDGE_EPSILON);
+  const maxX = clamp(Math.ceil(bottomRight.x - TILE_EDGE_EPSILON) - 1, minX, minX + n - 1);
+  const maxY = Math.max(minY, row(Math.ceil(bottomRight.y - TILE_EDGE_EPSILON) - 1));
   return { minX, minY, maxX, maxY };
+}
+
+/**
+ * The same tile with its column folded into [0, 2^z): what to fetch for a tile that
+ * {@link tilesForBounds} numbered past ±180°. Rows are left alone (they are never out of range).
+ */
+export function wrapTile({ z, x, y }: TileCoord): TileCoord {
+  const n = 2 ** z;
+  return { z, x: ((x % n) + n) % n, y };
 }
 
 /** Number of tiles {@link tilesForBounds} would return, without building the list. */
@@ -157,7 +177,9 @@ export function tileCount(bbox: Bounds, z: number): number {
 
 /**
  * Tiles covering a bbox at zoom `z`, row by row from the north-west corner. Always at least one
- * tile; indices are clamped to the valid range, so a box past the Mercator limits is safe.
+ * tile. Rows are clamped to the valid range, so a box past the Mercator limits is safe; columns
+ * of a box past ±180° run outside [0, 2^z) (contiguous, for stitching): fetch them through
+ * {@link wrapTile}.
  */
 export function tilesForBounds(bbox: Bounds, z: number): TileCoord[] {
   const { minX, minY, maxX, maxY } = tileRange(bbox, z);
@@ -180,31 +202,98 @@ export function chooseZoom(bbox: Bounds, maxTiles: number): number {
   return 0;
 }
 
+/** A longitude folded into [−180, 180): for display, never for geometry. */
+export function normalizeLon(lon: number): number {
+  // In range already: returned as is, so ordinary longitudes never pick up float noise.
+  if (lon >= -180 && lon < 180) return lon;
+  return shiftInto(lon, -180);
+}
+
+/** `lon` moved by whole turns into [from, from + 360); unchanged when it is already there. */
+function shiftInto(lon: number, from: number): number {
+  if (lon >= from && lon < from + 360) return lon;
+  const shifted = lon - 360 * Math.floor((lon - from) / 360);
+  // Float noise can land a hair outside the window; the turn count is what matters.
+  if (shifted < from) return shifted + 360;
+  if (shifted >= from + 360) return shifted - 360;
+  // `+ 0` turns −0 into 0.
+  return shifted + 0;
+}
+
+/**
+ * The narrowest longitude interval holding every one of `lons` (any representation, e.g. from
+ * −180…180 or already unwrapped): the complement of the widest gap between them around the
+ * circle. `west` is in [−180, 180) when the interval does not cross ±180; across it, the interval
+ * is the one whose middle lies in [−180, 180), so one edge is past ±180. A tie keeps the interval
+ * that does not cross. Empty input gives `null`.
+ */
+export function lonInterval(lons: ArrayLike<number>): { west: number; east: number } | null {
+  const sorted = Float64Array.from(lons, normalizeLon).sort();
+  const n = sorted.length;
+  const first = sorted[0];
+  const last = sorted[n - 1];
+  if (first === undefined || last === undefined) return null;
+  // The gap that wraps from the easternmost back to the westernmost: the plain min/max.
+  let widest = first + 360 - last;
+  let west = first;
+  let east = last;
+  for (let i = 1; i < n; i++) {
+    const gap = (sorted[i] ?? 0) - (sorted[i - 1] ?? 0);
+    if (gap > widest) {
+      widest = gap;
+      west = sorted[i] ?? 0;
+      east = (sorted[i - 1] ?? 0) + 360;
+    }
+  }
+  if ((west + east) / 2 >= 180) {
+    west -= 360;
+    east -= 360;
+  }
+  return { west, east };
+}
+
+/**
+ * Longitudes unwrapped across the antimeridian: each one moved by a whole number of turns into
+ * {@link lonInterval} of them all, the representation with the smallest span. A track that does
+ * not cross ±180° comes back unchanged (as a new array); one that does stays continuous, e.g.
+ * [179.98, −179.99] → [179.98, 180.01].
+ */
+export function unwrapLongitudes(lons: ArrayLike<number>): Float64Array {
+  const interval = lonInterval(lons);
+  const out = Float64Array.from(lons);
+  if (!interval) return out;
+  // The interval lies inside [west, west + 360) by construction; a point within float noise of
+  // `west + 360` is the westernmost point itself.
+  const from = interval.west - 1e-9;
+  for (let i = 0; i < out.length; i++) out[i] = shiftInto(out[i] ?? 0, from);
+  return out;
+}
+
 /**
  * The bbox of a set of positions, grown on each side by `paddingFraction` of its width and height
- * (0.1 adds 10% of the span to every edge). Latitudes are clamped to ±90 and longitudes to ±180
- * after padding. Assumes the points do not cross the antimeridian.
+ * (0.1 adds 10% of the span to every edge). Longitudes are taken in their narrowest
+ * representation ({@link lonInterval}), so a track crossing the antimeridian gets a box a few
+ * kilometres wide with one edge past ±180, not one around the globe. Latitudes are clamped to ±90
+ * after padding, and the width to 360°.
  *
  * @throws RangeError when `points` is empty.
  */
 export function boundsOf(points: readonly LatLon[], paddingFraction = 0): Bounds {
-  if (points.length === 0) throw new RangeError('boundsOf needs at least one point');
-  let west = Infinity;
+  const lons = lonInterval(points.map((point) => point.lon));
+  if (!lons) throw new RangeError('boundsOf needs at least one point');
   let south = Infinity;
-  let east = -Infinity;
   let north = -Infinity;
-  for (const { lat, lon } of points) {
-    if (lon < west) west = lon;
-    if (lon > east) east = lon;
+  for (const { lat } of points) {
     if (lat < south) south = lat;
     if (lat > north) north = lat;
   }
-  const padX = (east - west) * paddingFraction;
+  const { west, east } = lons;
+  const padX = Math.min((east - west) * paddingFraction, (360 - (east - west)) / 2);
   const padY = (north - south) * paddingFraction;
   return {
-    west: clamp(west - padX, -180, 180),
+    west: west - padX,
     south: clamp(south - padY, -90, 90),
-    east: clamp(east + padX, -180, 180),
+    east: east + padX,
     north: clamp(north + padY, -90, 90),
   };
 }

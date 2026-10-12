@@ -198,3 +198,16 @@ everything.
   elevation from Terrarium, timestamps synthesized from a pace model, labelled SAMPLE DATA in the UI.
 - **GPX parsing** runs in a Web Worker with a small hand-written XML tokenizer (no `DOMParser` in
   workers, no XML dependency).
+- **Antimeridian**: a run that crosses 180° is unwrapped in the parse worker: every longitude is
+  moved by whole turns into the narrowest interval holding them all (middle in −180…180), so the
+  track is continuous and `run.bounds` has one edge past ±180 (e.g. 179.98…180.02). Everything
+  downstream (heightfield, drape, posters, figure bounds) works in that space; tile columns are
+  folded into [0, 2^z) only when fetched, so requests stay `/tiles/z/x/y.png`. Printed
+  coordinates are folded back (Survey Quad: "179°59′ W"; exactly 180° prints "180°00′ W"). The
+  date line reads the start’s longitude as recorded (`lonForOffset`). Terrarium's own data is
+  rough at 180° and Vert draws it as it is: on Taveuni the z11+ tiles just west of the line are
+  zero-filled (the island shows only at z10), and in Chukotka the tiles step ~115 m across it.
+- **Tile decode errors**: tile bodies are read with `arrayBuffer()` (Chromium's `blob()` failed on
+  every tile with the disk nearly full). When every tile arrives but none decodes, the View says
+  "the elevation data arrived, but this browser couldn't read it. Reload the page and try again."
+  instead of "Check your connection".

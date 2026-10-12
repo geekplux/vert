@@ -174,6 +174,27 @@ describe('handleMessage', () => {
         .startTime,
     ).toBeNaN();
   });
+
+  it('unwraps a run across the antimeridian: continuous points, a narrow box past 180', () => {
+    const text = gpx(`<trk><trkseg>
+      <trkpt lat="-16.86" lon="179.96"/><trkpt lat="-16.85" lon="179.98"/>
+      <trkpt lat="-16.84" lon="-179.99"/><trkpt lat="-16.85" lon="-179.98"/>
+      <trkpt lat="-16.86" lon="179.96"/>
+    </trkseg></trk>`);
+    const { run, points } = ok(
+      handleMessage({ id: 10, kind: 'text', text, fileName: 'taveuni.gpx' }).response,
+    );
+    const lons = Array.from(points.lon);
+    [179.96, 179.98, 180.01, 180.02, 179.96].forEach((lon, i) => {
+      expect(lons[i]).toBeCloseTo(lon, 9);
+    });
+    expect(run.bounds).toEqual({ west: 179.96, south: -16.86, east: 180.02, north: -16.84 });
+    // Distance goes the short way: a loop of about 14 km, not around the world.
+    expect(run.distance).toBeGreaterThan(12_000);
+    expect(run.distance).toBeLessThan(15_000);
+    // The date line rule still reads the start's longitude as recorded.
+    expect(run.lonForOffset).toBe(179.96);
+  });
 });
 
 describe('decodeGpxBytes', () => {
@@ -261,5 +282,17 @@ describe('roundOutward', () => {
       east: 180,
       north: 90,
     });
+  });
+
+  it('keeps an edge that lies past ±180 (a run across the antimeridian)', () => {
+    expect(roundOutward({ west: 179.97501, south: -17, east: 180.02249, north: -16 })).toEqual({
+      west: 179.975,
+      south: -17,
+      east: 180.0225,
+      north: -16,
+    });
+    expect(roundOutward({ west: -180.01001, south: 0, east: -179.9, north: 1 }).west).toBe(
+      -180.0101,
+    );
   });
 });

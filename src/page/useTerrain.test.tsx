@@ -2,10 +2,12 @@ import { act, render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HeightfieldError } from '../terrain/heightfield';
+import { TileDecodeError } from '../terrain/tiles';
 import type { Heightfield } from '../terrain/heightfield';
 import { hills } from '../terrain/testing';
 import {
   RunProvider,
+  TERRAIN_DECODE_ERROR,
   TERRAIN_GENERIC_ERROR,
   TERRAIN_OFFLINE_ERROR,
   useRetryTerrain,
@@ -147,6 +149,18 @@ describe('useTerrain lifecycle', () => {
     terrain.build(1).resolve(heightfield);
     await settle();
     expect(result.current.terrain).toMatchObject({ status: 'ready', heightfield });
+  });
+
+  it('tells a decode failure apart from a network failure', async () => {
+    const terrain = manualTerrain();
+    const { result } = renderHook(useTerrainProbe, {
+      wrapper: wrapper({ initialRun: SAMPLE_RUN, loadTerrain: terrain.loadTerrain }),
+    });
+    const tile = { z: 13, x: 1, y: 1 };
+    terrain.build(0).reject(new HeightfieldError([tile], new TileDecodeError(tile, 1), 'decode'));
+    await settle();
+    expect(result.current.terrain).toEqual({ status: 'error', error: TERRAIN_DECODE_ERROR });
+    expect(TERRAIN_DECODE_ERROR).not.toMatch(/connection/);
   });
 
   it('says offline when the browser is offline, whatever the error', async () => {

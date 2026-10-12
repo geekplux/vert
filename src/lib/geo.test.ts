@@ -7,13 +7,17 @@ import {
   cumulativeDistances,
   haversine,
   localMetres,
+  lonInterval,
   lonLatToTile,
   lonLatToWorld,
   metresPerPixel,
+  normalizeLon,
   tileBounds,
   tileCount,
   tilesForBounds,
+  unwrapLongitudes,
   worldToLonLat,
+  wrapTile,
   type Bounds,
 } from './geo';
 
@@ -22,6 +26,15 @@ const ONE_DEGREE_M = (2 * Math.PI * EARTH_RADIUS_M) / 360;
 
 /** Vogel State Park, Georgia: the sample run's start area. */
 const VOGEL = { lat: 34.764, lon: -83.926 };
+
+/** A loop on Taveuni, Fiji, across 180°: as a GPX stores it, ±180. */
+const TAVEUNI = [
+  { lat: -16.86, lon: 179.95 },
+  { lat: -16.84, lon: 179.97 },
+  { lat: -16.85, lon: -179.99 },
+  { lat: -16.88, lon: -179.98 },
+  { lat: -16.87, lon: 179.96 },
+];
 
 describe('haversine', () => {
   it('is zero for the same point', () => {
@@ -362,15 +375,49 @@ describe('boundsOf', () => {
     expect(boundsOf([VOGEL], 0.5)).toEqual(b);
   });
 
-  it('clamps padding to valid coordinates', () => {
+  it('clamps padded latitudes to ±90', () => {
     const b = boundsOf(
       [
-        { lat: -89, lon: -179 },
-        { lat: 89, lon: 179 },
+        { lat: -89, lon: -10 },
+        { lat: 89, lon: 10 },
       ],
       0.5,
     );
-    expect(b).toEqual({ west: -180, south: -90, east: 180, north: 90 });
+    expect(b).toEqual({ west: -20, south: -90, east: 20, north: 90 });
+  });
+
+  it('takes a track across the antimeridian the short way, one edge past 180', () => {
+    // Taveuni, Fiji: 179.95° E to 179.98° W.
+    const b = boundsOf(TAVEUNI);
+    expect(b.west).toBe(179.95);
+    expect(b.east).toBeCloseTo(180.02, 10);
+    expect(b.south).toBe(-16.88);
+    expect(b.north).toBe(-16.84);
+    const padded = boundsOf(TAVEUNI, 0.5);
+    expect(padded.west).toBeCloseTo(179.915, 10);
+    expect(padded.east).toBeCloseTo(180.055, 10);
+  });
+
+  it('keeps the middle of a crossing box within ±180', () => {
+    // Mostly west of the line: −180.01…−179.9 rather than 179.99…180.1.
+    const b = boundsOf([
+      { lat: 0, lon: 179.99 },
+      { lat: 0, lon: -179.9 },
+    ]);
+    expect(b.west).toBeCloseTo(-180.01, 10);
+    expect(b.east).toBeCloseTo(-179.9, 10);
+  });
+
+  it('pads a near-global spread by at most a turn', () => {
+    const b = boundsOf(
+      [
+        { lat: 0, lon: -120 },
+        { lat: 0, lon: 0 },
+        { lat: 0, lon: 120 },
+      ],
+      0.5,
+    );
+    expect(b.east - b.west).toBeLessThanOrEqual(360);
   });
 
   it('throws for no points', () => {
@@ -430,5 +477,140 @@ describe('localMetres', () => {
     const { x } = localMetres(origin, point);
     const trueEast = haversine({ lat: point.lat, lon: 0 }, point);
     expect(Math.abs(x - trueEast) / trueEast).toBeLessThan(0.0016);
+  });
+});
+
+describe('normalizeLon', () => {
+  it('leaves longitudes in [−180, 180) exactly as they are', () => {
+    for (const lon of [-180, -83.926, 0, 6.8652, 179.9999999]) expect(normalizeLon(lon)).toBe(lon);
+  });
+
+  it('folds longitudes past ±180 back by whole turns', () => {
+    expect(normalizeLon(180)).toBe(-180);
+    expect(normalizeLon(180.02)).toBeCloseTo(-179.98, 10);
+    expect(normalizeLon(-180.5)).toBeCloseTo(179.5, 10);
+    expect(normalizeLon(540.25)).toBeCloseTo(-179.75, 10);
+    expect(Object.is(normalizeLon(360), 0)).toBe(true);
+  });
+});
+
+describe('lonInterval', () => {
+  it('is the plain min/max for a track that does not cross ±180', () => {
+    expect(lonInterval([VOGEL.lon, -83.9, -83.95])).toEqual({ west: -83.95, east: -83.9 });
+  });
+
+  it('is the short way round across the antimeridian, in any representation', () => {
+    const raw = lonInterval(TAVEUNI.map((p) => p.lon));
+    const unwrapped = lonInterval([179.95, 179.97, 180.01, 180.02, 179.96]);
+    for (const interval of [raw, unwrapped]) {
+      expect(interval?.west).toBeCloseTo(179.95, 10);
+      expect(interval?.east).toBeCloseTo(180.02, 10);
+    }
+  });
+
+  it('keeps the non-crossing interval on a tie, and is null for no longitudes', () => {
+    expect(lonInterval([-90, 90])).toEqual({ west: -90, east: 90 });
+    expect(lonInterval([])).toBeNull();
+  });
+});
+
+describe('unwrapLongitudes', () => {
+  it('returns a track that does not cross ±180 unchanged', () => {
+    const lons = [VOGEL.lon, -83.9, -83.95];
+    expect(Array.from(unwrapLongitudes(lons))).toEqual(lons);
+    expect(Array.from(unwrapLongitudes([-179.99, -179.5]))).toEqual([-179.99, -179.5]);
+  });
+
+  it('makes a track across the antimeridian continuous, inside its bounds', () => {
+    const lons = unwrapLongitudes(TAVEUNI.map((p) => p.lon));
+    const expected = [179.95, 179.97, 180.01, 180.02, 179.96];
+    lons.forEach((lon, i) => {
+      expect(lon).toBeCloseTo(expected[i] ?? NaN, 10);
+    });
+    for (let i = 1; i < lons.length; i++) {
+      expect(Math.abs((lons[i] ?? 0) - (lons[i - 1] ?? 0))).toBeLessThan(0.1);
+    }
+    const bounds = boundsOf(TAVEUNI);
+    for (const lon of lons) {
+      expect(lon).toBeGreaterThanOrEqual(bounds.west);
+      expect(lon).toBeLessThanOrEqual(bounds.east);
+    }
+  });
+
+  it('keeps every point in place (the same longitude mod 360)', () => {
+    const raw = TAVEUNI.map((p) => p.lon);
+    unwrapLongitudes(raw).forEach((lon, i) => {
+      expect(normalizeLon(lon)).toBeCloseTo(raw[i] ?? NaN, 9);
+    });
+  });
+
+  it('handles a point exactly on 180 and an empty track', () => {
+    expect(Array.from(unwrapLongitudes([179.8, 180, -179.9]))).toEqual([179.8, 180, -179.9 + 360]);
+    // Centred past 180: the representation west of the line instead.
+    const west = unwrapLongitudes([179.9, 180, -179.8]);
+    expect(west[0]).toBeCloseTo(-180.1, 10);
+    expect(west[1]).toBe(-180);
+    expect(west[2]).toBe(-179.8);
+    expect(unwrapLongitudes([])).toHaveLength(0);
+  });
+});
+
+describe('tiles across the antimeridian', () => {
+  const crossing: Bounds = { west: 179.97, south: -16.88, east: 180.04, north: -16.84 };
+
+  it('numbers the columns past 180 contiguously; wrapTile folds them into [0, 2^z)', () => {
+    const z = 12;
+    const n = 2 ** z;
+    const tiles = tilesForBounds(crossing, z);
+    const xs = [...new Set(tiles.map((t) => t.x))].sort((a, b) => a - b);
+    expect(xs).toEqual([n - 1, n]);
+    expect(tileCount(crossing, z)).toBe(tiles.length);
+    const wrapped = tiles.map(wrapTile);
+    for (const t of wrapped) {
+      expect(t.x).toBeGreaterThanOrEqual(0);
+      expect(t.x).toBeLessThan(n);
+    }
+    expect([...new Set(wrapped.map((t) => t.x))].sort((a, b) => a - b)).toEqual([0, n - 1]);
+    expect(wrapped.map((t) => t.y)).toEqual(tiles.map((t) => t.y));
+  });
+
+  it('wraps negative columns too, and leaves in-range tiles alone', () => {
+    expect(wrapTile({ z: 3, x: -1, y: 2 })).toEqual({ z: 3, x: 7, y: 2 });
+    expect(wrapTile({ z: 3, x: 9, y: 2 })).toEqual({ z: 3, x: 1, y: 2 });
+    expect(wrapTile({ z: 12, x: 1093, y: 1625 })).toEqual({ z: 12, x: 1093, y: 1625 });
+  });
+
+  it('picks the same zoom as an ordinary box of the same size', () => {
+    const shifted: Bounds = { ...crossing, west: crossing.west - 10, east: crossing.east - 10 };
+    expect(chooseZoom(crossing, 16)).toBe(chooseZoom(shifted, 16));
+  });
+
+  it('never needs more than 2^z columns', () => {
+    const wide: Bounds = { west: -200, south: -10, east: 200, north: 10 };
+    expect(tileCount(wide, 1)).toBe(2 * 2);
+  });
+
+  it('keeps world x continuous past 1', () => {
+    expect(lonLatToWorld(180.02, 0).x).toBeCloseTo(1 + 0.02 / 360, 12);
+    expect(worldToLonLat(1 + 0.02 / 360, 0.5).lon).toBeCloseTo(180.02, 9);
+  });
+});
+
+describe('near the poles', () => {
+  it('covers a Svalbard loop with ordinary tiles', () => {
+    const svalbard: Bounds = { west: 15.49, south: 78.19, east: 15.67, north: 78.22 };
+    const z = chooseZoom(svalbard, 16);
+    expect(z).toBeGreaterThanOrEqual(12);
+    const n = 2 ** z;
+    for (const t of tilesForBounds(svalbard, z)) {
+      expect(t.y).toBeGreaterThanOrEqual(0);
+      expect(t.y).toBeLessThan(n);
+    }
+  });
+
+  it('clamps rows at the Mercator limit for a box beyond it', () => {
+    const arctic: Bounds = { west: 0, south: 86, east: 1, north: 89 };
+    expect(tilesForBounds(arctic, 10).every((t) => t.y === 0)).toBe(true);
+    expect(lonLatToWorld(0, 89).y).toBe(lonLatToWorld(0, MAX_MERCATOR_LAT).y);
   });
 });

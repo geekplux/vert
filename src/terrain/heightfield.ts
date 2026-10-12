@@ -9,12 +9,14 @@ import {
   tileCount,
   tilesForBounds,
   worldToLonLat,
+  wrapTile,
   type Bounds,
   type TileCoord,
 } from '../lib/geo';
 import { sampleBilinear } from '../lib/terrarium';
 import {
   TILE_SIZE,
+  TileDecodeError,
   fetchTile as defaultFetchTile,
   isAbortError,
   type TileElevations,
@@ -73,18 +75,31 @@ export interface BuildHeightfieldOptions {
   fetchTile?: (coord: TileCoord, options: { signal?: AbortSignal }) => Promise<TileElevations>;
 }
 
-/** Every tile failed: there is nothing to build a grid from. */
+/**
+ * Every tile failed: there is nothing to build a grid from. `kind` is `'decode'` when every tile
+ * arrived but none could be decoded ({@link TileDecodeError}: a browser problem, so "check your
+ * connection" would mislead), else `'network'` (offline, HTTP errors, the tile server down).
+ */
 export class HeightfieldError extends Error {
   readonly failedTiles: readonly TileCoord[];
-  constructor(failedTiles: readonly TileCoord[], cause: unknown) {
+  readonly kind: 'network' | 'decode';
+  constructor(
+    failedTiles: readonly TileCoord[],
+    cause: unknown,
+    kind: 'network' | 'decode' = 'network',
+  ) {
     super(`No elevation tiles could be loaded (${String(failedTiles.length)} failed)`, { cause });
     this.name = 'HeightfieldError';
     this.failedTiles = failedTiles;
+    this.kind = kind;
   }
 }
 
 /** Smallest span a grid covers, degrees (~110 m of latitude), so a single point still works. */
 const MIN_SPAN_DEG = 0.001;
+
+/** Latitude limit of a grid, degrees: just inside Web Mercator's (`MAX_MERCATOR_LAT`, 85.05°). */
+const MAX_GRID_LAT = 85;
 
 function padBounds(bounds: Bounds, padding: number): Bounds {
   let { west, south, east, north } = bounds;
@@ -104,12 +119,17 @@ function padBounds(bounds: Bounds, padding: number): Bounds {
     south = mid - MIN_SPAN_DEG / 2;
     north = mid + MIN_SPAN_DEG / 2;
   }
-  return {
-    west: Math.max(-180, west),
-    east: Math.min(180, east),
-    south: Math.max(-85, south),
-    north: Math.min(85, north),
-  };
+  // Longitudes stay continuous past ±180 (a run across the antimeridian; tiles wrap when fetched),
+  // up to one turn. Latitudes stay inside the Mercator square, a minimum span apart even for a run
+  // beyond it (terrain there is drawn at the limit).
+  if (east - west > 360) {
+    const mid = (west + east) / 2;
+    west = mid - 180;
+    east = mid + 180;
+  }
+  south = Math.min(Math.max(-MAX_GRID_LAT, south), MAX_GRID_LAT - MIN_SPAN_DEG);
+  north = Math.min(Math.max(south + MIN_SPAN_DEG, north), MAX_GRID_LAT);
+  return { west, east, south, north };
 }
 
 /** Extent of `area` in pixels at zoom `z` (Web Mercator, 256 px tiles). */
@@ -269,17 +289,20 @@ export async function buildHeightfield(
   const loaded = new Array<boolean>(tiles.length).fill(false);
   const failedTiles: TileCoord[] = [];
   let firstError: unknown;
+  let decodeFailures = 0;
   let loadedMin = Infinity;
 
   await forEachLimited(tiles, concurrency, async (tile) => {
     signal?.throwIfAborted();
     let data: TileElevations;
     try {
-      data = await fetchTile(tile, { signal });
+      // Columns past ±180° (a run across the antimeridian) are fetched as the tile they wrap to.
+      data = await fetchTile(wrapTile(tile), { signal });
     } catch (error) {
       if (signal?.aborted || isAbortError(error)) throw error;
       failedTiles.push(tile);
       firstError ??= error;
+      if (error instanceof TileDecodeError) decodeFailures++;
       return;
     }
     const c = tile.x - first.x;
@@ -292,7 +315,10 @@ export async function buildHeightfield(
     loaded[r * cols + c] = true;
   });
   signal?.throwIfAborted();
-  if (failedTiles.length === tiles.length) throw new HeightfieldError(failedTiles, firstError);
+  if (failedTiles.length === tiles.length) {
+    const kind = decodeFailures === tiles.length ? 'decode' : 'network';
+    throw new HeightfieldError(failedTiles, firstError, kind);
+  }
   if (failedTiles.length > 0) fillMissingTiles(mosaic, cols, rows, loaded, loadedMin);
 
   // Grid extent in world coordinates and its shape: longest side = gridSize, square-ish samples.

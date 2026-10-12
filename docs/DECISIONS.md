@@ -36,10 +36,13 @@ everything.
   44×44, icon glyph 20px, stroke 2. Buttons can render as a link (`href`) for "Make a poster"-style
   navigation only if they navigate; otherwise `<button type="button">`.
 - **Segmented**: drawn 40px tall (spec and canvas), but the hit area is 44px: extend it with a
-  pseudo-element, not by changing the drawn size. Padding `0 14px`. Native radio inputs inside a
+  pseudo-element, not by changing the drawn size. Each segment also has `min-width: var(--touch)`
+  so short labels ("mi", "ft") still give a 44px-wide target. Padding `0 14px`. Native radio inputs inside a
   `radiogroup` (arrow keys move selection, as native radios do).
-- **StatTile**: unit follows the value after a space, 16/500, inherits color. `emphasis` uses
-  `--route` (34px bold is large text: 3.97:1 ≥ 3:1).
+- **StatTile**: unit follows the value after a space, 16/500. `emphasis` colours the value
+  `--route` (34px bold is large text: 3.97:1 ≥ 3:1) and the 16px unit `--route-text` (small text
+  needs 4.5:1). The value never wraps (`white-space: nowrap`); line-height `normal`, as in the
+  Main frame.
 - **Dropzone** (Upload frame wins over the Tokens frame):
   - Rest: background `--white`, 2px dashed `--muted`, radius 6, padding 40×24, gap 10, upload icon
     36px stroke 1.8, title 18/600 "Drop a .gpx file here", line 14 `--muted` "or choose a file · or

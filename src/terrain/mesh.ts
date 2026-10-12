@@ -393,10 +393,13 @@ export function heightfieldToLocal(
   );
 }
 
-/** Vertex kinds, in the `aWall` attribute. */
+/**
+ * Vertex kinds, in the `aWall` attribute. The shader draws ridge rows on the surface only; every
+ * wall gets the same plain shade with its top and bottom edges outlined.
+ */
 const SURFACE = 0;
-const SIDE_WALL = 1; // east and west walls: vertical lines where the ridge rows end
-const END_WALL = 2; // north and south walls: a line along the top edge
+const SIDE_WALL = 1; // east and west walls
+const END_WALL = 2; // north and south walls
 
 const vertexShader = /* glsl */ `
 uniform float uExaggeration;
@@ -479,17 +482,13 @@ void main() {
     strength = mix(0.95, 0.3, depth);
     line = gridLine(rowCoord, widthPx, 4.5 * uPixelRatio);
   } else {
-    // Walls: a touch darker than the surface so they read as planes; the rows' ends drop down
-    // them as lines of one constant, light strength (no depth fade, and only lines closer than
-    // about a pixel apart fade).
+    // Walls: a touch darker than the surface so they read as planes, outlined along their top
+    // (the surface's edge) and bottom at one constant, light strength. The ridge rows stay on the
+    // top surface: carried down a side wall, their ends hatch it with vertical lines.
     base = mix(base, ink, uWallShade);
     float widthPx = uLineWidth * uPixelRatio;
     strength = uWallLine;
-    if (vWall < 1.5) {
-      line = max(gridLine(rowCoord, widthPx, 2.0 * uPixelRatio), edgeLine(vBase, 1.0, widthPx));
-    } else {
-      line = max(edgeLine(vBase, 0.0, widthPx), edgeLine(vBase, 1.0, widthPx));
-    }
+    line = max(edgeLine(vBase, 0.0, widthPx), edgeLine(vBase, 1.0, widthPx));
   }
   // Blend the line in gamma space, as browsers blend SVG strokes: a linear blend makes partly
   // covered and faded lines look far lighter than the ink.

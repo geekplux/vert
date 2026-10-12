@@ -222,3 +222,16 @@
     aspect-ratio: 4 / 3;
   }
 }
+
+/*
+ * Side by side (≥ 900px), the box is no taller than the window leaves once the header (85px), the
+ * main column's padding (24 + 32) and gap (16) and the elevation section (182) are counted: 339px
+ * in all, so the elevation profile (the scrub control) is on screen from a window 800px tall. At
+ * the Main frame's own height (1059) that is its 720px box, exactly; the floor (460px, the box at
+ * 800) keeps the terrain usable in shorter windows, where the page scrolls as before.
+ */
+@media (min-width: 900px) {
+  .box {
+    max-height: max(460px, calc(100dvh - 339px));
+  }
+}

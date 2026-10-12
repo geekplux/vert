@@ -56,14 +56,35 @@ describe('SizePicker', () => {
 
   it('shows the name and a derived sub-line for each size', () => {
     render(<SizePicker sizes={POSTER_SIZES} value="18x24" onChange={noop} label="Size" />);
+    /** The sub-line is split into unbreakable parts; match the element holding all of it. */
+    const subLine = (text: string) =>
+      screen.getByText(
+        (_, element) => element?.tagName === 'SPAN' && element.textContent === text,
+        { ignore: false },
+      );
     expect(screen.getByText('18 × 24 in')).toBeTruthy();
-    expect(screen.getByText('print · 5400 × 7200')).toBeTruthy();
+    expect(subLine('print · 5400 × 7200')).toBeTruthy();
     expect(screen.getByText('A3')).toBeTruthy();
-    expect(screen.getByText('print · 3508 × 4961')).toBeTruthy();
+    expect(subLine('print · 3508 × 4961')).toBeTruthy();
     expect(screen.getByText('4 : 5')).toBeTruthy();
-    expect(screen.getByText('social · 1080 × 1350')).toBeTruthy();
+    expect(subLine('social · 1080 × 1350')).toBeTruthy();
     expect(screen.getByText('9 : 16')).toBeTruthy();
-    expect(screen.getByText('story · 1080 × 1920')).toBeTruthy();
+    expect(subLine('story · 1080 × 1920')).toBeTruthy();
+  });
+
+  it('keeps the pixel size together: the sub-line wraps only after "print ·"', () => {
+    render(<SizePicker sizes={POSTER_SIZES} value="18x24" onChange={noop} label="Size" />);
+    const parts = screen
+      .getAllByText((_, element) => element?.textContent === '5400 × 7200')
+      .filter((element) => element.childElementCount === 0);
+    expect(parts).toHaveLength(1);
+    const pixels = parts[0];
+    expect(pixels?.previousSibling?.textContent).toBe(' ');
+    expect(pixels?.previousSibling?.previousSibling?.textContent).toBe('print ·');
+    // Both parts are no-wrap spans (class from the CSS module).
+    expect(pixels?.className).toBe(
+      (pixels?.previousSibling?.previousSibling as HTMLElement | null)?.className,
+    );
   });
 
   it('derives the sub-line from use, width and height with a real multiplication sign', () => {

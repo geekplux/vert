@@ -39,6 +39,7 @@ const RIDGES: RidgeFigure = {
   route: 'M100,230L300,210L500,225',
   start: { x: 100, y: 230 },
   finish: null,
+  depthScale: 0.6,
 };
 
 const DATA: NightRidgeFigureData = {

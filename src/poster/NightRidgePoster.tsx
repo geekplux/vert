@@ -323,6 +323,7 @@ function Ridges({ figure, k }: { figure: RidgeFigure; k: number }) {
       viewBox={`0 0 ${String(figure.width)} ${String(figure.height)}`}
       preserveAspectRatio="xMidYMax meet"
       data-figure="ridges"
+      data-depth-scale={figure.depthScale}
     >
       {figure.rows.map((row, index) => (
         <g key={index}>

@@ -9,6 +9,7 @@ import {
   nightRidgeFigureData,
   padBounds,
   quadBounds,
+  NORTH_FILL_MAX,
   ridgeBounds,
   surveyQuadFigureData,
   trackBounds,
@@ -97,6 +98,28 @@ describe('quadBounds and ridgeBounds', () => {
       2,
     );
     expect(aspectOf(ridgeBounds(route, { width: 900, height: 100 }))).toBeCloseTo(3, 2);
+  });
+
+  it('ridge bounds widen east and west, and deepen only to the north, behind the route', () => {
+    const margin = quadBounds(route, 0, 0.12);
+    // A tall stage gets ground behind the route (north), never in front of it (south), at most
+    // NORTH_FILL_MAX × the route's north–south extent.
+    const tall = ridgeBounds(route, { width: 400, height: 1200 });
+    expect(tall.south).toBeCloseTo(margin.south, 9);
+    expect(tall.west).toBeCloseTo(margin.west, 9);
+    expect(tall.east).toBeCloseTo(margin.east, 9);
+    expect(tall.north).toBeGreaterThan(margin.north);
+    expect(tall.north - margin.north).toBeLessThanOrEqual(
+      NORTH_FILL_MAX * (route.north - route.south) + 1e-12,
+    );
+    // A stage the margin already fills gets none.
+    const short = ridgeBounds(route, { width: 624, height: 300 });
+    expect(short.north).toBeCloseTo(margin.north, 9);
+    // A wide one adds ground at the sides only.
+    const wide = ridgeBounds(route, { width: 900, height: 100 });
+    expect(wide.north).toBeCloseTo(margin.north, 9);
+    expect(wide.south).toBeCloseTo(margin.south, 9);
+    expect(wide.west).toBeLessThan(margin.west);
   });
 });
 

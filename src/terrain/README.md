@@ -21,8 +21,8 @@ scrub marker. No map library, no basemap.
   centre and lowest point, 1 unit = the longer horizontal side, true metres vertically. The style A
   `ShaderMaterial` draws a flat-shaded fill and 1px ink ridge lines on every Nth grid row (~48
   across, `fwidth` for constant pixel width and anti-aliasing), darker and thicker towards the
-  camera on the top surface; walls are a touch darker (`wallShade`, blended towards ink) and carry
-  the rows' ends as lines of constant, light strength. The skirt's flat base hangs a small fixed
+  camera on the top surface only; walls are a touch darker (`wallShade`, blended towards ink) with
+  their top and bottom edges outlined at a constant, light strength, and no row lines. The skirt's flat base hangs a small fixed
   depth (`DEFAULT_BASE_DEPTH`) below the lowest point of the edges facing the camera
   (`visibleEdgeLevel`, updated per frame); where a more oblique wall's edge dips lower, its bottom
   follows the edge. Exaggeration is the `uExaggeration` uniform; colours come from a

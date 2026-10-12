@@ -1,0 +1,111 @@
+/* Button. Sizes and copy from canvas frames 00 Tokens, 02 View and 03 Poster mode; DECISIONS.md. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  min-height: var(--touch);
+  margin: 0;
+  padding: var(--space-3) 18px;
+  border: 0;
+  border-radius: var(--radius-control);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out,
+      filter 120ms ease-out;
+  }
+}
+
+/* Variants */
+
+.primary {
+  background: var(--ink);
+  color: var(--white);
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(0.8);
+}
+
+.secondary {
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.quiet {
+  padding-inline: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.quiet:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.icon {
+  width: var(--touch);
+  height: var(--touch);
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.icon > svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.secondary:hover:not(:disabled),
+.quiet:hover:not(:disabled),
+.icon:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+/* Sizes */
+
+.lg {
+  min-height: 48px;
+  padding-block: 14px;
+  font-size: 16px;
+}
+
+.lg.icon {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+}
+
+/* Disabled: native `disabled` tells assistive tech; the look is a dimmed control. */
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Windows High Contrast drops backgrounds; keep the filled button's edge visible. */
+@media (forced-colors: active) {
+  .primary {
+    border: 1px solid ButtonText;
+  }
+}

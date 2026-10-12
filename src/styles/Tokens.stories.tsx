@@ -16,6 +16,7 @@ const colors = [
 const label: CSSProperties = {
   fontFamily: 'var(--font-mono)',
   fontSize: 12,
+  fontWeight: 400,
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
   color: 'var(--muted)',

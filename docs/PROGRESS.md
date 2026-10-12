@@ -20,20 +20,20 @@ Worker deploy.
 One component per task, simplest first. Each: implementation sub-agent (own worktree) →
 verification sub-agent → merge on PASS. Max three rounds.
 
-| Done | Component        | Rounds | Notes |
-| ---- | ---------------- | ------ | ----- |
-| [ ]  | Button           |        |       |
-| [ ]  | Wordmark         |        |       |
-| [ ]  | StatTile         |        |       |
-| [ ]  | Segmented        |        |       |
-| [ ]  | Checkbox         |        |       |
-| [ ]  | TextField        |        |       |
-| [ ]  | Slider           |        |       |
-| [ ]  | Marker           |        |       |
-| [ ]  | SizePicker       |        |       |
-| [ ]  | StylePicker      |        |       |
-| [ ]  | Dropzone         |        |       |
-| [ ]  | ElevationProfile |        |       |
+| Done | Component        | Rounds | Notes                                                                              |
+| ---- | ---------------- | ------ | ---------------------------------------------------------------------------------- |
+| [ ]  | Button           |        |                                                                                    |
+| [x]  | Wordmark         | 1      | Name 30/800/62%, optional mono tagline; matches the Upload header pixel-for-pixel. |
+| [ ]  | StatTile         |        |                                                                                    |
+| [ ]  | Segmented        |        |                                                                                    |
+| [ ]  | Checkbox         |        |                                                                                    |
+| [ ]  | TextField        |        |                                                                                    |
+| [ ]  | Slider           |        |                                                                                    |
+| [ ]  | Marker           |        |                                                                                    |
+| [ ]  | SizePicker       |        |                                                                                    |
+| [ ]  | StylePicker      |        |                                                                                    |
+| [ ]  | Dropzone         |        |                                                                                    |
+| [ ]  | ElevationProfile |        |                                                                                    |
 
 ## 2 Layout
 

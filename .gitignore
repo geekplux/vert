@@ -27,3 +27,8 @@ docs/verify/
 
 # sample generator cache (OSM + elevation tiles)
 scripts/.cache/
+
+# fixtures: your own tracks (never committed) and UTMB course files (terms forbid redistribution;
+# fetch with `pnpm fixtures`)
+fixtures/gpx/
+fixtures/courses/*.gpx

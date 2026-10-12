@@ -1,6 +1,7 @@
 import type { Story } from '@ladle/react';
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { POSTER_STYLES, StylePicker, type PosterStyleId } from './StylePicker';
+import { POSTER_STYLES, type PosterStyleId } from '../../poster/styles';
+import { StylePicker } from './StylePicker';
 
 export default { title: 'Components / StylePicker' };
 

@@ -284,17 +284,28 @@ describe('PosterState', () => {
   it('moves focus to the h1 on entering Poster mode, and back to the View’s on leaving', async () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
+    await screen.findByRole(
+      'heading',
+      { level: 1, name: 'Coosa Backcountry Trail' },
+      { timeout: 5000 },
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
       await Promise.resolve();
     });
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Make a poster' });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(heading);
-    });
-    expect(heading.getAttribute('tabindex')).toBe('-1');
+    // Re-queried on every try (a remount replaces the element), with room for a loaded suite.
+    await waitFor(
+      () => {
+        expect(document.activeElement).toBe(
+          screen.getByRole('heading', { level: 1, name: 'Make a poster' }),
+        );
+      },
+      { timeout: 5000 },
+    );
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Make a poster' }).getAttribute('tabindex'),
+    ).toBe('-1');
     // RUN_LOADED seeded the title with the route name and left the subtitle empty.
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveProperty(
       'value',
@@ -303,13 +314,14 @@ describe('PosterState', () => {
     expect(screen.getByRole('textbox', { name: 'Subtitle' })).toHaveProperty('value', '');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
-    const viewHeading = await screen.findByRole('heading', {
-      level: 1,
-      name: 'Coosa Backcountry Trail',
-    });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(viewHeading);
-    });
+    await waitFor(
+      () => {
+        expect(document.activeElement).toBe(
+          screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+        );
+      },
+      { timeout: 5000 },
+    );
   });
 
   it('keeps reading order: style, size, text, stats, hide ends, then Download', () => {

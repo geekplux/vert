@@ -1,10 +1,8 @@
 import { useId } from 'react';
+// The style list and palettes (POSTER_STYLES) live in src/poster/styles.ts, their one source;
+// the picker draws whatever options it is given.
 import type { PosterStyleId, PosterStyleOption, PosterStyleTerrain } from '../../poster/styles';
 import styles from './StylePicker.module.css';
-
-// The style list and palettes live in src/poster/styles.ts; re-exported here for existing imports.
-export { POSTER_STYLES } from '../../poster/styles';
-export type { PosterStyleId, PosterStyleOption, PosterStyleTerrain } from '../../poster/styles';
 
 export interface StylePickerProps<Id extends string = PosterStyleId> {
   styles: readonly PosterStyleOption<Id>[];

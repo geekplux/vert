@@ -10,9 +10,12 @@ import {
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { describe, expect, it, vi } from 'vitest';
 import { haversine } from '../lib/geo';
+import { TRAIL_SIGN_ROUTE_PALETTE } from '../poster/terrainFigure';
+import { blend, contrast } from '../test/contrast';
 import { elevationAt } from './heightfield';
 import { heightfieldToLocal, modelBounds } from './mesh';
 import {
+  APP_ROUTE_PALETTE,
   CORE_CUT_INSET_PX,
   CORE_RENDER_ORDER,
   DEFAULT_LIFT_M,
@@ -26,6 +29,7 @@ import {
   ROUTE_WIDTH_PX,
   createRouteLayer,
   drapeTrack,
+  hiddenRouteColour,
   patchRouteFragmentShader,
   patchRouteShader,
   pointAtDistance,
@@ -33,6 +37,7 @@ import {
   resampleTrack,
   routeLineWidths,
   trackLength,
+  type RoutePalette,
   type RouteTrack,
 } from './route';
 import { hills, makeTrack } from './testing';
@@ -248,15 +253,23 @@ describe('createRouteLayer', () => {
     layer.dispose();
   });
 
-  it('draws hidden stretches as a thin, faded route-colour line with no halo, each pixel once', () => {
+  it('draws hidden stretches as a thin line with no halo, ≥ 3:1 on the terrain, each pixel once', () => {
     const layer = createRouteLayer(hills(), straight());
     const { hidden, halo, core } = layer;
     expect(HIDDEN_ROUTE_WIDTH_PX).toBe(2);
-    expect(HIDDEN_ROUTE_OPACITY).toBe(0.4);
+    expect(HIDDEN_ROUTE_OPACITY).toBe(0.85);
     expect(hidden.material.linewidth).toBe(HIDDEN_ROUTE_WIDTH_PX);
     expect(hidden.material.opacity).toBe(HIDDEN_ROUTE_OPACITY);
-    // Width, opacity and the missing halo set it apart, not colour: it is the route's colour.
-    expect(hidden.material.color.getHexString()).toBe(core.material.color.getHexString());
+    // Width and the missing halo set it apart, not colour: the route's colour, a shade darker.
+    expect(`#${hidden.material.color.getHexString()}`).toBe('#bd4415');
+    expect(hiddenRouteColour(APP_ROUTE_PALETTE)).toBe('#bd4415');
+    // WCAG 1.4.11 (a graphic needs 3:1) against the terrain fill, as blended on the canvas, in the
+    // View (--route) and on poster A (its accent): the route colour at 40% was 1.68:1 and 1.77:1.
+    const onFill = (palette: RoutePalette) =>
+      contrast(blend(hiddenRouteColour(palette), '#E6EAEE', HIDDEN_ROUTE_OPACITY), '#E6EAEE');
+    expect(onFill(APP_ROUTE_PALETTE)).toBeGreaterThan(3.5);
+    expect(onFill(TRAIL_SIGN_ROUTE_PALETTE)).toBeGreaterThanOrEqual(4);
+    expect(contrast(blend('#D9480F', '#E6EAEE', 0.4), '#E6EAEE')).toBeLessThan(1.7);
     expect(hidden.geometry).toBe(core.geometry);
     // The opposite verdicts, drawn before the halo (which covers it where they cross).
     expect(hidden.material.uniforms.uRouteHidden?.value).toBe(1);
@@ -274,8 +287,9 @@ describe('createRouteLayer', () => {
     expect(hidden.material.depthFunc).toBe(LessDepth);
     expect(hidden.material.defines).toHaveProperty('ROUTE_FLAT_DEPTH');
     expect(core.material.defines).not.toHaveProperty('ROUTE_FLAT_DEPTH');
+    // On a dark paper the ink is light, so the shade goes lighter: still apart from the paper.
     layer.setPalette({ route: '#FFD9A0', halo: '#0F2233', ink: '#E8F1F5' });
-    expect(hidden.material.color.getHexString()).toBe('ffd9a0');
+    expect(hidden.material.color.getHexString()).toBe('fcddad');
     layer.dispose();
   });
 

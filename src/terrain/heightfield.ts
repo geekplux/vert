@@ -6,6 +6,7 @@ import {
   MERCATOR_RADIUS_M,
   chooseZoom,
   lonLatToWorld,
+  tileCount,
   tilesForBounds,
   worldToLonLat,
   type Bounds,
@@ -51,8 +52,13 @@ export const MIN_PREFERRED_ZOOM = 12;
 export const MAX_PREFERRED_ZOOM = 14;
 
 export interface BuildHeightfieldOptions {
-  /** Most tiles to fetch. */
+  /** Most tiles to fetch at the zoom whose native extent fits the grid. */
   maxTiles?: number;
+  /**
+   * Most tiles to fetch when a long route samples one zoom finer ({@link chooseHeightfieldZoom});
+   * {@link MAX_LONG_ROUTE_TILES} by default.
+   */
+  maxLongRouteTiles?: number;
   /**
    * Samples along the longer side of the grid. Defaults to the area's extent in native pixels at
    * the chosen zoom, capped at {@link MAX_GRID_SIZE}.
@@ -115,19 +121,33 @@ function nativeExtent(area: Bounds, z: number): { width: number; height: number 
 }
 
 /**
+ * Most tiles a long route's heightfield fetches when it samples one zoom finer than its grid
+ * needs (see {@link chooseHeightfieldZoom}): within the tile cache (64), and a few seconds' load.
+ */
+export const MAX_LONG_ROUTE_TILES = 32;
+
+/**
  * Tile zoom for a (padded) area: the highest zoom from {@link MAX_PREFERRED_ZOOM} down whose
  * covering needs at most `maxTiles` tiles and whose native extent fits `maxSamples` pixels on its
- * longer side. Normally that lands in 12–14; for an area too large for z12 (a very long route,
- * roughly > 14 km across at 45° with the default budget) it drops below 12 rather than exceed the
- * budget, down to 0 at the most.
+ * longer side. Normally that lands in 12–14. For an area too large for z12 (a long route, roughly
+ * > 14 km across at 45° with the default budget) the native fit drops below 12; the grid is then
+ * sampled from one zoom finer and downsampled to `maxSamples` (2× finer source data, so ridges stay
+ * sharp instead of blobby), as long as that needs at most `maxLongRouteTiles` tiles. Down to 0 at
+ * the most.
  */
 export function chooseHeightfieldZoom(
   area: Bounds,
-  { maxTiles = 16, maxSamples = MAX_GRID_SIZE }: { maxTiles?: number; maxSamples?: number } = {},
+  {
+    maxTiles = 16,
+    maxSamples = MAX_GRID_SIZE,
+    maxLongRouteTiles = MAX_LONG_ROUTE_TILES,
+  }: { maxTiles?: number; maxSamples?: number; maxLongRouteTiles?: number } = {},
 ): number {
   for (let z = Math.min(MAX_PREFERRED_ZOOM, chooseZoom(area, maxTiles)); z > 0; z--) {
     const { width, height } = nativeExtent(area, z);
-    if (Math.max(width, height) <= maxSamples) return z;
+    if (Math.max(width, height) > maxSamples) continue;
+    if (z < MIN_PREFERRED_ZOOM && tileCount(area, z + 1) <= maxLongRouteTiles) return z + 1;
+    return z;
   }
   return 0;
 }
@@ -226,6 +246,7 @@ export async function buildHeightfield(
   bounds: Bounds,
   {
     maxTiles = 16,
+    maxLongRouteTiles = MAX_LONG_ROUTE_TILES,
     gridSize,
     padding = DEFAULT_PADDING,
     concurrency = 6,
@@ -235,7 +256,7 @@ export async function buildHeightfield(
 ): Promise<Heightfield> {
   signal?.throwIfAborted();
   const area = padBounds(bounds, padding);
-  const zoom = chooseHeightfieldZoom(area, { maxTiles });
+  const zoom = chooseHeightfieldZoom(area, { maxTiles, maxLongRouteTiles });
   const tiles = tilesForBounds(area, zoom);
   const first = tiles[0];
   const last = tiles.at(-1);
@@ -326,6 +347,12 @@ export async function buildHeightfield(
     },
     failedTiles,
   };
+}
+
+/** Ground the grid spans on its longer side, metres (at its centre latitude). */
+export function groundExtent(heightfield: Heightfield): number {
+  const { width, height, metresPerSample } = heightfield;
+  return Math.max(metresPerSample.x * (width - 1), metresPerSample.y * (height - 1));
 }
 
 /**

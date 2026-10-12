@@ -50,6 +50,21 @@ function climbRows(): string[] {
 
 const readout = () => elevationSection().querySelector('p')?.textContent;
 
+/**
+ * Waits until focus is on the h1 named `name`, re-querying it on every try: the page moves focus in
+ * an effect after the screen changes, and a remount (the View is keyed by run) replaces the
+ * element, so a reference taken earlier could never match. A generous timeout: under the full,
+ * parallel suite the lazy View can take more than the default second to settle.
+ */
+async function expectHeadingFocused(name: string) {
+  await waitFor(
+    () => {
+      expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name }));
+    },
+    { timeout: 5000 },
+  );
+}
+
 describe('ViewState', () => {
   it('renders every element of DESIGN-SPEC §3 "02 View" from the run’s data', () => {
     renderView();
@@ -78,7 +93,9 @@ describe('ViewState', () => {
     expect(slider.getAttribute('max')).toBe('3');
     expect(slider.getAttribute('step')).toBe('0.1');
     expect((slider as HTMLInputElement).value).toBe('1.6');
-    expect(slider.getAttribute('aria-valuetext')).toBe('1.6×');
+    // Spoken "1.6 times"; the visible value stays "1.6×".
+    expect(slider.getAttribute('aria-valuetext')).toBe('1.6 times');
+    expect(within(aside()).getByText('1.6×')).toBeDefined();
     expect(
       within(aside()).getByText(
         'Drag the terrain to orbit. Scrub the profile to move the runner along the route. Your file stays in this browser.',
@@ -176,7 +193,8 @@ describe('ViewState', () => {
     renderView();
     fireEvent.change(exaggeration(), { target: { value: '2.3' } });
     expect((exaggeration() as HTMLInputElement).value).toBe('2.3');
-    expect(exaggeration().getAttribute('aria-valuetext')).toBe('2.3×');
+    expect(exaggeration().getAttribute('aria-valuetext')).toBe('2.3 times');
+    expect(within(aside()).getByText('2.3×')).toBeDefined();
     expect(within(main()).getByText('Vertical ×2.3')).toBeDefined();
     expect(screen.queryByText('Vertical ×1.6')).toBeNull();
   });
@@ -242,20 +260,13 @@ describe('ViewState', () => {
   it('moves focus to the route name when the View opens, and to Upload’s h1 on New file', async () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
-    const heading = await screen.findByRole('heading', { level: 1, name: ROUTE });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(heading);
-    });
-    expect(heading.getAttribute('tabindex')).toBe('-1');
+    await expectHeadingFocused(ROUTE);
+    expect(screen.getByRole('heading', { level: 1, name: ROUTE }).getAttribute('tabindex')).toBe(
+      '-1',
+    );
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
-    const uploadHeading = await screen.findByRole('heading', {
-      level: 1,
-      name: 'Your run, as terrain.',
-    });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(uploadHeading);
-    });
+    await expectHeadingFocused('Your run, as terrain.');
   });
 
   it('does not steal focus on first render', () => {
@@ -266,16 +277,10 @@ describe('ViewState', () => {
   it('goes to Poster mode with Make a poster, and focuses its h1', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Make a poster' });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(heading);
-    });
+    await expectHeadingFocused('Make a poster');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
-    const viewHeading = await screen.findByRole('heading', { level: 1, name: ROUTE });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(viewHeading);
-    });
+    await expectHeadingFocused(ROUTE);
   });
 
   it('goes back to Upload with New file', () => {

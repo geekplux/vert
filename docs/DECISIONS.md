@@ -119,6 +119,13 @@ everything.
 - Clock times (Night Ridge start and sunrise) are shown in the viewer's time zone: most people
   upload their own local runs, and a longitude-based offset would show 05:32 for a 07:32 Georgia
   sunrise. The date line keeps the longitude rule, because it must survive any viewer time zone.
+- Poster A's display title keeps line-height 0.88, except where its lines, as broken, put an
+  accented capital (Ż, Ó, É, Å, Ñ) under another line or a mark below (Ç, Ę) over one: those lines
+  are set looser (from each line's real ink, canvas `TextMetrics` with the face loaded, so
+  doubled Vietnamese marks count; Archivo's measured extremes only where there is no canvas) so glyphs stay ≥ 5 logical px clear on print and ≥ 10 on the share card (≥ 3 whole
+  pixel rows in every preview, antialiasing included), and the size shrinks until they fit the box
+  the same title takes at 0.88. The box height, and so the figure, stats and footer, stay exactly
+  where they are; one-line and Latin-only titles are unchanged.
 - Style A at the social sizes (4:5, 9:16) uses the share-card layout (frame "Style A · share card
   4:5"); print sizes use the Trail Sign layout.
 - No invented data: poster A's "VERT № 014" becomes "VERT"; footer URL is VERT.GEEKPLUX.COM.
@@ -126,14 +133,23 @@ everything.
   `src/lib`); its top nav (RUNS / COMPARE / UPLOAD) is mockup decoration and is omitted.
 - Terrain look, style A (View and poster): oblique 3D, `--surface` fill, 1px ink ridge lines along
   rows of the grid (front rows darker), route 4px `--route` with a 9px white halo, ○ start, ▲ summit.
-  Where a ridge hides the route it is drawn, not dropped: 2px, route colour at 40%, no halo (told
-  apart by width, opacity and the missing halo, not colour). Poster widths are logical px × scale.
+  Where a ridge hides the route it is drawn, not dropped: 2px, no halo, the route colour mixed 15%
+  towards the ink at 85% opacity (told apart by width and the missing halo, not colour). It keeps
+  ≥ 3:1 on the terrain fill (WCAG 1.4.11) for a colour-weak viewer: 3.5:1 in the View, 4.0:1 on
+  poster A (measured on screen; the route colour at 40% was 1.7:1 and 1.8:1). Poster widths are
+  logical px × scale.
 - Hide start and end also reframes: with ends hidden every poster figure is framed on the drawn
   route's bounds (A builds its own grid, +15%; the View keeps the whole run), so the margin does
   not show where the trimmed start was.
 - The 9:16 share card's elevation strip is the muted `#C9D1D9` at 60% (4.37:1 on the card).
 - Back to the run starts the View from the poster's camera (angle, zoom, flat), no intro; New file
   resets it.
+- Flat map off returns to the oblique angle and zoom the user left when turning it on (the default
+  view only if the View opened flat). Reset view still goes to the default.
+- Long routes (terrain ≥ 15 km on its longer side, e.g. the CCC): the default oblique view is 50°
+  from vertical instead of 62°, so ridges hide less of the route (CCC: 42% → 11% hidden at 1440,
+  28% → 4% at 600), and the heightfield samples one tile zoom finer than its 512-sample grid needs
+  (CCC: z10 → z11, 6 → 12 tiles, 107 → 77 m samples from 2× finer data), capped at 32 tiles.
 
 ## Architecture
 
@@ -146,7 +162,8 @@ everything.
   `TILES`. Same parts as PLAN.md (static app + tile proxy + R2), one deployable, same origin (no
   CORS, and tile requests never leave the app's origin).
 - **Tile zooms**: the Worker accepts z 6–15 (the heightfield drops below z12 only for very long
-  routes; z6 covers 100+ km courses). Anything else, and any query string, is a 400.
+  routes, then samples one zoom finer; z6–7 covers 100+ km courses). Anything else, and any query
+  string, is a 400.
 - **Dev tiles**: Vite proxies `/tiles/:z/:x/:y.png` to the public AWS Terrarium bucket in dev only.
 - **Sample run**: a real trail, the Coosa Backcountry Trail loop (Vogel State Park, Georgia;
   ≈ 21 km, ≈ +1,070 m, matching the canvas). Geometry from OpenStreetMap (ODbL, credited in About),

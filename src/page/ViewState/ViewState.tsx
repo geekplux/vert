@@ -49,6 +49,8 @@ export interface ViewStateProps {
   initialCamera?: ViewCamera;
 }
 const formatExaggeration = (value: number) => `${value.toFixed(1)}×`;
+/** Spoken: screen readers drop or misread "×" ("1.6" or "1.6 multiplication sign"). */
+const exaggerationValueText = (value: number) => `${value.toFixed(1)} times`;
 
 /**
  * The View state (DESIGN-SPEC §3 "02 View", canvas Main frame). Aside: date line, route name,
@@ -162,6 +164,7 @@ export function ViewState({
         step={EXAGGERATION.step}
         value={exaggeration}
         format={formatExaggeration}
+        valueText={exaggerationValueText}
         onChange={onExaggerationChange}
       />
 

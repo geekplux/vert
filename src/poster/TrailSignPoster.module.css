@@ -78,7 +78,9 @@
 .title {
   flex: none;
   margin: 0;
-  /* font-size comes from the fit rule (titleFit.ts): 104px, smaller for a title over 3 lines. */
+  /* font-size comes from the fit rule (titleFit.ts): 104px, smaller for a title over 3 lines.
+     Wide scripts and titles with diacritics (Ż, Ó, Ç, Ę) get a looser line-height inline
+     inside the same box height (fitTitleSetting), so lines never touch and nothing moves. */
   line-height: 0.88;
   font-weight: 800;
   font-stretch: 62%;
@@ -259,7 +261,8 @@
 }
 
 /* The title in the big number's slot (no vert or distance shown): display type, uppercase, fitted
-   by SHARE_TITLE; line-height 0.88 as the print title, 1 for wide scripts (set inline). */
+   by SHARE_TITLE; line-height 0.88 as the print title, looser for wide scripts and accented
+   capitals (set inline, titleLineHeight). */
 .bigTitle {
   line-height: 0.88;
   color: var(--share-text);

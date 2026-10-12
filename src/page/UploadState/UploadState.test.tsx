@@ -102,12 +102,21 @@ describe('UploadState', () => {
   it('announces the sample loading, then shows View', async () => {
     const clock = manualSchedule();
     render(<Page schedule={clock.schedule} />);
+    // The live region is there, empty, before its text changes (or nothing would be read out).
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('');
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
 
-    expect(screen.getByRole('status').textContent).toBe('Loading the sample run…');
+    expect(screen.getByRole('status')).toBe(region);
+    expect(region.textContent).toBe('Loading the sample run…');
     // The Dropzone's title and the page's announcement use the same words.
     expect(screen.getByRole('group', { name: 'Loading the sample run…' })).toBe(dropzone());
     expect(dropzone().getAttribute('aria-busy')).toBe('true');
+    // aria-busy holds back announcements inside the Dropzone only: the region is outside it, and
+    // no ancestor of it is busy, so "Loading the sample run…" is read out.
+    expect(dropzone().contains(region)).toBe(false);
+    expect(region.closest('[aria-busy="true"]')).toBeNull();
+    expect(region.getAttribute('aria-live') ?? 'polite').toBe('polite');
 
     await clock.flush();
     expect(

@@ -1,11 +1,17 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../../test/axe';
-import { POSTER_STYLES, StylePicker } from './StylePicker';
+import { POSTER_STYLES } from '../../poster/styles';
+import * as stylePickerModule from './StylePicker';
+import { StylePicker } from './StylePicker';
 
 const noop = () => undefined;
 
 describe('StylePicker', () => {
+  it('takes its styles from src/poster/styles.ts, the one source of the palette', () => {
+    expect(stylePickerModule).not.toHaveProperty('POSTER_STYLES');
+  });
+
   it('is a radiogroup named by its label', () => {
     render(<StylePicker styles={POSTER_STYLES} value="A" onChange={noop} label="Style" />);
     expect(screen.getByRole('radiogroup', { name: 'Style' })).toBeTruthy();

@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gpx:gpx xmlns:gpx='http://www.topografix.com/GPX/1/1' version='1.1' creator='Prefixed Writer'>
+  <gpx:metadata>
+    <gpx:name>Prefixed metadata name</gpx:name>
+  </gpx:metadata>
+  <gpx:trk>
+    <gpx:trkseg>
+      <gpx:trkpt lon='6.8652' lat='45.8326'><gpx:ele>4808.7</gpx:ele></gpx:trkpt>
+      <gpx:trkpt
+          lat = "45.8331"
+          lon = '6.8660' >
+        <gpx:ele>4790.2</gpx:ele>
+      </gpx:trkpt>
+      <gpx:trkpt lat="45.8340" lon="6.8671"/>
+    </gpx:trkseg>
+  </gpx:trk>
+</gpx:gpx>

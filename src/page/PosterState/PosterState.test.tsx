@@ -213,23 +213,22 @@ describe('PosterState', () => {
     ]);
   });
 
-  it('shows an honest placeholder for the styles not built yet', () => {
+  it('shows the real Night Ridge and Survey Quad posters, figures pending their terrain', async () => {
     renderPoster();
     fireEvent.click(screen.getByRole('radio', { name: 'E Survey Quad' }));
     expect(screen.getByRole('radio', { name: 'E Survey Quad' })).toHaveProperty('checked', true);
-    expect(screen.queryByRole('img', { name: /^Poster: / })).toBeNull();
-    const card = screen.getByRole('img', {
-      name: 'Survey Quad preview: this poster style is not built yet.',
-    });
-    expect(card.style.background).toBe('rgb(242, 239, 230)');
+    const quad = await screen.findByRole('img', { name: /^Poster: / });
+    expect(quad.dataset.style).toBe('E');
+    // Placeholder mode never builds terrain: the map frame says it is drawing.
+    expect(within(quad).getByText('Drawing the terrain…')).toBeDefined();
 
     fireEvent.click(screen.getByRole('radio', { name: 'B Night Ridge' }));
-    expect(
-      screen.getByRole('img', { name: 'Night Ridge preview: this poster style is not built yet.' }),
-    ).toBeDefined();
+    await waitFor(() => {
+      expect(poster().dataset.style).toBe('B');
+    });
 
     fireEvent.click(screen.getByRole('radio', { name: 'A Trail Sign' }));
-    expect(poster()).toBeDefined();
+    expect(poster().dataset.layout).toBe('print');
   });
 
   it('starts the export with the poster’s file name from Download', () => {
@@ -329,10 +328,11 @@ describe('PosterState', () => {
     ]);
   });
 
-  it('has no axe violations, for style A and a placeholder style', async () => {
+  it('has no axe violations, for style A and Night Ridge', async () => {
     const { container } = renderPoster({ signature: '@geekplux' });
     await expectNoAxeViolations(container);
     fireEvent.click(screen.getByRole('radio', { name: 'B Night Ridge' }));
+    await screen.findByText('Drawing the terrain…');
     await expectNoAxeViolations(container);
   });
 });

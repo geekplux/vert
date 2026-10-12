@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { posterLayout } from './layout';
 import type { PosterSize } from './sizes';
@@ -12,6 +12,11 @@ export interface PosterPreviewProps {
   maxWidth?: number;
   maxHeight?: number;
   className?: string;
+  /**
+   * Called with the scale the poster is drawn at (screen px per logical px) when it is first laid
+   * out and whenever it changes, so a raster figure can be rendered sharp at that scale.
+   */
+  onScale?: (scale: number) => void;
 }
 
 /**
@@ -28,6 +33,7 @@ export function PosterPreview({
   maxWidth = 600,
   maxHeight = 800,
   className,
+  onScale,
 }: PosterPreviewProps) {
   const layout = posterLayout(size);
   const fitWidth = Math.min(maxWidth, (maxHeight * layout.width) / layout.height);
@@ -55,6 +61,13 @@ export function PosterPreview({
     aspectRatio: `${String(layout.width)} / ${String(layout.height)}`,
   };
   const scale = Math.min(frameWidth, fitWidth) / layout.width;
+  const onScaleRef = useRef(onScale);
+  useLayoutEffect(() => {
+    onScaleRef.current = onScale;
+  });
+  useEffect(() => {
+    onScaleRef.current?.(scale);
+  }, [scale]);
 
   return (
     <div className={[styles.preview, className ?? ''].filter(Boolean).join(' ')}>

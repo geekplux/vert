@@ -20,6 +20,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { useRef, useState } from 'react';
 import type { Dispatch, ReactNode } from 'react';
 import { tilesForBounds } from '../lib/geo';
+import type { Bounds } from '../lib/geo';
 import { HeightfieldError, buildHeightfield } from '../terrain/heightfield';
 import type { Heightfield } from '../terrain/heightfield';
 import { isAbortError } from '../terrain/tiles';
@@ -118,6 +119,29 @@ export const pendingLoadTerrain: LoadTerrain = (_run, signal) =>
     );
   });
 
+/**
+ * Builds a height grid for exactly `bounds` (no padding): the Night Ridge and Survey Quad posters
+ * lay their own figures out and ask for the area their figure box needs (`ridgeBounds`,
+ * `quadBounds`). Rejects with an `AbortError` when `signal` aborts.
+ */
+export type LoadFigureTerrain = (bounds: Bounds, signal: AbortSignal) => Promise<Heightfield>;
+
+/** The app's figure terrain loader: same-origin Terrarium tiles for `bounds`, unpadded. */
+export const realLoadFigureTerrain: LoadFigureTerrain = (bounds, signal) =>
+  buildHeightfield(bounds, { padding: 0, signal });
+
+/** A figure terrain loader that never settles (placeholder mode: no tile requests). */
+export const pendingLoadFigureTerrain: LoadFigureTerrain = (_bounds, signal) =>
+  new Promise<Heightfield>((_resolve, reject) => {
+    signal.addEventListener(
+      'abort',
+      () => {
+        reject(signal.reason as Error);
+      },
+      { once: true },
+    );
+  });
+
 /** No elevation tile came through: offline, or the tile server is down. */
 export const TERRAIN_OFFLINE_ERROR =
   "The terrain couldn't load: no elevation data came through. Check your connection and try again.";
@@ -157,6 +181,8 @@ interface RunContextValue {
   readonly clear: () => void;
   /** Whether a load is in flight right now (read at call time, not render time). */
   readonly isLoading: () => boolean;
+  /** Builds a height grid for a poster figure's own bounds. */
+  readonly loadFigureTerrain: LoadFigureTerrain;
 }
 
 const RunContext = createContext<RunContextValue | null>(null);
@@ -182,6 +208,11 @@ export interface RunProviderProps {
    * placeholder mode (`schedule` / `delayMs` given), to `pendingLoadTerrain` (stays loading).
    */
   loadTerrain?: LoadTerrain;
+  /**
+   * Builds the Night Ridge and Survey Quad figures' height grids. Defaults to
+   * `realLoadFigureTerrain`, or in placeholder mode to `pendingLoadFigureTerrain` (stays loading).
+   */
+  loadFigureTerrain?: LoadFigureTerrain;
 }
 
 export function RunProvider({
@@ -191,6 +222,7 @@ export function RunProvider({
   schedule,
   delayMs,
   loadTerrain,
+  loadFigureTerrain,
 }: RunProviderProps) {
   const [run, setRun] = useState<Run | null>(initialRun);
   const pending = useRef<AbortController | null>(null);
@@ -201,6 +233,8 @@ export function RunProvider({
   );
   const loader = loadRun ?? (usePlaceholder ? placeholder : realLoadRun);
   const terrainLoader = loadTerrain ?? (usePlaceholder ? pendingLoadTerrain : realLoadTerrain);
+  const figureTerrainLoader =
+    loadFigureTerrain ?? (usePlaceholder ? pendingLoadFigureTerrain : realLoadFigureTerrain);
 
   // The terrain follows the run: built as soon as a run is current, aborted when it changes.
   const [attempt, setAttempt] = useState(0);
@@ -301,8 +335,16 @@ export function RunProvider({
   useEffect(() => cancelPending, [cancelPending]);
 
   const value = useMemo<RunContextValue>(
-    () => ({ run, terrain, retryTerrain, load, clear, isLoading }),
-    [run, terrain, retryTerrain, load, clear, isLoading],
+    () => ({
+      run,
+      terrain,
+      retryTerrain,
+      load,
+      clear,
+      isLoading,
+      loadFigureTerrain: figureTerrainLoader,
+    }),
+    [run, terrain, retryTerrain, load, clear, isLoading, figureTerrainLoader],
   );
   return createElement(RunContext, { value }, children);
 }
@@ -326,6 +368,11 @@ export function useTerrain(): Terrain {
 /** Builds the current run's terrain again (the View's "Try again" after an error). */
 export function useRetryTerrain(): () => void {
   return useRunContext('useRetryTerrain').retryTerrain;
+}
+
+/** Builds a height grid for a poster figure's bounds (Night Ridge, Survey Quad). */
+export function useFigureTerrainLoader(): LoadFigureTerrain {
+  return useRunContext('useFigureTerrainLoader').loadFigureTerrain;
 }
 
 /** Low-level access to `load` and `clear`. The page normally uses `useRunChooser`. */

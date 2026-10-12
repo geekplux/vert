@@ -43,11 +43,21 @@ This is the only place that owns application state and composes `components`, `t
   Flat map → profile. `viewCopy.ts` holds its data-driven copy and profile maths (the terrain
   label says "loop" only when the track ends within 50 m of its start).
 - `PosterState/`: Poster mode, also shown under the export overlay (aside: style, size, text,
-  stats, hide ends, then the sticky Download block; main: the live `PosterPreview` of
-  `TrailSignPoster`, fitted to the stage). At ≥ 900px the page is one viewport tall and the aside
-  scrolls. `posterCopy.ts` holds the file name and button copy. Phase 2 placeholders, marked in
-  the code: the sample terrain illustration as the figure, a plain card for styles B and E, and
-  `simulateExport.ts` as the `defaultExporter` (see the exporter contract below).
+  stats, hide ends, then the sticky Download block; main: the live `PosterPreview`, fitted to the
+  stage). At ≥ 900px the page is one viewport tall and the aside scrolls. `posterCopy.ts` holds
+  the file name and button copy. `LivePoster.tsx` draws the chosen style with its live figure
+  (`figureHooks.ts`): style A's three.js terrain (`renderTerrainFigure`, loaded on demand) at the
+  figure box × the preview's scale × device pixel ratio (≤ 2), re-rendered 150 ms after the box,
+  scale, exaggeration, hide ends, camera or terrain change, with "Drawing the terrain…" until the
+  first frame; Night Ridge and Survey Quad build their own height grids for the box they report
+  (`ridgeBounds` / `quadBounds`, cached by bounds, `useFigureTerrainLoader()`), and show only once
+  their fonts have loaded (`loadPosterFonts`; a plain card in the style's paper until then).
+  Hide start and end: every style draws `trimTrack(run.track, hideEnds)` (route and start / finish
+  markers); stats, profile, sunrise and the map's centre keep the whole run. The camera: "Make a
+  poster" reads the View's terrain camera (`TerrainBox` `cameraRef`) into `prefs.poster.camera`
+  (`MAKE_POSTER { camera }`; New file resets it). The figure renderer's WebGL context is released
+  when Poster mode closes. `simulateExport.ts` is still the `defaultExporter` (see the exporter
+  contract below).
 - Exporting (`PosterState/ExportProgress.tsx`): under the Download button, a 6px progress bar, the
   label ("Preparing…" until the exporter reports its tile count, then "Rendering tile 4 of 12")
   and a Quiet Cancel; afterwards "✓ Saved <file>" or "⚠ <error>" (`--route-text`). While

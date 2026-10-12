@@ -44,6 +44,15 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import type { RunTrack } from '../page/types';
+import {
+  DEFAULT_AZIMUTH,
+  DEFAULT_POLAR,
+  FLAT_POLAR,
+  MAX_POLAR,
+  MIN_POLAR,
+  normalizeAzimuth,
+  type ViewCamera,
+} from './camera';
 import type { Heightfield } from './heightfield';
 import { createMarkerLayer, markerExtent, type MarkerLayer } from './markers';
 import { APP_ROUTE_PALETTE, createRouteLayer, type RouteLayer, type RoutePalette } from './route';
@@ -106,18 +115,7 @@ export const createWebGLRenderer: RendererFactory = (canvas) => {
 export type TerrainViewMode = 'oblique' | 'flat';
 
 const DEG = Math.PI / 180;
-/** OrbitControls polar limits for the oblique view (prompt: 20°–80°). */
-export const MIN_POLAR = 20 * DEG;
-export const MAX_POLAR = 80 * DEG;
-/** The default oblique view. */
-export const DEFAULT_POLAR = 62 * DEG;
-/**
- * The default azimuth: the camera 18° east of south (DECISIONS.md's "−18°", a bearing measured the
- * other way round), so the east wall shows its stepped row ends on the right, as in the canvas.
- */
-export const DEFAULT_AZIMUTH = 18 * DEG;
-/** Top-down, a hair off 0 so `lookAt` keeps north up. */
-export const FLAT_POLAR = 1e-4;
+export { DEFAULT_AZIMUTH, DEFAULT_POLAR, FLAT_POLAR, MAX_POLAR, MIN_POLAR };
 export const INTRO_MS = 1200;
 export const VIEW_CHANGE_MS = 600;
 export const FOV = 30;
@@ -958,6 +956,74 @@ export function setLensShift(
   camera.setViewOffset(width, height, (shiftX * width) / 2, (-shiftY * height) / 2, width, height);
 }
 
+/** A rectangle of an image, output px from its top-left corner. */
+export interface PixelRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** The arguments of `PerspectiveCamera.setViewOffset`. */
+export interface ViewOffset {
+  readonly fullWidth: number;
+  readonly fullHeight: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * The view offset that draws `tile` of a `width × height` image whose camera has the lens shift
+ * (`shiftX`, `shiftY`) (NDC, as {@link setLensShift}): the lens shift is a view offset the size of
+ * the image, and a tile is the same offset moved by the tile's corner and cut to its size. Tiles
+ * that cover the image therefore stitch into exactly the image drawn whole (the projection is
+ * linear in the offset). All lengths in output px; any rectangle works, also past the edges.
+ */
+export function figureViewOffset(
+  width: number,
+  height: number,
+  shiftX: number,
+  shiftY: number,
+  tile: PixelRect,
+): ViewOffset {
+  return {
+    fullWidth: width,
+    fullHeight: height,
+    offsetX: (shiftX * width) / 2 + tile.x,
+    offsetY: (-shiftY * height) / 2 + tile.y,
+    width: tile.width,
+    height: tile.height,
+  };
+}
+
+/** Applies a {@link ViewOffset} to `camera` (and so updates its projection). */
+export function applyViewOffset(camera: PerspectiveCamera, view: ViewOffset): void {
+  camera.setViewOffset(
+    view.fullWidth,
+    view.fullHeight,
+    view.offsetX,
+    view.offsetY,
+    view.width,
+    view.height,
+  );
+}
+
+/**
+ * One figure render ({@link TerrainStage.renderFigure}): the whole figure's size in output px, how
+ * many output px a logical px is (line widths, ridge lines and markers are logical px, so they
+ * scale with it), and the part of the figure to draw now.
+ */
+export interface FigureFrame {
+  readonly width: number;
+  readonly height: number;
+  /** Output px per logical px (the poster's preview or export scale). */
+  readonly scale: number;
+  /** The part to draw, output px from the figure's top-left corner; the whole figure by default. */
+  readonly tile?: PixelRect;
+}
+
 /** Where the camera is: on a sphere of `distance` around (0, `targetY`, 0), lens-shifted. */
 export interface CameraPose {
   readonly distance: number;
@@ -1009,6 +1075,11 @@ export interface StageOptions {
   routePalette?: RoutePalette;
   /** Called once per rendered frame with the time spent in `render`, ms (for instrumentation). */
   onFrame?: (renderMs: number) => void;
+  /**
+   * `false` for an off-screen stage that only draws on request (`renderFigure`): no pointer or
+   * wheel handling and no render loop. Default `true` (the View).
+   */
+  interactive?: boolean;
 }
 
 export interface ShowOptions {
@@ -1107,12 +1178,18 @@ export class TerrainStage {
   /** The terrain's depth for the route's visibility test (created on the first frame with one). */
   private depthTarget: WebGLRenderTarget | null = null;
   private readonly bufferSize = new Vector2();
+  private readonly interactive: boolean;
+  /** Output px per logical px while drawing a figure (`renderFigure`); null in the View. */
+  private figureScale: number | null = null;
+  /** The figure size the fit was last computed for (`renderFigure`). */
+  private figureKey = '';
 
   constructor(canvas: HTMLCanvasElement, options: StageOptions) {
     this.canvas = canvas;
     this.palette = options.palette;
     this.routePalette = options.routePalette ?? APP_ROUTE_PALETTE;
     this.onFrame = options.onFrame;
+    this.interactive = options.interactive ?? true;
     this.renderer = (options.createRenderer ?? createWebGLRenderer)(canvas);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
@@ -1123,14 +1200,19 @@ export class TerrainStage {
     controls.minPolarAngle = MIN_POLAR;
     controls.maxPolarAngle = MAX_POLAR;
     controls.rotateSpeed = 0.6;
-    controls.addEventListener('change', this.requestRender);
+    if (this.interactive) {
+      controls.addEventListener('change', this.requestRender);
+    } else {
+      // Off-screen: nothing to drag, and the stage draws only when asked.
+      controls.disconnect();
+    }
     this.controls = controls;
     placeCamera(this.camera, this.target, 3, DEFAULT_POLAR, DEFAULT_AZIMUTH);
   }
 
   /** Schedules one frame (no-op when one is already pending). */
   readonly requestRender = (): void => {
-    if (this.frameId || this.disposed) return;
+    if (this.frameId || this.disposed || !this.interactive) return;
     this.frameId = raf(this.drawFrame);
   };
 
@@ -1213,7 +1295,7 @@ export class TerrainStage {
       camera: this.camera,
       bufferWidth: width,
       bufferHeight: height,
-      pixelRatio: renderer.getPixelRatio(),
+      pixelRatio: this.figureScale ?? renderer.getPixelRatio(),
     });
   }
 
@@ -1416,10 +1498,12 @@ export class TerrainStage {
   /**
    * The zoom band at polar angle `phi` (camera distances, at zoom 1): `far`, the farthest any
    * azimuth needs, and `near` = far ÷ {@link TURN_ZOOM_BAND}. Between grid steps, interpolated.
-   * Below the oblique range (the flat map, where nothing turns) there is no band (0).
+   * Below the oblique range (the flat map, where nothing turns) there is no band (0), nor in an
+   * off-screen figure (`interactive: false`): it never turns, so the model fills its box at the
+   * camera's own azimuth.
    */
   private bandAt(phi: number): { near: number; far: number } {
-    if (phi < MIN_POLAR - 1e-6) return { near: 0, far: 0 };
+    if (phi < MIN_POLAR - 1e-6 || !this.interactive) return { near: 0, far: 0 };
     const u = (Math.min(MAX_POLAR, Math.max(MIN_POLAR, phi)) - MIN_POLAR) / BAND_STEP;
     const index = Math.round(u);
     let far: number;
@@ -1839,6 +1923,8 @@ export class TerrainStage {
   private applySize(width: number, height: number, pixelRatio: number, overlays = true) {
     const w = Math.max(1, Math.round(width));
     const h = Math.max(1, Math.round(height));
+    this.figureScale = null;
+    this.figureKey = '';
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
@@ -1851,6 +1937,88 @@ export class TerrainStage {
     this.route?.setResolution(w, h);
     this.markers?.setViewport(h, this.camera.fov);
     if (this.mesh) this.mesh.material.uniforms.uPixelRatio.value = this.renderer.getPixelRatio();
+  }
+
+  /**
+   * The camera as the user left it, for Poster mode ("Make a poster uses the current camera"):
+   * its angles and zoom factor, or where a running camera move (Rotate, Flat map) is heading. In
+   * the flat view, top-down and north up.
+   */
+  viewCamera(): ViewCamera {
+    const pose = this.tween ? this.tween.to : this.livePose();
+    const zoom = clampZoom(pose.zoom);
+    if (this.view === 'flat') return { azimuth: 0, polar: FLAT_POLAR, zoom, view: 'flat' };
+    return {
+      azimuth: normalizeAzimuth(pose.theta),
+      polar: Math.min(MAX_POLAR, Math.max(MIN_POLAR, pose.phi)),
+      zoom,
+      view: 'oblique',
+    };
+  }
+
+  /**
+   * Draws the terrain, route and markers seen from `camera` as a figure of `frame.width ×
+   * frame.height` output px (or the part `frame.tile` of it) into the stage's canvas, sized to the
+   * part, synchronously; copy the canvas before the task ends. The model is framed for the whole
+   * figure in logical px (`width / scale`), exactly as the View frames its box, and every line
+   * width and marker size is logical px times `scale`, so a preview and an export at another
+   * scale show the same picture. A tile is the whole figure's camera with a view offset
+   * ({@link figureViewOffset}). For an off-screen stage (`interactive: false`).
+   */
+  renderFigure(camera: ViewCamera, frame: FigureFrame): void {
+    if (this.disposed) return;
+    const width = Math.max(1, Math.round(frame.width));
+    const height = Math.max(1, Math.round(frame.height));
+    const scale = frame.scale > 0 && Number.isFinite(frame.scale) ? frame.scale : 1;
+    const tile = frame.tile ?? { x: 0, y: 0, width, height };
+    const tileWidth = Math.max(1, Math.round(tile.width));
+    const tileHeight = Math.max(1, Math.round(tile.height));
+    const logical = { width: width / scale, height: height / scale };
+
+    this.figureScale = scale;
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(tileWidth, tileHeight, false);
+    const key = `${String(width)}×${String(height)}@${String(scale)}`;
+    if (key !== this.figureKey) {
+      this.figureKey = key;
+      this.camera.aspect = width / height;
+      this.size = logical;
+      this.margins = fitMargins(logical.width, logical.height, this.insets);
+      this.obstacles = [];
+      this.invalidateFit();
+      if (this.mesh) this.updateFit();
+    }
+    // Logical px over the drawn part: line widths are logical px, so they scale with `scale`.
+    this.route?.setResolution(tileWidth / scale, tileHeight / scale);
+    this.markers?.setViewport(logical.height, this.camera.fov);
+    if (this.mesh) this.mesh.material.uniforms.uPixelRatio.value = scale;
+
+    const pose: ViewPose =
+      camera.view === 'flat'
+        ? { phi: FLAT_POLAR, theta: 0, zoom: clampZoom(camera.zoom) }
+        : {
+            phi: Math.min(MAX_POLAR, Math.max(MIN_POLAR, camera.polar)),
+            theta: camera.azimuth,
+            zoom: clampZoom(camera.zoom),
+          };
+    this.view = camera.view;
+    let shiftX = 0;
+    let shiftY = 0;
+    if (this.mesh) {
+      this.setPose(pose);
+      ({ shiftX, shiftY } = this.frame(pose.phi, pose.theta));
+    }
+    applyViewOffset(
+      this.camera,
+      figureViewOffset(width, height, shiftX, shiftY, {
+        x: tile.x,
+        y: tile.y,
+        width: tileWidth,
+        height: tileHeight,
+      }),
+    );
+    this.camera.updateMatrixWorld();
+    this.draw();
   }
 
   /**

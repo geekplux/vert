@@ -8,6 +8,7 @@ import { runDateLine, runPaceAt } from '../runCopy';
 import { EXAGGERATION } from '../state';
 import type { Run, Terrain } from '../types';
 import { TerrainBox } from './TerrainBox';
+import type { TerrainCameraSource } from './TerrainBox';
 import { PHONE_QUERY, useMediaQuery } from './useMediaQuery';
 import {
   defaultScrub,
@@ -38,6 +39,8 @@ export interface ViewStateProps {
    * timed run shows "· 6:48 /km" in the readout and a timeless one leaves pace out.
    */
   paceAt?: PaceAt;
+  /** Reads the terrain's camera ("Make a poster" hands it to Poster mode); see `TerrainBox`. */
+  cameraRef?: Ref<TerrainCameraSource>;
 }
 const formatExaggeration = (value: number) => `${value.toFixed(1)}×`;
 
@@ -56,6 +59,7 @@ export function ViewState({
   onRetryTerrain,
   headingRef,
   paceAt: paceAtProp,
+  cameraRef,
 }: ViewStateProps) {
   const paceAt: PaceAt = paceAtProp ?? ((d) => runPaceAt(run, d));
   const climbsId = useId();
@@ -177,6 +181,7 @@ export function ViewState({
           setFlat((on) => !on);
         }}
         overlaysBelow={phone}
+        cameraRef={cameraRef}
       />
 
       <section className={styles.elevation} aria-labelledby={elevationId}>

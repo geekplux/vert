@@ -12,8 +12,6 @@ import {
 import { PosterPreview } from '../../poster/PosterPreview';
 import { posterSizeById } from '../../poster/sizes';
 import { POSTER_STYLES } from '../../poster/styles';
-import type { PosterStyleId, PosterStyleOption } from '../../poster/styles';
-import { TrailSignPoster } from '../../poster/TrailSignPoster';
 import { posterContentFromRun } from '../../poster/types';
 import { HIDE_ENDS } from '../state';
 import type {
@@ -25,14 +23,16 @@ import type {
   PrefsEvent,
   ScreenEvent,
 } from '../state';
+import { realLoadFigureTerrain } from '../hooks';
+import type { LoadFigureTerrain } from '../hooks';
 import { PageShell } from '../PageShell/PageShell';
-import type { Run } from '../types';
-import sampleTerrain from '../UploadState/sample-terrain.svg';
+import type { Run, Terrain } from '../types';
 import { useMediaQuery } from '../ViewState/useMediaQuery';
 import { buildExportJob, defaultExporter } from './exporter';
 import type { ExportFormat, Exporter } from './exporter';
 import { ExportNotice, ExportProgress } from './ExportProgress';
-import { PendingStylePoster } from './PendingStylePoster';
+import { useReleaseTerrainFigure } from './figureHooks';
+import { LivePoster } from './LivePoster';
 import { exportAnnouncement, offersPdf, pngButtonLabel } from './posterCopy';
 import { useExport } from './useExport';
 import styles from './PosterState.module.css';
@@ -50,7 +50,19 @@ export interface PosterStateProps {
   headingRef?: Ref<HTMLHeadingElement>;
   /** Renders and saves the file. Default: `defaultExporter` (exporter.ts). */
   exporter?: Exporter;
+  /**
+   * The run's terrain (`useTerrain()`): style A's figure is drawn from its height grid. Default
+   * idle (the figure shows its loading note).
+   */
+  terrain?: Terrain;
+  /** Builds the Night Ridge and Survey Quad figures' height grids (`useFigureTerrainLoader()`). */
+  loadFigureTerrain?: LoadFigureTerrain;
 }
+
+const IDLE_TERRAIN: Terrain = { status: 'idle' };
+
+/** Raster figures are drawn at most at this many device px per CSS px. */
+const MAX_PIXEL_RATIO = 2;
 
 /** Poster mode's preview box (canvas PosterMode frame): 600 × 800 at most. */
 const PREVIEW_MAX = { width: 600, height: 800 } as const;
@@ -71,12 +83,6 @@ const STATS: readonly { stat: PosterStat; label: string }[] = [
   { stat: 'highPoint', label: 'High point' },
 ];
 
-function posterStyleById(id: PosterStyleId): PosterStyleOption {
-  const style = POSTER_STYLES.find((option) => option.id === id);
-  if (!style) throw new RangeError(`Unknown poster style: ${id}`);
-  return style;
-}
-
 const formatMetres = (value: number) => `${String(value)} m`;
 const metresText = (value: number) => `${String(value)} metres`;
 
@@ -85,8 +91,8 @@ const metresText = (value: number) => `${String(value)} metres`;
  * text, stats and hide-ends, then the sticky Download block. Main: the live poster preview on the
  * grey stage. Download runs `exporter`; while it runs (`exporting`, DESIGN-SPEC §3 "04 Exporting")
  * the progress shows under the Download button and every control that could change the output is
- * disabled. Phase 2: the figure is the sample terrain illustration and the exporter is simulated
- * (phase 3 renders the terrain and the file).
+ * disabled. The preview is live (`LivePoster`): the terrain figure follows the camera the View
+ * was left at, the exaggeration and the hidden ends, re-rendered as they change.
  */
 export function PosterState({
   run,
@@ -95,16 +101,20 @@ export function PosterState({
   dispatch,
   headingRef,
   exporter = defaultExporter,
+  terrain = IDLE_TERRAIN,
+  loadFigureTerrain = realLoadFigureTerrain,
 }: PosterStateProps) {
   const { poster } = prefs;
   const size = posterSizeById(poster.size);
-  const style = posterStyleById(poster.style);
   const content = posterContentFromRun(run, prefs);
   const [stageRef, stageHeight] = useStageHeight();
   const exporting = screen.name === 'exporting';
   const { start, cancel, cancelled } = useExport(exporter, dispatch);
   const { labelRef, pngRef, pdfRef, rememberStarter } = useExportFocus(screen.name);
   const busyNoteId = useId();
+  const [previewScale, setPreviewScale] = useState(1);
+  const pixelScale = figurePixelScale(previewScale);
+  useReleaseTerrainFigure();
 
   const download = (format: ExportFormat) => {
     rememberStarter(format);
@@ -243,22 +253,30 @@ export function PosterState({
           size={size}
           maxWidth={PREVIEW_MAX.width}
           maxHeight={Math.min(PREVIEW_MAX.height, stageHeight ?? PREVIEW_MAX.height)}
+          onScale={setPreviewScale}
         >
-          {style.id === 'A' ? (
-            <TrailSignPoster
-              content={content}
-              size={size}
-              // PHASE 3: the live terrain render replaces the sample illustration.
-              figure={<img src={sampleTerrain} alt="" />}
-              onFigureBox={() => undefined /* PHASE 3: the terrain renders at this box. */}
-            />
-          ) : (
-            <PendingStylePoster style={style} size={size} />
-          )}
+          <LivePoster
+            run={run}
+            prefs={prefs}
+            size={size}
+            content={content}
+            terrain={terrain}
+            loadFigureTerrain={loadFigureTerrain}
+            pixelScale={pixelScale}
+          />
         </PosterPreview>
       </div>
     </PageShell>
   );
+}
+
+/**
+ * Output px per logical px for the preview's raster figure: the preview's scale times the device
+ * pixel ratio (at most 2), in steps of 1/20 so a sub-pixel resize does not re-render it.
+ */
+export function figurePixelScale(previewScale: number): number {
+  const ratio = Math.min(MAX_PIXEL_RATIO, window.devicePixelRatio || 1);
+  return Math.max(0.05, Math.round(previewScale * ratio * 20) / 20);
 }
 
 /** The status region's text: the export's milestones, then how it ended. */

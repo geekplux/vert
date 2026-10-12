@@ -20,20 +20,20 @@ Worker deploy.
 One component per task, simplest first. Each: implementation sub-agent (own worktree) →
 verification sub-agent → merge on PASS. Max three rounds.
 
-| Done | Component        | Rounds | Notes                                                                                                                                                     |
-| ---- | ---------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [x]  | Button           | 1      | Four variants, md/lg, link form; widths identical to the canvas buttons; keyboard verified in Chromium.                                                   |
-| [x]  | Wordmark         | 1      | Name 30/800/62%, optional mono tagline; matches the Upload header pixel-for-pixel.                                                                        |
-| [x]  | StatTile         | 2      | Label/value/unit in dl semantics with StatGrid; emphasised unit uses --route-text; 0px from the Main frame.                                               |
-| [x]  | Segmented        | 2      | Native radios in a radiogroup; 40px drawn, 44x44 hit area per segment; NoInfer value typing; 0.4px from the canvas.                                       |
-| [x]  | Checkbox         | 1      | Native checkbox in a 44px label row; within 0px of the PosterMode stats row; keyboard verified.                                                           |
-| [x]  | TextField        | 2      | Label above a 44px input with a --rule-strong (3:1) border; counter from 80% that reads 'N / M characters' to AT; 0px from the canvas.                    |
-| [x]  | Slider           | 3      | Native range with a styled 3:1 track and ink thumb, live formatted value + aria-valuetext, 44px hit area; within 1px of the canvas vertically.            |
-| [x]  | Marker           | 1      | Start ring, summit triangle, scrub dot; MarkerShape for embedding; 0px from the Tokens legend; distinct in greyscale.                                     |
-| [x]  | SizePicker       | 2      | 2x2 native-radio cards copying the canvas line boxes (0px off); POSTER_SIZES data; names read 'A3, print · 3508 × 4961'.                                  |
-| [x]  | StylePicker      | 1      | Native radios; 3:4 swatches with a per-style terrain sketch so styles differ by shape, not just colour; within 1.3px of the canvas.                       |
-| [x]  | Dropzone         | 1      | Drop or choose a .gpx (extension-validated, 20 MB cap), sample button, dashed-to-solid drag state, alert errors, busy; within 0.03px of the Upload frame. |
-| [ ]  | ElevationProfile |        |                                                                                                                                                           |
+| Done | Component        | Rounds | Notes                                                                                                                                                                 |
+| ---- | ---------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x]  | Button           | 1      | Four variants, md/lg, link form; widths identical to the canvas buttons; keyboard verified in Chromium.                                                               |
+| [x]  | Wordmark         | 1      | Name 30/800/62%, optional mono tagline; matches the Upload header pixel-for-pixel.                                                                                    |
+| [x]  | StatTile         | 2      | Label/value/unit in dl semantics with StatGrid; emphasised unit uses --route-text; 0px from the Main frame.                                                           |
+| [x]  | Segmented        | 2      | Native radios in a radiogroup; 40px drawn, 44x44 hit area per segment; NoInfer value typing; 0.4px from the canvas.                                                   |
+| [x]  | Checkbox         | 1      | Native checkbox in a 44px label row; within 0px of the PosterMode stats row; keyboard verified.                                                                       |
+| [x]  | TextField        | 2      | Label above a 44px input with a --rule-strong (3:1) border; counter from 80% that reads 'N / M characters' to AT; 0px from the canvas.                                |
+| [x]  | Slider           | 3      | Native range with a styled 3:1 track and ink thumb, live formatted value + aria-valuetext, 44px hit area; within 1px of the canvas vertically.                        |
+| [x]  | Marker           | 1      | Start ring, summit triangle, scrub dot; MarkerShape for embedding; 0px from the Tokens legend; distinct in greyscale.                                                 |
+| [x]  | SizePicker       | 2      | 2x2 native-radio cards copying the canvas line boxes (0px off); POSTER_SIZES data; names read 'A3, print · 3508 × 4961'.                                              |
+| [x]  | StylePicker      | 1      | Native radios; 3:4 swatches with a per-style terrain sketch so styles differ by shape, not just colour; within 1.3px of the canvas.                                   |
+| [x]  | Dropzone         | 1      | Drop or choose a .gpx (extension-validated, 20 MB cap), sample button, dashed-to-solid drag state, alert errors, busy; within 0.03px of the Upload frame.             |
+| [x]  | ElevationProfile | 1      | Scrubbable SVG profile as an ARIA slider (keys, pointer, touch), numbered climb bands, ticks by distance; within 1px of the canvas; no path rebuilds while scrubbing. |
 
 ## 2 Layout
 

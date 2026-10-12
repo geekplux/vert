@@ -113,7 +113,7 @@ export function Dropzone({
     ? busyName
       ? `Reading ${busyName}…`
       : source?.kind === 'sample'
-        ? 'Reading the sample run…'
+        ? 'Loading the sample run…'
         : 'Reading…'
     : dragOver
       ? 'Release to open the file'

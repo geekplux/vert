@@ -36,9 +36,14 @@ export function AboutDialog({ open, onClose, returnFocusRef }: AboutDialogProps)
   }, [open]);
 
   function handleClose() {
-    // Runs after the browser's own focus restoration, so this wins (Safari does not focus a
-    // clicked button, so the browser alone may restore focus to <body>).
-    returnFocusRef?.current?.focus();
+    // `close` is a queued task that runs after the browser's own focus restoration. Fill in only
+    // where the browser left focus nowhere useful: on <body> (Safari does not focus a clicked
+    // button, so it may restore to <body>) or still inside the dialog. If focus has already moved
+    // on (a quick Tab after Escape), leave it there rather than pulling it back.
+    const active = document.activeElement;
+    const stranded =
+      active === null || active === document.body || dialogRef.current?.contains(active) === true;
+    if (stranded) returnFocusRef?.current?.focus();
     onClose();
   }
 

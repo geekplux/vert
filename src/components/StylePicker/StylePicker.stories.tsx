@@ -47,9 +47,14 @@ export const NightRidgeSelected: Story = () => (
 );
 NightRidgeSelected.storyName = 'Night Ridge selected';
 
-/** Without colour the swatches still differ: paper lightness and the terrain hint's shape. */
+/**
+ * Without colour the swatches still differ (paper lightness, the terrain hint's shape) and the
+ * selection still reads: the check badge's white ring and check are shapes, on light or dark paper.
+ */
 export const Greyscale: Story = () => (
-  <div style={{ ...column, filter: 'grayscale(1)' }}>
+  <div style={{ ...column, filter: 'grayscale(1)', display: 'grid', gap: 24 }}>
     <Controlled initial="A" />
+    <Controlled initial="B" />
+    <Controlled initial="E" />
   </div>
 );

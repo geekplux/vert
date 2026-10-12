@@ -260,6 +260,34 @@ describe('tilesForBounds / tileCount', () => {
     expect(tileCount(tileBounds(0, 0, 1), 1)).toBe(1);
   });
 
+  // tileBounds → lonLatToTile drifts by ~1e-11 tile (y = 6533.000000000001), which used to pull in
+  // an extra row or column. Every tile of a deterministic sweep must cover exactly itself, and a
+  // block of tiles exactly that block.
+  it.each([6, 10, 12, 13, 14, 15])('round-trips tileBounds to exactly one tile at z%i', (z) => {
+    const centre = lonLatToTile(VOGEL.lon, VOGEL.lat, z);
+    const cx = Math.floor(centre.x);
+    const cy = Math.floor(centre.y);
+    for (let dy = -6; dy <= 6; dy++) {
+      for (let dx = -6; dx <= 6; dx++) {
+        const x = cx + dx * 7;
+        const y = cy + dy * 5;
+        if (x < 0 || y < 0 || x >= 2 ** z || y >= 2 ** z) continue;
+        expect(tilesForBounds(tileBounds(x, y, z), z)).toEqual([{ z, x, y }]);
+      }
+    }
+    const nw = tileBounds(cx, cy, z);
+    const se = tileBounds(cx + 2, cy + 1, z);
+    const block: Bounds = { west: nw.west, north: nw.north, east: se.east, south: se.south };
+    expect(tileCount(block, z)).toBe(6);
+    expect(tilesForBounds(block, z)[0]).toEqual({ z, x: cx, y: cy });
+  });
+
+  it('still adds the next tile for an edge just past a boundary', () => {
+    const b = tileBounds(1093, 1625, 12);
+    const past = { ...b, east: b.east + 1e-6, south: b.south - 1e-6 };
+    expect(tileCount(past, 12)).toBe(4);
+  });
+
   it('returns the whole world at low zoom and clamps beyond the Mercator limits', () => {
     const world: Bounds = { west: -180, south: -90, east: 180, north: 90 };
     expect(tilesForBounds(world, 0)).toEqual([{ z: 0, x: 0, y: 0 }]);

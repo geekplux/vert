@@ -36,6 +36,7 @@
 }
 
 .swatch {
+  position: relative;
   display: block;
   aspect-ratio: 3 / 4;
   overflow: hidden;
@@ -60,4 +61,33 @@
 
 .input:checked ~ .name {
   font-weight: 600;
+}
+
+/* Selected badge: 20px, top-right inside the swatch (the swatch clips overflow). */
+.mark {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+}
+
+.markDisc {
+  fill: var(--ink);
+  stroke: var(--white);
+}
+
+.markCheck {
+  stroke: var(--white);
+}
+
+@media (forced-colors: active) {
+  .markDisc {
+    fill: Highlight;
+    stroke: Canvas;
+  }
+
+  .markCheck {
+    stroke: HighlightText;
+  }
 }

@@ -265,19 +265,10 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     await expect
       .poll(() => dialog.evaluate((node) => node.contains(document.activeElement)))
       .toBe(true);
-    // The dialog's `close` event is a queued task, and AboutDialog returns focus to About in it.
-    // Wait for it as a person would (a test can Tab three times before it fires).
-    await dialog.evaluate((node) => {
-      node.addEventListener(
-        'close',
-        () => {
-          (window as unknown as { aboutClosed?: boolean }).aboutClosed = true;
-        },
-        { once: true },
-      );
-    });
+    // The browser restores focus to About on Escape; AboutDialog's handler for the (queued) `close`
+    // event only fills in when focus was left on <body> or in the dialog, so Tabbing straight on
+    // is safe: no waiting for the event.
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => (window as unknown as { aboutClosed?: boolean }).aboutClosed);
     await expect(dialog).toBeHidden();
     await expect(about).toBeFocused();
 

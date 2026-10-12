@@ -29,8 +29,8 @@
   .button {
     transition:
       background-color 120ms ease-out,
-      color 120ms ease-out,
-      filter 120ms ease-out;
+      border-color 120ms ease-out,
+      color 120ms ease-out;
   }
 }
 
@@ -41,8 +41,9 @@
   color: var(--white);
 }
 
+/* Hover darkens the fill, not the whole button: a brightness filter would dim the white text too. */
 .primary:hover:not(:disabled) {
-  filter: brightness(0.8);
+  background: color-mix(in srgb, var(--ink) 85%, black);
 }
 
 .secondary {
@@ -96,11 +97,27 @@
   padding: 0;
 }
 
-/* Disabled: native `disabled` tells assistive tech; the look is a dimmed control. */
-
+/*
+ * Disabled: native `disabled` tells assistive tech. WCAG exempts disabled controls from contrast,
+ * but Sean is colour-weak, so we choose legibility: every variant drops to --muted text and dims to
+ * 0.8 (--muted at 0.8 is 3.39:1 on --bg and 3.58:1 on white; the old opacity 0.45 gave 1.88:1).
+ * Primary also loses its ink fill for a --rule outline, a change of shape and not only of colour;
+ * the outline is an inset shadow so toggling `disabled` never changes the button's size.
+ */
 .button:disabled {
-  opacity: 0.45;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.8;
   cursor: not-allowed;
+}
+
+.primary:disabled {
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.secondary:disabled,
+.icon:disabled {
+  border-color: var(--rule);
 }
 
 /* Windows High Contrast drops backgrounds; keep the filled button's edge visible. */

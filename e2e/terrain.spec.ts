@@ -21,7 +21,7 @@ const ALLOWED_PATHS = [
   /^\/fonts\/[\w.-]+\.woff2$/,
   /^\/samples\/coosa-backcountry\.gpx$/,
   /^\/tiles\/\d{1,2}\/\d{1,5}\/\d{1,5}\.png$/,
-  /^\/favicon\.ico$/,
+  /^\/favicon\.svg$/,
 ];
 
 function recordRequests(page: Page): Request[] {

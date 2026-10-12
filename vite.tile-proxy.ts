@@ -7,10 +7,13 @@ import type { ProxyOptions } from 'vite';
  *
  * The key is anchored, so only a bare z/x/y path is proxied: anything else (a query string, an
  * extra segment) falls through to Vite and never reaches AWS. Cookies and the referrer are
- * stripped so the upstream request carries the tile address and nothing else.
+ * stripped so the upstream request carries the tile address and nothing else. The zoom is capped at
+ * 0–15, Terrarium's deepest level (z=99 falls through to Vite instead of reaching S3).
  */
+export const TILE_PROXY_PATTERN = '^/tiles/(?:1[0-5]|\\d)/\\d{1,5}/\\d{1,5}\\.png$';
+
 export const tileProxy: Record<string, ProxyOptions> = {
-  '^/tiles/\\d{1,2}/\\d{1,5}/\\d{1,5}\\.png$': {
+  [TILE_PROXY_PATTERN]: {
     target: 'https://s3.amazonaws.com',
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/tiles\//, '/elevation-tiles-prod/terrarium/'),

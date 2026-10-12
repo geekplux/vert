@@ -33,7 +33,7 @@ function uploadState(screen: Partial<UploadScreen>, prefs = INITIAL_PREFS): Page
   return { screen: { ...INITIAL_SCREEN, ...screen }, prefs };
 }
 
-const dropzone = () => screen.getByRole('group', { name: /gpx file|Reading/ });
+const dropzone = () => screen.getByRole('group', { name: /gpx file|Reading|Loading/ });
 
 function dropFile(file: File) {
   fireEvent.drop(dropzone(), { dataTransfer: { files: [file], types: ['Files'] } });
@@ -105,6 +105,8 @@ describe('UploadState', () => {
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
 
     expect(screen.getByRole('status').textContent).toBe('Loading the sample run…');
+    // The Dropzone's title and the page's announcement use the same words.
+    expect(screen.getByRole('group', { name: 'Loading the sample run…' })).toBe(dropzone());
     expect(dropzone().getAttribute('aria-busy')).toBe('true');
 
     await clock.flush();

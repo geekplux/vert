@@ -22,5 +22,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["vite.config.ts", "vite.tile-proxy.ts", "playwright.config.ts", "e2e", ".ladle/*.ts"]
+  "include": [
+    "vite.config.ts",
+    "vite.tile-proxy.ts",
+    "vite.tile-proxy.test.ts",
+    "playwright.config.ts",
+    "e2e",
+    ".ladle/*.ts"
+  ]
 }

@@ -128,17 +128,24 @@ export function metresPerPixel(lat: number, z: number, tileSize = 256): number {
   return (Math.cos(lat * DEG) * 2 * Math.PI * MERCATOR_RADIUS_M) / (tileSize * 2 ** z);
 }
 
+/**
+ * Slack, in tile units, for deciding that a bbox edge sits on a tile boundary. A lon/lat → tile
+ * round trip drifts by up to ~2.4e-11 tile at z15 (y = 6533.000000000001), which would otherwise
+ * pull in a whole extra row or column of tiles; 1e-9 tile is under a micrometre on the ground.
+ */
+const TILE_EDGE_EPSILON = 1e-9;
+
 /** Inclusive tile index ranges covering a bbox at zoom `z`, clamped to the valid tile range. */
 function tileRange(bbox: Bounds, z: number) {
   const n = 2 ** z;
   const topLeft = lonLatToTile(bbox.west, bbox.north, z);
   const bottomRight = lonLatToTile(bbox.east, bbox.south, z);
   const index = (v: number) => clamp(Math.floor(v), 0, n - 1);
-  const minX = index(topLeft.x);
-  const minY = index(topLeft.y);
-  // An edge that lies exactly on a tile boundary does not pull in the next tile.
-  const maxX = Math.max(minX, index(Math.ceil(bottomRight.x) - 1));
-  const maxY = Math.max(minY, index(Math.ceil(bottomRight.y) - 1));
+  // An edge that lies on a tile boundary (within float noise) does not pull in the next tile.
+  const minX = index(topLeft.x + TILE_EDGE_EPSILON);
+  const minY = index(topLeft.y + TILE_EDGE_EPSILON);
+  const maxX = Math.max(minX, index(Math.ceil(bottomRight.x - TILE_EDGE_EPSILON) - 1));
+  const maxY = Math.max(minY, index(Math.ceil(bottomRight.y - TILE_EDGE_EPSILON) - 1));
   return { minX, minY, maxX, maxY };
 }
 

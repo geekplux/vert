@@ -1,0 +1,42 @@
+/*
+ * Design tokens. Source: docs/DESIGN-SPEC.md §1 and canvas frame "00 Tokens and components".
+ * App chrome is poster style A, "Trail Sign". Light only in v1.
+ * Poster palettes (A, B, E) live with the poster styles in src/poster, not here.
+ */
+@import url('./fonts.css');
+
+:root {
+  /* Color */
+  --bg: #f4f6f8; /* page */
+  --surface: #e6eaee; /* terrain canvas background, poster paper */
+  --ink: #1b2a3a; /* text, primary buttons, terrain lines */
+  --muted: #5b6b7a; /* secondary text, labels */
+  --rule: #c9d1d9; /* borders, dividers */
+  --route: #d9480f; /* the route, scrub marker, vert number */
+  --white: #ffffff;
+
+  /* Type. Archivo is variable: wdth 62–125, wght 400–800. Metric-matched fallbacks come next. */
+  --font-display:
+    'Archivo', 'Archivo Fallback Helvetica Neue', 'Archivo Fallback Arial', 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono:
+    'IBM Plex Mono', 'IBM Plex Mono Fallback Menlo', 'IBM Plex Mono Fallback Courier New',
+    ui-monospace, Menlo, monospace;
+
+  /* Space */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radius */
+  --radius-control: 4px;
+  --radius-panel: 6px;
+  --radius-poster: 0; /* canvas frame 00: "radius … 0 (posters)" */
+
+  /* Minimum touch target */
+  --touch: 44px;
+}

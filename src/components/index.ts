@@ -10,6 +10,8 @@ export { MarkerShape } from './Marker/Marker';
 export type { MarkerShapeProps } from './Marker/Marker';
 export { Segmented } from './Segmented/Segmented';
 export type { SegmentedProps } from './Segmented/Segmented';
+export { Slider } from './Slider/Slider';
+export type { SliderProps } from './Slider/Slider';
 export { StatGrid } from './StatTile/StatGrid';
 export type { StatGridProps } from './StatTile/StatGrid';
 export { StatTile } from './StatTile/StatTile';

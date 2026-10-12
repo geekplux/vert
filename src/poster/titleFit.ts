@@ -68,6 +68,8 @@ export interface TitleFitOptions {
   letterSpacing: number;
   /** Size step, px. */
   step: number;
+  /** The title is set uppercase (CSS `text-transform`), so it is measured uppercase. Default true. */
+  uppercase?: boolean;
 }
 
 /** Trail Sign print layout: 720 − 2 × 48 px column, 104 px display, −0.01em, ≤ 3 lines. */
@@ -93,13 +95,17 @@ export const SHARE_TITLE: TitleFitOptions = {
 /** True when the title has East Asian wide characters (it is then set with line-height 1). */
 export const hasWide = (text: string): boolean => Array.from(text).some(isWide);
 
-/** Width of `text` in em at the title face (uppercased, as CSS shows it), with letter-spacing. */
+/**
+ * Width of `text` in em at the title face (uppercased, as CSS shows it, unless `uppercase` is
+ * false), with letter-spacing.
+ */
 export function titleWidthEm(
   text: string,
   letterSpacing = 0,
   measure: MeasureEm = tableMeasure,
+  uppercase = true,
 ): number {
-  const upper = text.toUpperCase();
+  const upper = uppercase ? text.toUpperCase() : text;
   return measure(upper) + letterSpacing * Array.from(upper).length;
 }
 
@@ -151,10 +157,11 @@ export function countLines(
   widthEm: number,
   letterSpacing = 0,
   measure: MeasureEm = tableMeasure,
+  uppercase = true,
 ): number {
   const tokens = tokenize(text);
   if (tokens.length === 0) return 0;
-  const space = titleWidthEm(' ', letterSpacing, measure);
+  const space = titleWidthEm(' ', letterSpacing, measure, uppercase);
   let lines = 0;
   let current = 0;
   const startLine = (w: number) => {
@@ -162,7 +169,7 @@ export function countLines(
     current = w > widthEm ? w - (Math.ceil(w / widthEm) - 1) * widthEm : w;
   };
   for (const token of tokens) {
-    const w = titleWidthEm(token.text, letterSpacing, measure);
+    const w = titleWidthEm(token.text, letterSpacing, measure, uppercase);
     const gap = token.space ? space : 0;
     if (lines === 0) startLine(w);
     else if (current + gap + w <= widthEm) current += gap + w;
@@ -184,9 +191,10 @@ export function fitTitle(
   options: TitleFitOptions = TRAIL_SIGN_TITLE,
   measure: MeasureEm = tableMeasure,
 ): TitleFit {
-  const { width, maxSize, minSize, maxLines, letterSpacing, step } = options;
+  const { width, maxSize, minSize, maxLines, letterSpacing, step, uppercase = true } = options;
   const usable = width * 0.98;
-  const linesAt = (size: number) => countLines(title, usable / size, letterSpacing, measure);
+  const linesAt = (size: number) =>
+    countLines(title, usable / size, letterSpacing, measure, uppercase);
   for (let size = maxSize; size > minSize; size -= step) {
     const lines = linesAt(size);
     if (lines <= maxLines) return { size, lines };

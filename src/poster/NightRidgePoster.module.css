@@ -1,0 +1,233 @@
+/*
+ * Poster style B, Night Ridge (canvas frame "Style B · Night Ridge", 1440 × 900), adapted to the
+ * portrait poster sizes. Every length is logical px at the layout's width (720 print, 1080 social:
+ * the share card is the print design at 1.5×, with no text under 18px); the parent scales the
+ * whole poster. Colours come from NIGHT_RIDGE_PALETTE (custom properties on the root), never from
+ * app tokens.
+ *
+ * Faces (DECISIONS): Big Shoulders Display 800 for the wordmark, title and vert number; JetBrains
+ * Mono for every small line. Both come from poster-fonts.css (loadPosterFonts('B')).
+ *
+ * Contrast on the paper #0F2233 (WCAG 2): title/wordmark #E8F1F5 14.13:1; vert number and sunrise
+ * label #FFD9A0 12.09:1; all small text #B9D3DE 10.36:1. The ridge colour #8EC5DA (8.60:1) is used
+ * for strokes only (DESIGN-SPEC §5).
+ */
+
+.poster {
+  --nr-display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --nr-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  border-radius: var(--radius-poster);
+  background: var(--nr-paper);
+  color: var(--nr-ink);
+  font-family: var(--nr-display);
+  font-size: 16px;
+  line-height: normal;
+  text-align: left;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.header,
+.footer,
+.profileLabels {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.wordmark {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.eyebrow,
+.lines,
+.profileLabels,
+.footer {
+  font-family: var(--nr-mono);
+  font-weight: 400;
+  color: var(--nr-body);
+}
+
+.eyebrow,
+.footer {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  /* font-size from NIGHT_RIDGE_TITLE (fitTitle); line-height 0.86 as the canvas h1. */
+  line-height: 0.86;
+  font-weight: 800;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.vert {
+  font-weight: 800;
+  line-height: 1;
+  color: var(--nr-route);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lines {
+  line-height: 1.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The stage between header and elevation strip: the ridgeline figure fills it and the text
+   column sits over its top-left (canvas: "left text column over figure"). The ridges are laid out
+   clear of the text's line boxes (ridgeFigure keepOut). */
+.stage {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.stage > .text {
+  position: relative;
+}
+
+.figure {
+  position: absolute;
+  inset: 0;
+}
+
+.figure > * {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.profileBlock {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.profile {
+  display: block;
+  overflow: visible;
+}
+
+.sunrise {
+  color: var(--nr-route);
+}
+
+.footerNote,
+.footerSign {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footerSign {
+  flex: 0 1 auto;
+  max-width: 50%;
+  text-transform: none;
+}
+
+/* ---- Print: 18×24 and A3, 720 wide ---- */
+
+.print .inner {
+  gap: 18px;
+  padding: 48px;
+}
+
+.print .wordmark {
+  font-size: 24px;
+}
+
+.print .text {
+  gap: 10px;
+}
+
+.print .eyebrow {
+  font-size: 12px;
+}
+
+.print .vert {
+  margin-top: 6px;
+  font-size: 64px;
+}
+
+.print .lines {
+  font-size: 14px;
+}
+
+.print .profileBlock {
+  gap: 6px;
+}
+
+.print .profileLabels {
+  font-size: 11px;
+}
+
+.print .footer {
+  gap: 24px;
+  font-size: 10px;
+}
+
+/* ---- Social: 4:5 and 9:16, 1080 wide (the print design at 1.5×, but no text under 18px) ---- */
+
+.social .inner {
+  gap: 27px;
+  padding: 72px;
+}
+
+.social .wordmark {
+  font-size: 36px;
+}
+
+.social .text {
+  gap: 15px;
+}
+
+.social .eyebrow {
+  font-size: 18px;
+}
+
+.social .vert {
+  margin-top: 9px;
+  font-size: 96px;
+}
+
+.social .lines {
+  font-size: 21px;
+}
+
+.social .profileBlock {
+  gap: 9px;
+}
+
+.social .profileLabels {
+  font-size: 18px;
+}
+
+.social .footer {
+  gap: 36px;
+  font-size: 18px;
+}

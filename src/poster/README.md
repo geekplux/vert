@@ -41,4 +41,40 @@ slots, and export.
   the drawn text `aria-hidden`: it is artwork to be exported, and the summary carries the same
   facts.
 - Export is client-side. Print sizes render as tiles of ≤ 4096 px, stitched in an OffscreenCanvas.
-- Await `document.fonts.load(...)` for every face a style uses before drawing.
+- Await `document.fonts.load(...)` for every face a style uses before drawing: `loadPosterFonts(style,
+text)` (`fonts.ts`) does it, and for B and E first injects `src/styles/poster-fonts.css` (never
+  loaded at app start).
+
+## Styles B and E
+
+Same props as `TrailSignPoster` plus `figureData`; same logical sizes (720 print, 1080 social; the
+social layout is the print design at 1.5×, strokes included, except that no social text is under
+18 px). Both draw their own SVG figure from
+`figureData` and show `figure` (a placeholder) until it exists.
+
+- `NightRidgePoster.tsx` (B): text column laid over a stage that the ridgeline figure fills; the
+  stage reports `{ width, height, keepOut }` through `onFigureBox` (the text's line boxes), and
+  `nightRidgeFigureData(run, heightfield, box, { exaggeration, rows })` (`figures.ts`) lays the
+  ridges out clear of the text. Build the heightfield from `ridgeBounds(run.bounds, box)` with
+  `padding: 0` so the rows run across the stage. Sunrise (`src/lib/sun.ts`) appears only when
+  the run's timestamps put it during the run; clock times use the viewer's time zone (GPX times
+  carry none).
+- `SurveyQuadPoster.tsx` (E): title, map in its frame, stats band, legend and scale bar. The map box
+  (inside the frame's padding) is reported through `onFigureBox`; build the heightfield from
+  `quadBounds(run.bounds, box.width / box.height)` with `padding: 0`, then
+  `surveyQuadFigureData(run, heightfield, box, { units, layout })`.
+- Detail: pass `detailScale` (the export scale, `posterLayout(size).scale`) to the figure-data
+  functions when exporting: lines are then sampled and simplified to 0.3 output px with finer
+  coordinate rounding (`lineDetail`). The preview can use the default 1.
+- `ridges.ts`: rows west to east, back (north) to front, lifted by elevation ×
+  `ridgeExaggeration(setting)` (the setting × 1.5: ridgelines need the extra lift), which is also
+  the factor the poster prints ("ELEVATION ×2.4") and states in its accessible name;
+  paper-filled below each line, opacity 0.18 → 0.88; the depth compression is chosen to fill the
+  free area; the route is draped on the same (lightly smoothed) surface, and vertical zigzags from
+  GPS jitter on steep slopes are evened out (`smoothZigzags`).
+- `contours.ts`: marching squares (saddles resolved by the cell centre), segments joined into
+  polylines, smoothed input, 20 m interval (coarser only when lines would pack under 2.5 px; the
+  label states the interval drawn), index every 5th, top-down true-aspect projection, RDP
+  simplification, scale bar of four round segments.
+- Palettes: `NIGHT_RIDGE_PALETTE` and `SURVEY_QUAD_PALETTE` in `styles.ts`. B's small text is
+  `#B9D3DE` (10.36:1); `#8EC5DA` is for strokes only.

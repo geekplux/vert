@@ -76,6 +76,21 @@ describe('posterCopy', () => {
     expect(result).not.toMatch(/\p{Variation_Selector}|\p{Cf}|^\p{M}|-\p{M}|--/u);
   });
 
+  it.each([
+    ['\u3164\u3164', ''],
+    ['\u115F \u1160 \uFFA0', ''],
+    ['Han\u3164 \u3164 river', 'han-river'],
+    ['a\u034Fb \u17B4\u17B5 c', 'ab-c'],
+    ['\uFFA0\uFFA0 - - Loop', 'loop'],
+  ])('drops default-ignorable letters and marks from %j (%j)', (text, slug) => {
+    const result = slugify(text);
+    expect(result).toBe(slug);
+    expect(result).not.toMatch(/\p{Default_Ignorable_Code_Point}|--|^-|-$/u);
+    expect(posterFileName(text, 'B', '4x5', 'png')).toBe(
+      ['vert', slug, 'night-ridge-4x5.png'].filter(Boolean).join('-'),
+    );
+  });
+
   it('drops ZWJ and ZWNJ even between letters, since Chrome would save them as "_"', () => {
     const persian = '\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645';
     const joined = '\u0645\u06CC\u062E\u0648\u0627\u0647\u0645';

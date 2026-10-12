@@ -9,8 +9,13 @@
  *   come from the terrain, shifted to meet the recorded values on either side (the offset blends
  *   linearly by distance across the gap; one side at the route's ends), so a recorder that reads
  *   20 m above the DEM adds no step and no false climb at the joins. `elevationSource: 'mixed'`,
- *   or `'terrain'` when the file's own values are under {@link MIN_RECORDED_SHARE} of the points
- *   (they are then ignored).
+ *   or `'terrain'` when the file's own values cover under {@link MIN_RECORDED_SHARE} of the
+ *   route's distance (they are then ignored).
+ * - Long gaps and no terrain (it failed to load): {@link withInterpolatedGaps} draws a straight
+ *   line across each gap instead, `elevationSource: 'interpolated'`, so the stats and profile
+ *   still come from the file's own values; the page says the gaps are interpolated. Only for a
+ *   file mostly recorded ({@link MIN_INTERPOLATED_SHARE} of the distance); any other keeps its
+ *   elevation unknown.
  *
  * One bilinear sample per filled point, then the same 3-point median filter and the same rules as
  * the file's own `<ele>` (`elevationStats`). O(n): about 10 ms for the 500,000 points the parser
@@ -23,8 +28,53 @@ import { elevationStats, median3 } from './stats';
 /** Elevation (metres) at a position: `elevationAt(heightfield, lon, lat)` in the app. */
 export type ElevationSampler = (lon: number, lat: number) => number;
 
-/** A file whose usable `<ele>` cover fewer points than this share counts as having none. */
+/**
+ * A file whose usable `<ele>` cover less than this share of the route's distance counts as having
+ * none (a lone `<ele>`, or a few at the start of a long route).
+ */
 export const MIN_RECORDED_SHARE = 0.05;
+
+/**
+ * The share of the route's distance that `partialEle` covers: the steps whose two ends both have a
+ * value (recorded, or a short gap already interpolated), over the whole distance. By points when
+ * the route has no length.
+ */
+export function recordedShare(partialEle: Float64Array, cumulative: Float64Array): number {
+  const n = partialEle.length;
+  if (n === 0) return 0;
+  const known = (i: number) => Number.isFinite(partialEle[i] ?? NaN);
+  const total = (cumulative[n - 1] ?? 0) - (cumulative[0] ?? 0);
+  if (!(total > 0)) {
+    let points = 0;
+    for (let i = 0; i < n; i++) if (known(i)) points++;
+    return points / n;
+  }
+  let covered = 0;
+  for (let i = 1; i < n; i++) {
+    if (known(i - 1) && known(i)) covered += (cumulative[i] ?? 0) - (cumulative[i - 1] ?? 0);
+  }
+  return covered / total;
+}
+
+/**
+ * A file whose usable `<ele>` cover at least this share of the route's distance ("mostly
+ * recorded") has its long gaps interpolated when the terrain cannot fill them
+ * ({@link withInterpolatedGaps}); under it a straight line would be most of the profile, so the
+ * elevation stays unknown.
+ */
+export const MIN_INTERPOLATED_SHARE = 0.5;
+
+/**
+ * Whether the file's own values in `partialEle` cover at least `share` of the route's distance
+ * (see {@link recordedShare}).
+ */
+function covers(
+  partialEle: Float64Array | null | undefined,
+  cumulative: Float64Array,
+  share: number,
+): partialEle is Float64Array {
+  return partialEle?.length === cumulative.length && recordedShare(partialEle, cumulative) >= share;
+}
 
 /**
  * The run with elevations sampled from the terrain where the file has none: `track.ele`, vert,
@@ -39,12 +89,8 @@ export function withTerrainElevation(run: Run, sample: ElevationSampler): Run {
   if (n === 0) return run;
 
   const series = new Float64Array(n).fill(NaN);
-  let recorded = 0;
-  if (partialEle?.length === n) {
-    for (let i = 0; i < n; i++) if (Number.isFinite(partialEle[i] ?? NaN)) recorded++;
-    if (recorded >= MIN_RECORDED_SHARE * n) series.set(partialEle);
-    else recorded = 0;
-  }
+  const recorded = covers(partialEle, cumulative, MIN_RECORDED_SHARE);
+  if (recorded) series.set(partialEle);
 
   const terrainAt = (i: number) => sample(lon[i] ?? 0, lat[i] ?? 0);
   let sampled = 0;
@@ -74,9 +120,49 @@ export function withTerrainElevation(run: Run, sample: ElevationSampler): Run {
   // its neighbour's value.
   holdFinite(series);
 
+  return withElevation(run, series, recorded ? 'mixed' : 'terrain');
+}
+
+/**
+ * The fallback when the terrain could not load for a file with long gaps (`track.partialEle`): each
+ * gap is a straight line by distance between the recorded values around it (held level at the
+ * route's ends), then the usual median filter and rules, `elevationSource: 'interpolated'`. A run
+ * that already has elevations, has no gaps to fill, or whose own values cover under
+ * {@link MIN_INTERPOLATED_SHARE} of the route is returned as it is (its elevation stays unknown).
+ */
+export function withInterpolatedGaps(run: Run): Run {
+  if (run.hasElevation) return run;
+  const { cumulative, partialEle } = run.track;
+  if (!covers(partialEle, cumulative, MIN_INTERPOLATED_SHARE)) return run;
+  const series = Float64Array.from(partialEle);
+  const n = series.length;
+  let previous = -1; // the last index with a value
+  for (let i = 0; i <= n; i++) {
+    if (i < n && !Number.isFinite(series[i] ?? NaN)) continue;
+    if (i - previous > 1) {
+      const a = series[previous] ?? NaN;
+      const b = series[i] ?? NaN;
+      const d0 = cumulative[previous] ?? 0;
+      const span = (cumulative[i] ?? 0) - d0;
+      for (let k = previous + 1; k < i; k++) {
+        if (previous < 0) series[k] = b;
+        else if (i >= n) series[k] = a;
+        else {
+          const f = span > 0 ? ((cumulative[k] ?? 0) - d0) / span : (k - previous) / (i - previous);
+          series[k] = a + (b - a) * f;
+        }
+      }
+    }
+    previous = i;
+  }
+  return withElevation(run, series, 'interpolated');
+}
+
+/** `run` with `series` (filled, unfiltered) as its elevations, filtered, and its figures. */
+function withElevation(run: Run, series: Float64Array, source: ElevationSource): Run {
+  const { cumulative } = run.track;
   const elevation = median3(series);
   const stats = elevationStats(elevation, cumulative);
-  const source: ElevationSource = recorded > 0 ? 'mixed' : 'terrain';
   return {
     ...run,
     hasElevation: true,

@@ -145,11 +145,14 @@ export function posterStatList(stats: PosterStats): [PosterStatKey, string, stri
 export const TERRAIN_ELEVATION_NOTE = 'ELEVATION FROM TERRAIN DATA';
 /** …or when the terrain filled gaps in the file's own. */
 export const MIXED_ELEVATION_NOTE = 'ELEVATION PARTLY FROM TERRAIN DATA';
+/** …or when the file's long gaps were interpolated (the terrain could not load). */
+export const INTERPOLATED_ELEVATION_NOTE = 'ELEVATION GAPS INTERPOLATED';
 
 /**
  * The print footer's left side: "[SAMPLE DATA · ][<subtitle> · ][ELEVATION FROM TERRAIN DATA · ]
  * ELEVATION ×1.6". The sample note only for the sample run, the subtitle only when set, the
- * terrain note only when the terrain supplied the elevations ("PARTLY" when it filled gaps).
+ * terrain note only when the terrain supplied the elevations ("PARTLY" when it filled gaps), or
+ * "ELEVATION GAPS INTERPOLATED" when the terrain could not fill them.
  */
 export function elevationNote(
   content: Pick<PosterContent, 'isSample' | 'exaggeration'> & {
@@ -164,7 +167,9 @@ export function elevationNote(
       ? TERRAIN_ELEVATION_NOTE
       : content.elevationSource === 'mixed'
         ? MIXED_ELEVATION_NOTE
-        : '',
+        : content.elevationSource === 'interpolated'
+          ? INTERPOLATED_ELEVATION_NOTE
+          : '',
     `ELEVATION ×${formatNumber(content.exaggeration, 1)}`,
   ]
     .filter(Boolean)
@@ -193,6 +198,7 @@ export function posterAriaLabel(content: PosterContent): string {
   if (content.isSample) parts.push('Sample data.');
   if (content.elevationSource === 'terrain') parts.push('Elevation from terrain data.');
   if (content.elevationSource === 'mixed') parts.push('Elevation partly from terrain data.');
+  if (content.elevationSource === 'interpolated') parts.push('Elevation gaps interpolated.');
   if (content.signature) parts.push(`By ${content.signature}.`);
   return parts.join(' ');
 }

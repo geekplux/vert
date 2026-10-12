@@ -19,15 +19,21 @@
  * A run whose GPX has no elevations gets them from that grid as soon as it is ready
  * (`withTerrainElevation`): `useRun()` then returns the run with its profile, vert, high point and
  * climbs filled in and `elevationSource: 'terrain'`, in the same render that reports the terrain
- * `ready`, so the View never draws the route twice. Before that, or if the terrain fails, the
- * elevation figures stay unknown (`NaN`, shown as "–").
+ * `ready`, so the View never draws the route twice. Before that the elevation figures stay unknown
+ * (`NaN`, shown as "–"). If the terrain fails, a file mostly recorded but with long gaps has them
+ * interpolated (`withInterpolatedGaps`, `elevationSource: 'interpolated'`); any other stays unknown.
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useRef, useState } from 'react';
 import type { Dispatch, ReactNode } from 'react';
 import { tilesForBounds } from '../lib/geo';
 import type { Bounds } from '../lib/geo';
-import { HeightfieldError, buildHeightfield, elevationAt } from '../terrain/heightfield';
+import {
+  HeightfieldError,
+  HeightfieldTooLargeError,
+  buildHeightfield,
+  elevationAt,
+} from '../terrain/heightfield';
 import type { Heightfield } from '../terrain/heightfield';
 import { isAbortError } from '../terrain/tiles';
 import { PERF_MARKS, perfMark } from './perfMarks';
@@ -38,7 +44,7 @@ import { preloadTerrainView } from './terrainChunk';
 import type { Run, Terrain } from './types';
 import { GENERIC_LOAD_ERROR, RunLoadError } from './errors';
 import { realLoadRun } from '../gpx/loadRun';
-import { withTerrainElevation } from '../gpx/terrainElevation';
+import { withInterpolatedGaps, withTerrainElevation } from '../gpx/terrainElevation';
 
 /** What to load: a file the user chose, or the built-in sample run. */
 export type RunSource =
@@ -103,7 +109,8 @@ export function placeholderLoadRun(
 
 /**
  * Builds the height grid under a run. Rejects with an `AbortError` when `signal` aborts (a new run,
- * New file), and with `HeightfieldError` when no elevation tile loads.
+ * New file), with `HeightfieldError` when no elevation tile loads, and with
+ * `HeightfieldTooLargeError` when the route is too large to fetch tiles for.
  */
 export type LoadTerrain = (run: Run, signal: AbortSignal) => Promise<Heightfield>;
 
@@ -157,10 +164,14 @@ export const TERRAIN_OFFLINE_ERROR =
 export const TERRAIN_DECODE_ERROR =
   "The terrain couldn't load: the elevation data arrived, but this browser couldn't read it. Reload the page and try again.";
 
+/** The route spans more than the tiles the app can fetch (even at the lowest served zoom). */
+export const TERRAIN_TOO_LARGE_ERROR = 'This route covers too much ground to draw its terrain.';
+
 /** Anything else that stopped the grid from being built. */
 export const TERRAIN_GENERIC_ERROR = "The terrain couldn't be built for this run.";
 
 function terrainErrorMessage(error: unknown): string {
+  if (error instanceof HeightfieldTooLargeError) return TERRAIN_TOO_LARGE_ERROR;
   if (error instanceof HeightfieldError && error.kind === 'decode') return TERRAIN_DECODE_ERROR;
   const offline = typeof navigator !== 'undefined' && !navigator.onLine;
   return offline || error instanceof HeightfieldError || error instanceof TypeError
@@ -293,14 +304,17 @@ export function RunProvider({
       ? terrainResult.terrain
       : LOADING_TERRAIN;
 
-  // No <ele> in the file: sample the elevations from the terrain grid once it is ready (O(n)).
-  const run = useMemo(
-    () =>
-      loadedRun && !loadedRun.hasElevation && terrain.status === 'ready'
-        ? withTerrainElevation(loadedRun, (lon, lat) => elevationAt(terrain.heightfield, lon, lat))
-        : loadedRun,
-    [loadedRun, terrain],
-  );
+  // No <ele> in the file, or long gaps: sample the elevations from the terrain grid once it is
+  // ready (O(n)). If it fails, a mostly recorded file has its gaps interpolated instead.
+  const run = useMemo(() => {
+    if (!loadedRun || loadedRun.hasElevation) return loadedRun;
+    if (terrain.status === 'ready') {
+      return withTerrainElevation(loadedRun, (lon, lat) =>
+        elevationAt(terrain.heightfield, lon, lat),
+      );
+    }
+    return terrain.status === 'error' ? withInterpolatedGaps(loadedRun) : loadedRun;
+  }, [loadedRun, terrain]);
 
   const retryTerrain = useCallback(() => {
     setAttempt((n) => n + 1);

@@ -5,7 +5,12 @@ import type { Run } from '../page/types';
 import { buildRun } from './handler';
 import { parseGpx } from './parse';
 import type { TrackPoint } from './types';
-import { withTerrainElevation } from './terrainElevation';
+import {
+  MIN_RECORDED_SHARE,
+  recordedShare,
+  withInterpolatedGaps,
+  withTerrainElevation,
+} from './terrainElevation';
 
 /**
  * A straight 6 km run north from (46.0, 7.0) without `<ele>`, one point every ~11 m, parsed the
@@ -133,5 +138,69 @@ describe('withTerrainElevation on patchy <ele> (the sample, edited)', () => {
     const ele = filled.track.ele;
     const join = Math.ceil(n / 2);
     expect(Math.abs((ele?.[join] ?? 0) - (ele?.[join - 1] ?? 0))).toBeLessThan(3);
+  });
+});
+
+describe('recordedShare', () => {
+  it('measures the route distance the file covers, not its points', () => {
+    // 10 points bunched in the first 10 m of a 1 km route, then 2 points with no value: 10 of 12
+    // points (83%), but 1% of the distance.
+    const cumulative = Float64Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 500, 1000]);
+    const ele = Float64Array.from([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, NaN, NaN]);
+    expect(recordedShare(ele, cumulative)).toBeCloseTo(0.01);
+    expect(recordedShare(ele, cumulative)).toBeLessThan(MIN_RECORDED_SHARE);
+    // The reverse: 2 of 12 points carry 99% of the distance.
+    const sparse = Float64Array.from([NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, 5, 6, 7]);
+    expect(recordedShare(sparse, cumulative)).toBeCloseTo(0.99);
+    // A route with no length: by points.
+    expect(recordedShare(Float64Array.from([1, NaN]), new Float64Array(2))).toBe(0.5);
+  });
+});
+
+describe('withInterpolatedGaps (the terrain failed)', () => {
+  const parsed = parseGpx(sampleGpx);
+  const original = parsed.points;
+  const variant = (ele: (e: number | null, i: number) => number | null): Run => {
+    const points = original.map((p, i) => ({ ...p, ele: ele(p.ele, i) }));
+    const { run, points: track } = buildRun({ ...parsed, points }, 'variant.gpx', false);
+    return { ...run, id: 'variant', track };
+  };
+  const n = original.length;
+
+  it("draws straight lines across a mostly recorded file's long gaps, marked as interpolated", () => {
+    // A 10% stretch in the middle without <ele>.
+    const run = variant((e, i) => (i > 0.45 * n && i < 0.55 * n ? null : e));
+    expect(run.hasElevation).toBe(false);
+    const filled = withInterpolatedGaps(run);
+    expect(filled.elevationSource).toBe('interpolated');
+    expect(filled.hasElevation).toBe(true);
+    expect(filled.profile).toHaveLength(500);
+    expect(filled.vert).toBeGreaterThan(800);
+    expect(filled.vert).toBeLessThanOrEqual(1_110);
+    expect(filled.track.ele?.every(Number.isFinite)).toBe(true);
+    // Each gap point lies on the line between the recorded values around it.
+    const first = Math.floor(0.45 * n) + 1;
+    const last = Math.ceil(0.55 * n) - 1;
+    const { cumulative } = run.track;
+    const a = run.track.partialEle?.[first - 1] ?? NaN;
+    const b = run.track.partialEle?.[last + 1] ?? NaN;
+    const mid = Math.round((first + last) / 2);
+    const f =
+      ((cumulative[mid] ?? 0) - (cumulative[first - 1] ?? 0)) /
+      ((cumulative[last + 1] ?? 0) - (cumulative[first - 1] ?? 0));
+    expect(filled.track.ele?.[mid]).toBeCloseTo(a + (b - a) * f, 6);
+  });
+
+  it('holds the ends level and leaves files without enough recorded elevation unknown', () => {
+    const tail = variant((e, i) => (i < 0.7 * n ? e : null));
+    const filled = withInterpolatedGaps(tail);
+    expect(filled.elevationSource).toBe('interpolated');
+    expect(filled.track.ele?.[n - 1]).toBe(filled.track.ele?.[n - 2]);
+    // A third recorded: the line would be most of the profile, so the elevation stays unknown.
+    const third = variant((e, i) => (i < n / 3 ? e : null));
+    expect(withInterpolatedGaps(third)).toBe(third);
+    const lone = variant((e, i) => (i === 0 ? e : null));
+    expect(withInterpolatedGaps(lone)).toBe(lone);
+    expect(withInterpolatedGaps(SAMPLE_RUN)).toBe(SAMPLE_RUN);
   });
 });

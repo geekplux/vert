@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  MIN_SERVED_ZOOM,
   chooseZoom,
   lonLatToWorld,
   tileCount,
@@ -11,6 +12,7 @@ import {
 import { decodeTerrariumImage } from '../lib/terrarium';
 import {
   HeightfieldError,
+  HeightfieldTooLargeError,
   MAX_GRID_SIZE,
   MAX_LONG_ROUTE_TILES,
   buildHeightfield,
@@ -242,6 +244,34 @@ describe('buildHeightfield', () => {
     expect(chooseZoom(half, 1)).toBeLessThan(13);
   });
 
+  it("never asks for a zoom below the Worker's range (z6–15)", async () => {
+    expect(MIN_SERVED_ZOOM).toBe(6);
+    // ~1,670 × 890 km at the equator: native fit at z5, which the Worker does not serve. Without
+    // the long-route step it would have been z5; it is z6, downsampled to 512.
+    const wide: Bounds = { west: 0, south: 0, east: 15, north: 8 };
+    expect(chooseHeightfieldZoom(wide, { maxLongRouteTiles: 0 })).toBe(6);
+    expect(chooseHeightfieldZoom(wide)).toBe(6);
+    const source = fakeSource();
+    const hf = await buildHeightfield(wide, { padding: 0, fetchTile: source.fetchTile });
+    expect(hf.zoom).toBe(6);
+    expect(source.requested.every((tile) => tile.z >= MIN_SERVED_ZOOM)).toBe(true);
+    expect(Math.max(hf.width, hf.height)).toBe(MAX_GRID_SIZE);
+  });
+
+  it.each([
+    // A flight-like line 200° wide (padded past a whole turn, clamped to 360°).
+    ['a 200°-wide track', { west: -100, south: 40, east: 100, north: 41 }],
+    // A grid reaching the pole: clamped at 85°, still dozens of z6 rows.
+    ['a polar figure grid', { west: -10, south: 70, east: 10, north: 89 }],
+  ])('fetches nothing for %s and says it is too large', async (_, bounds: Bounds) => {
+    expect(chooseHeightfieldZoom(bounds)).toBeNull();
+    const source = fakeSource();
+    const failure = buildHeightfield(bounds, { fetchTile: source.fetchTile });
+    await expect(failure).rejects.toBeInstanceOf(HeightfieldTooLargeError);
+    await expect(failure).rejects.not.toBeInstanceOf(HeightfieldError);
+    expect(source.requested).toEqual([]);
+  });
+
   it('samples a long route one zoom finer than its grid needs, then downsamples to 512', async () => {
     // ~39 × 28 km around Chamonix (the CCC's padded box): 368 px at z10, too wide for z11's 512.
     const ccc: Bounds = { west: 6.84, south: 45.78, east: 7.34, north: 46.03 };
@@ -290,8 +320,9 @@ describe('buildHeightfield', () => {
   });
 
   it('blends a failed tile from loaded neighbours on two sides', async () => {
-    // A 2×2 block where only the diagonal corners load: the other two touch neither.
-    const bounds: Bounds = { west: -90, south: -45, east: 90, north: 45 };
+    // A 2×2 block (z8, around 0°, 0°) where only the diagonal corners load: the other two touch
+    // neither.
+    const bounds: Bounds = { west: -1, south: -1, east: 1, north: 1 };
     const tiles = tilesForBounds(bounds, chooseZoom(bounds, 4));
     expect(tiles).toHaveLength(4);
     const [first, , , last] = tiles as [TileCoord, TileCoord, TileCoord, TileCoord];
@@ -319,9 +350,8 @@ describe('buildHeightfield', () => {
     // z12 tiles are 0.087890625° wide; tile 2132 starts at 7.3828125°. This box clips into
     // tiles 2132 and 2134 and spans 2133: ~290 px, so z12 (z13 would exceed 512 px).
     const bounds: Bounds = { west: 7.465, south: 46.0, east: 7.5636, north: 46.001 };
-    const zoom = chooseHeightfieldZoom(bounds);
-    expect(zoom).toBe(12);
-    const tiles = tilesForBounds(bounds, zoom);
+    expect(chooseHeightfieldZoom(bounds)).toBe(12);
+    const tiles = tilesForBounds(bounds, 12);
     expect(tiles).toHaveLength(3);
     const [first] = tiles as [TileCoord];
     const hf = await buildHeightfield(bounds, {

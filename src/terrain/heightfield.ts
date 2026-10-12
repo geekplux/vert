@@ -4,6 +4,7 @@
  */
 import {
   MERCATOR_RADIUS_M,
+  MIN_SERVED_ZOOM,
   chooseZoom,
   lonLatToWorld,
   tileCount,
@@ -95,6 +96,22 @@ export class HeightfieldError extends Error {
   }
 }
 
+/**
+ * The area is too large for the tiles the app can fetch: even at {@link MIN_SERVED_ZOOM} (the
+ * lowest zoom the tile Worker serves) its covering needs more tiles than the cap, so nothing is
+ * fetched. A route hundreds of kilometres across (a flight), or a grid reaching a pole.
+ */
+export class HeightfieldTooLargeError extends Error {
+  readonly tiles: number;
+  constructor(tiles: number) {
+    super(
+      `The area needs ${String(tiles)} tiles at zoom ${String(MIN_SERVED_ZOOM)}, more than the cap`,
+    );
+    this.name = 'HeightfieldTooLargeError';
+    this.tiles = tiles;
+  }
+}
+
 /** Smallest span a grid covers, degrees (~110 m of latitude), so a single point still works. */
 const MIN_SPAN_DEG = 0.001;
 
@@ -152,8 +169,10 @@ export const MAX_LONG_ROUTE_TILES = 32;
  * longer side. Normally that lands in 12–14. For an area too large for z12 (a long route, roughly
  * > 14 km across at 45° with the default budget) the native fit drops below 12; the grid is then
  * sampled from one zoom finer and downsampled to `maxSamples` (2× finer source data, so ridges stay
- * sharp instead of blobby), as long as that needs at most `maxLongRouteTiles` tiles. Down to 0 at
- * the most.
+ * sharp instead of blobby), as long as that needs at most `maxLongRouteTiles` tiles. Never below
+ * {@link MIN_SERVED_ZOOM}, the lowest zoom the tile Worker serves (a z6 grid wider than
+ * `maxSamples` is downsampled); `null` when even z6 needs more than `maxTiles` tiles: the area is
+ * too large to draw.
  */
 export function chooseHeightfieldZoom(
   area: Bounds,
@@ -162,14 +181,20 @@ export function chooseHeightfieldZoom(
     maxSamples = MAX_GRID_SIZE,
     maxLongRouteTiles = MAX_LONG_ROUTE_TILES,
   }: { maxTiles?: number; maxSamples?: number; maxLongRouteTiles?: number } = {},
-): number {
-  for (let z = Math.min(MAX_PREFERRED_ZOOM, chooseZoom(area, maxTiles)); z > 0; z--) {
+): number | null {
+  const start = Math.min(MAX_PREFERRED_ZOOM, chooseZoom(area, maxTiles));
+  if (start < MIN_SERVED_ZOOM) return null;
+  for (let z = start; z >= MIN_SERVED_ZOOM; z--) {
     const { width, height } = nativeExtent(area, z);
-    if (Math.max(width, height) > maxSamples) continue;
-    if (z < MIN_PREFERRED_ZOOM && tileCount(area, z + 1) <= maxLongRouteTiles) return z + 1;
+    const fits = Math.max(width, height) <= maxSamples;
+    // z6 that does not fit is downsampled as it is (already finer than the grid needs).
+    if (!fits && z > MIN_SERVED_ZOOM) continue;
+    if (fits && z < MIN_PREFERRED_ZOOM && tileCount(area, z + 1) <= maxLongRouteTiles) {
+      return z + 1;
+    }
     return z;
   }
-  return 0;
+  return MIN_SERVED_ZOOM;
 }
 
 /** Runs `task` over `items` with at most `limit` running at once. */
@@ -260,7 +285,8 @@ function fillMissingTiles(
  *
  * Failed tiles (404, network) are filled from their neighbours and listed in `failedTiles`.
  *
- * @throws AbortError when `signal` aborts; {@link HeightfieldError} when no tile loads.
+ * @throws AbortError when `signal` aborts; {@link HeightfieldError} when no tile loads;
+ *   {@link HeightfieldTooLargeError} (before any request) when the area is too large to fetch.
  */
 export async function buildHeightfield(
   bounds: Bounds,
@@ -277,6 +303,7 @@ export async function buildHeightfield(
   signal?.throwIfAborted();
   const area = padBounds(bounds, padding);
   const zoom = chooseHeightfieldZoom(area, { maxTiles, maxLongRouteTiles });
+  if (zoom === null) throw new HeightfieldTooLargeError(tileCount(area, MIN_SERVED_ZOOM));
   const tiles = tilesForBounds(area, zoom);
   const first = tiles[0];
   const last = tiles.at(-1);

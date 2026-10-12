@@ -190,18 +190,31 @@ export const SCALE_BAR_MAX_PX: Readonly<Record<PosterLayoutKind, number>> = {
   social: 300,
 };
 
+/** Minutes in 180°: a longitude that rounds to this is on the antimeridian. */
+const ANTIMERIDIAN_MINUTES = 180 * 60;
+
 /**
  * Degrees and minutes, "34°46′ N" / "83°56′ W" (rounded to the minute). A longitude past ±180 (a
- * run across the antimeridian, see lib/geo) is folded back first: 180.02 is "179°59′ W".
+ * run across the antimeridian, see lib/geo) is folded back first: 180.02 is "179°59′ W". The
+ * hemisphere is decided after rounding: anything that rounds to 180°00′ (179.995, exactly 180,
+ * −179.996) is "180°00′ W", the side ±180 folds to, and anything that rounds to 0°00′ is N or E
+ * (−0.004 is "0°00′ E", not W).
  */
 export function formatLatLon(lat: number, lon: number): { lat: string; lon: string } {
-  const dm = (value: number, positive: string, negative: string) => {
+  const dm = (value: number, positive: string, negative: string, antimeridian = false) => {
     const total = Math.round(Math.abs(value) * 60);
     const degrees = Math.floor(total / 60);
     const minutes = total - degrees * 60;
-    return `${String(degrees)}°${String(minutes).padStart(2, '0')}′ ${value < 0 ? negative : positive}`;
+    // After rounding: 180°00′ of longitude is always W, 0°00′ always N or E.
+    const hemisphere =
+      antimeridian && total === ANTIMERIDIAN_MINUTES
+        ? negative
+        : value < 0 && total > 0
+          ? negative
+          : positive;
+    return `${String(degrees)}°${String(minutes).padStart(2, '0')}′ ${hemisphere}`;
   };
-  return { lat: dm(lat, 'N', 'S'), lon: dm(normalizeLon(lon), 'E', 'W') };
+  return { lat: dm(lat, 'N', 'S'), lon: dm(normalizeLon(lon), 'E', 'W', true) };
 }
 
 const METRES_PER_DEGREE_LAT = 111_320;

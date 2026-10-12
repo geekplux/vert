@@ -4,10 +4,12 @@ import type { Mock } from 'vitest';
 import type { ExportProgressReport } from '../../page/PosterState/exporter';
 import { posterSizeById } from '../sizes';
 import type { PosterSizeId } from '../sizes';
+import { canvasDiagnostics, knownCanvasResult, resetCanvasResults } from './canvasLimits';
 import type { ProbeCanvas } from './canvasLimits';
 import {
   TOO_LARGE_MESSAGE,
   downloadBlob,
+  encodeCanvas,
   exportPoster,
   isCanvasLimitError,
   mountOffscreen,
@@ -347,6 +349,60 @@ describe('exportPoster', () => {
       new ExportError(TOO_LARGE_MESSAGE),
     );
     expect(spies.events).toContain('unmount');
+  });
+
+  it('records a canvas that verifies but will not encode, so the retry policy applies', async () => {
+    resetCanvasResults();
+    // `toBlob` hands back null: the canvas verified, but its pixels cannot be written.
+    const encode = (canvas: ProbeCanvas, type: string, quality?: number) =>
+      encodeCanvas(
+        Object.assign(canvas, {
+          toBlob: (callback: BlobCallback) => {
+            callback(null);
+          },
+        }),
+        type,
+        quality,
+      );
+    const { deps } = fakeDeps({ encode, canvasKnown: knownCanvasResult });
+    const { width, height } = posterSizeById('18x24');
+    await expect(exportPoster(options('18x24'), deps)).rejects.toThrow(
+      new ExportError(TOO_LARGE_MESSAGE),
+    );
+    // One failure: worth another try (the verify that preceded it no longer counts as proof).
+    expect(knownCanvasResult(width, height)).toBeUndefined();
+    await expect(exportPoster(options('18x24', { format: 'pdf' }), deps)).rejects.toThrow(
+      new ExportError(TOO_LARGE_MESSAGE),
+    );
+    // Two in a row: given up for the session, and the next Download fails at once.
+    expect(knownCanvasResult(width, height)).toBe(false);
+    const { deps: fresh, spies } = fakeDeps({ canvasKnown: knownCanvasResult });
+    await expect(exportPoster(options('18x24'), fresh)).rejects.toThrow(
+      new ExportError(TOO_LARGE_MESSAGE),
+    );
+    expect(spies.events).toEqual([]);
+    resetCanvasResults();
+  });
+
+  it('records a size as working once its file is encoded, and a cancel as nothing', async () => {
+    resetCanvasResults();
+    const { width, height } = posterSizeById('4x5');
+    const controller = new AbortController();
+    const { deps } = fakeDeps({
+      encode: () => {
+        controller.abort();
+        // An encode that never finishes: the abort rejects at once.
+        return new Promise<Blob>(() => undefined);
+      },
+    });
+    await expect(
+      exportPoster(options('4x5', { signal: controller.signal }), deps),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(knownCanvasResult(width, height)).toBeUndefined();
+    expect(canvasDiagnostics().failing).toEqual([]);
+    await exportPoster(options('4x5'), fakeDeps().deps);
+    expect(knownCanvasResult(width, height)).toBe(true);
+    resetCanvasResults();
   });
 
   it('passes other failures through (the page shows its generic message)', async () => {

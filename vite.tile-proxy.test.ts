@@ -10,7 +10,7 @@ describe('dev tile proxy', () => {
     expect(Object.keys(tileProxy)).toEqual([TILE_PROXY_PATTERN]);
   });
 
-  it.each(Array.from({ length: 16 }, (_, z) => z))('proxies zoom %i', (z) => {
+  it.each(Array.from({ length: 10 }, (_, i) => i + 6))('proxies zoom %i', (z) => {
     expect(proxied(`/tiles/${String(z)}/0/0.png`)).toBe(true);
   });
 
@@ -19,9 +19,13 @@ describe('dev tile proxy', () => {
     expect(proxied('/tiles/15/8749/13005.png')).toBe(true);
   });
 
-  it.each(['16', '19', '99', '00', '07', '150', '-1'])('does not proxy zoom %s', (z) => {
-    expect(proxied(`/tiles/${z}/0/0.png`)).toBe(false);
-  });
+  // Only the Worker's range (z6–15), so dev fails where production would.
+  it.each(['0', '2', '5', '16', '19', '99', '00', '07', '150', '-1'])(
+    'does not proxy zoom %s',
+    (z) => {
+      expect(proxied(`/tiles/${z}/0/0.png`)).toBe(false);
+    },
+  );
 
   it.each([
     '/tiles/12/1093/1625.png?lat=34.7',

@@ -51,6 +51,13 @@ const LATIN_LETTER = new RegExp(`[${Object.keys(LATIN_LETTERS).join('')}]`, 'gu'
  * name shown would not match the file), tags, bidi controls, soft hyphen, BOM…
  */
 const FORMAT = /\p{Cf}/gu;
+/**
+ * Default-ignorable code points that are not format characters: variation selectors, the Hangul
+ * fillers (U+115F, U+1160, U+3164, U+FFA0; the last two become U+1160 under NFKD), the combining
+ * grapheme joiner U+034F and Khmer U+17B4/U+17B5. They draw nothing, so "ㅤㅤ" would otherwise name
+ * a file "vert-ᅠᅠ-…".
+ */
+const IGNORABLE = /[\p{Default_Ignorable_Code_Point}\p{Variation_Selector}]/gu;
 /** A run of marks that does not follow a letter or a mark: after a digit, a symbol, or nothing. */
 const STRAY_MARKS = /(?<![\p{L}\p{M}])\p{M}+/gu;
 /** Everything that becomes a hyphen: anything but letters, marks and digits. */
@@ -116,8 +123,8 @@ function capSlug(slug: string, maxPoints: number, maxBytes: number): string {
  * "ぶどう" stays "ぶどう", "हिमालय" keeps its vowel signs), recomposed (NFC).
  *
  * Invisible leftovers are dropped: marks that do not follow a letter (an acute accent after a
- * digit, an emoji's VS16), variation selectors and format characters, ZWJ and ZWNJ included even
- * between letters, since Chrome would save them as "_" (Persian "می‌خواهم" becomes "میخواهم"; a
+ * digit, an emoji's VS16), default-ignorable code points (variation selectors, Hangul fillers,
+ * CGJ…) and format characters, ZWJ and ZWNJ included even between letters, since Chrome would save them as "_" (Persian "می‌خواهم" becomes "میخواهم"; a
  * Devanagari conjunct keeps its virama and stays whole). The slug stops at 60 code points and
  * `maxBytes` UTF-8 bytes, at a grapheme boundary, so a conjunct is never split. Empty when the
  * text has no letters or digits.
@@ -129,7 +136,7 @@ export function slugify(text: string, maxBytes = Infinity): string {
     .replace(LATIN_LETTER, (letter) => LATIN_LETTERS[letter] ?? letter)
     .normalize('NFC')
     .toLowerCase()
-    .replace(/\p{Variation_Selector}/gu, '')
+    .replace(IGNORABLE, '')
     .replace(FORMAT, '')
     .replace(STRAY_MARKS, '')
     .replace(SEPARATOR, '-')

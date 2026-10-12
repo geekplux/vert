@@ -11,7 +11,9 @@ scrub marker. No map library, no basemap.
   `'decode'` and the View says the data arrived but could not be read, not "check your connection".
 - `heightfield.ts`: `buildHeightfield(bounds)` pads the bbox 15%, picks z12–14 so the area is
   ≤ 512 samples a side at native resolution and ≤ 16 tiles (below z12 only when a long route needs
-  it; a long route then samples one zoom finer, ≤ 32 tiles, and downsamples to 512), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`) and
+  it; a long route then samples one zoom finer, ≤ 32 tiles, and downsamples to 512; never below
+  z6, the Worker's lowest, and an area that needs more than 16 tiles even at z6 fetches nothing and
+  throws `HeightfieldTooLargeError`), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`) and
   resamples to a regular Web Mercator grid. `elevationAt` drapes the route; `groundExtent` is the
   grid's longer side in metres. Across the antimeridian the bounds run past ±180 (lib/geo), the
   mosaic's columns stay contiguous and each tile is fetched as `wrapTile(tile)`, so requests keep

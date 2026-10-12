@@ -144,6 +144,12 @@ export interface RasterizeOptions {
   readonly onTile?: (done: number, total: number) => void | Promise<void>;
   readonly createCanvas?: (width: number, height: number) => ProbeCanvas;
   readonly loadImage?: (svg: string) => Promise<LoadedImage>;
+  /**
+   * Whether a verified output canvas is recorded as working (default true). The export passes
+   * false and records the success itself once the file is encoded, so a canvas that verifies but
+   * cannot be encoded does not count as proof and its failures add up.
+   */
+  readonly recordSuccess?: boolean;
 }
 
 export interface SettleResult {
@@ -291,6 +297,7 @@ export async function rasterize({
   onTile,
   createCanvas: create = createProbeCanvas,
   loadImage = loadSvgImage,
+  recordSuccess = true,
 }: RasterizeOptions): Promise<ProbeCanvas> {
   if (knownCanvasResult(width, height) === false) {
     throw new CanvasLimitError(`A ${String(width)} × ${String(height)} canvas failed before`);
@@ -331,7 +338,7 @@ export async function rasterize({
     // The real output canvas is the probe: far-corner pixel drawn and read back.
     const context = context2d(canvas);
     if (!context) recordCanvasResult(width, height, false);
-    if (!context || !verifyCanvas(canvas, width, height)) {
+    if (!context || !verifyCanvas(canvas, width, height, recordSuccess)) {
       throw new CanvasLimitError(
         `A ${String(width)} × ${String(height)} canvas does not work here`,
       );

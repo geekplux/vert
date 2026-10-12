@@ -124,6 +124,8 @@ everything.
   assets from `dist/`, with `/tiles/*` routed to Worker code (`run_worker_first`) and R2 bound as
   `TILES`. Same parts as PLAN.md (static app + tile proxy + R2), one deployable, same origin (no
   CORS, and tile requests never leave the app's origin).
+- **Tile zooms**: the Worker accepts z 6–15 (the heightfield drops below z12 only for very long
+  routes; z6 covers 100+ km courses). Anything else, and any query string, is a 400.
 - **Dev tiles**: Vite proxies `/tiles/:z/:x/:y.png` to the public AWS Terrarium bucket in dev only.
 - **Sample run**: a real trail, the Coosa Backcountry Trail loop (Vogel State Park, Georgia;
   ≈ 21 km, ≈ +1,070 m, matching the canvas). Geometry from OpenStreetMap (ODbL, credited in About),

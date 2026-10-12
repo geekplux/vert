@@ -1,13 +1,19 @@
-# Vert tile proxy: AWS Terrain Tiles (Terrarium PNG), cached in R2.
-# Not deployed yet. Before deploying: create the bucket (`wrangler r2 bucket create vert-tiles`)
-# and route the Worker on the app's own origin (vert.geekplux.com/tiles/*) so no CORS is needed.
+# Local development config for the tile proxy alone (`pnpm worker:dev`, `pnpm worker:types`).
+# Production ships the app and the proxy as one Worker from ../wrangler.deploy.jsonc; keep the
+# bindings and observability settings here in step with it. See README.md.
 name = "vert-tiles"
 main = "src/index.ts"
-compatibility_date = "2026-10-11"
+compatibility_date = "2026-10-12"
 
 [observability]
 enabled = true
 head_sampling_rate = 1
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+# Privacy: invocation logs record request metadata (headers, the cf object). Keep only our own logs.
+invocation_logs = false
 
 [[r2_buckets]]
 binding = "TILES"

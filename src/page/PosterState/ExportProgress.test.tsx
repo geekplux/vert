@@ -178,11 +178,56 @@ describe('Exporting overlay', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeDefined();
   });
 
-  it('updates the bar and label every tile, the live region only at quarters', () => {
+  it('announces only the start and the outcome of an export that ends within 2 s', async () => {
+    vi.useFakeTimers();
+    const { exporter, last } = manualExporter();
+    renderPoster(exporter);
+    fireEvent.click(button(PNG));
+    const said = [status().textContent];
+    for (const done of [0, 3, 6, 9, 12]) {
+      act(() => {
+        vi.advanceTimersByTime(300);
+        last().onProgress({ done, total: 12 });
+      });
+      // The label follows every tile all the same.
+      expect(label().textContent).toBe(`Rendering tile ${String(Math.min(done + 1, 12))} of 12`);
+      said.push(status().textContent);
+    }
+    act(() => {
+      last().onProgress({ done: 12, total: 12, stage: 'encode' });
+    });
+    expect(label().textContent).toBe('Saving the file…');
+    said.push(status().textContent);
+    await settle(() => {
+      last().resolve({ fileName: FILE });
+    });
+    said.push(status().textContent);
+    expect([...new Set(said)]).toEqual([`Exporting ${FILE}.`, `Saved ${FILE}.`]);
+
+    // The 2 s timer of a finished export does not reach the next one.
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    fireEvent.click(button(PNG));
+    act(() => {
+      last().onProgress({ done: 6, total: 12 });
+    });
+    expect(status().textContent).toBe(`Exporting ${FILE}.`);
+  });
+
+  it('updates the bar and label every tile, the live region at quarters after 2 s', () => {
+    vi.useFakeTimers();
     const { exporter, last } = manualExporter();
     renderPoster(exporter);
     fireEvent.click(button(PNG));
     expect(status().textContent).toBe(`Exporting ${FILE}.`);
+    act(() => {
+      vi.advanceTimersByTime(1999);
+    });
+    expect(status().textContent).toBe(`Exporting ${FILE}.`);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
 
     act(() => {
       last().onProgress({ done: 0, total: 12 });

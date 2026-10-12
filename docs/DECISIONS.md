@@ -159,15 +159,25 @@ everything.
 - File names: `vert-<title slug>-<size>.<ext>`. Latin letters lose their accents and the ones
   without a decomposition are transliterated (ł→l, ø→o, đ/ð→d, æ→ae, œ→oe, ß→ss, þ→th, ı→i,
   ŋ→n, ħ→h, ŧ→t, ĸ→k, capitals too); every other script is kept as written, marks included
-  (NFC), so Japanese voiced kana and Indic vowel signs survive. Slugs stop at 60 characters.
+  (NFC), so Japanese voiced kana and Indic vowel signs survive. Invisible leftovers are dropped:
+  marks that follow no letter (a U+0301 after a digit, an emoji's VS16), variation selectors, format
+  characters, ZWJ and ZWNJ included even between letters: Chrome saves them as "_", and the
+  "Saved <name>" text must match the file written (Persian می‌خواهم → میخواهم; a Devanagari
+  conjunct keeps its virama, so it stays whole). Slugs
+  stop at 60 code points and the whole name at 200 UTF-8 bytes, both cut at a grapheme boundary
+  (`Intl.Segmenter`; without it, never before a mark), so no conjunct is split.
 - A canvas size that failed once is tried again on the next Download (the cause may be gone);
-  after two failures in a row it fails at once for the rest of the session. Error messages
-  suggest a smaller size only when one exists (not at 4 : 5).
+  after two failures in a row it fails at once for the rest of the session. A size that works
+  clears the failures of every size no larger in both sides and counts as proof they work; a
+  failure drops any working size at least as large in both sides. Error messages suggest a
+  smaller size only when one exists (not at 4 : 5).
 - No WebGL at all is told apart from a draw failure: "This browser can’t draw 3D terrain, so Trail
   Sign posters can’t be exported here. Night Ridge and Survey Quad still work."
 - Progress: the engine waits for a paint after every report, so each "Rendering tile k of N" is
-  seen, then shows "Saving the file…" while it encodes. The live region still speaks only at the
-  start, each quarter and the outcome.
+  seen, then shows "Saving the file…" while it encodes. The live region says "Exporting <file>."
+  and the outcome; only once an export has run 2 s does it also speak at each quarter ("Export
+  25% done." … "Rendered N of N tiles."), so a typical sub-second export is two announcements.
+  "Saving the file…" is never announced.
 
 ## Architecture
 

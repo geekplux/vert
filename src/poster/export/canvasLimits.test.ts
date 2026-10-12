@@ -57,6 +57,47 @@ describe('knownCanvasResult', () => {
   });
 });
 
+describe('a larger size working', () => {
+  it('clears the failures of every size no larger in both sides', () => {
+    // A3 fails, then 18×24 works: A3 fits in it, so its count starts over.
+    recordCanvasResult(3508, 4961, false);
+    recordCanvasResult(5400, 7200, true);
+    expect(knownCanvasResult(3508, 4961)).toBe(true);
+    expect(canvasDiagnostics().failing).toEqual([]);
+    // A3 fails again: one failure since the success, so it is not given up.
+    recordCanvasResult(3508, 4961, false);
+    expect(knownCanvasResult(3508, 4961)).toBeUndefined();
+  });
+
+  it('clears a size already given up, but not one larger in either side', () => {
+    recordCanvasResult(3508, 4961, false);
+    recordCanvasResult(3508, 4961, false);
+    recordCanvasResult(6000, 6000, false);
+    recordCanvasResult(6000, 6000, false);
+    expect(knownCanvasResult(3508, 4961)).toBe(false);
+    recordCanvasResult(5400, 7200, true);
+    expect(knownCanvasResult(3508, 4961)).toBe(true);
+    expect(knownCanvasResult(4000, 4000)).toBe(true);
+    // 6000 × 6000 is wider than 5400 × 7200: still given up, and so are sizes beyond it.
+    expect(knownCanvasResult(6000, 6000)).toBe(false);
+    expect(knownCanvasResult(6000, 8000)).toBe(false);
+  });
+
+  it('is dropped by a later failure of a smaller size, which counts toward giving up', () => {
+    recordCanvasResult(5400, 7200, true);
+    recordCanvasResult(3508, 4961, false);
+    expect(knownCanvasResult(5400, 7200)).toBeUndefined();
+    expect(knownCanvasResult(3508, 4961)).toBeUndefined();
+    recordCanvasResult(3508, 4961, false);
+    expect(knownCanvasResult(3508, 4961)).toBe(false);
+    expect(knownCanvasResult(5400, 7200)).toBe(false);
+    // Smaller sizes that worked are kept.
+    recordCanvasResult(1080, 1920, true);
+    recordCanvasResult(3508, 4961, false);
+    expect(knownCanvasResult(1080, 1350)).toBe(true);
+  });
+});
+
 describe('canvasWorks', () => {
   it('allocates only when the answer is unknown, and frees the canvas', () => {
     const created: ReturnType<typeof fakeCanvas>[] = [];

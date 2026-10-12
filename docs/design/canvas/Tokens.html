@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert tokens and components</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1B2A3A}a:hover{color:#D9480F}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 40px 48px; background: #F4F6F8; color: #1B2A3A; font-family: 'Archivo', 'Helvetica Neue', sans-serif; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 20px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; font-stretch: 75%">00 · Tokens</h1>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">COLOR · app chrome (style A is the app)</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px">
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 4px; background: #F4F6F8; border: 1px solid #C9D1D9"></span>--bg #F4F6F8</div>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 4px; background: #E6EAEE"></span>--surface #E6EAEE</div>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 4px; background: #1B2A3A"></span>--ink #1B2A3A</div>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 4px; background: #5B6B7A"></span>--muted #5B6B7A</div>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 4px; background: #C9D1D9"></span>--rule #C9D1D9</div>
+<div style="display: flex; align-items: center; gap: 10px"><span style="width: 28px; height: 28px; border-radius: 4px; background: #D9480F"></span>--route #D9480F</div>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A; margin-top: 8px">TYPE</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 44px; line-height: 1; font-weight: 800; font-stretch: 75%">Display 44/800/75%</div>
+<div style="font-size: 34px; line-height: 1.1; font-weight: 700; font-stretch: 75%; font-variant-numeric: tabular-nums">Stat 34/700 · 1,070</div>
+<div style="font-size: 16px; line-height: 1.5">Body 16/400 Archivo</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em">LABEL 12 MONO · TRACKING 0.08</div>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A; margin-top: 8px">SPACE · RADIUS</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.8">4 · 8 · 12 · 16 · 24 · 32 · 40<br>radius 4 (controls) · 6 (panels) · 0 (posters)<br>min touch target 44</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; font-stretch: 75%">Components</h2>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">BUTTONS</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button type="button" style="font: 600 15px 'Archivo', sans-serif; color: #FFFFFF; background: #1B2A3A; border: 0; border-radius: 4px; padding: 12px 18px; min-height: 44px; cursor: pointer">Primary</button>
+<button type="button" style="font: 600 15px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 1px solid #1B2A3A; border-radius: 4px; padding: 12px 18px; min-height: 44px; cursor: pointer">Secondary</button>
+<button type="button" style="font: 600 15px 'Archivo', sans-serif; color: #5B6B7A; background: transparent; border: 0; padding: 12px 10px; min-height: 44px; cursor: pointer">Quiet</button>
+<button type="button" aria-label="Icon only" style="width: 44px; height: 44px; border: 1px solid #C9D1D9; border-radius: 4px; background: #F4F6F8; color: #1B2A3A; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">STAT TILE</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">DISTANCE</div><div style="font-size: 34px; font-weight: 700; font-stretch: 75%; font-variant-numeric: tabular-nums">21.4<span style="font-size: 16px; font-weight: 500"> km</span></div></div>
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">VERT</div><div style="font-size: 34px; font-weight: 700; font-stretch: 75%; color: #D9480F; font-variant-numeric: tabular-nums">+1,070<span style="font-size: 16px; font-weight: 500"> m</span></div></div>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">SEGMENTED CONTROL · UNITS</div>
+<div style="display: inline-flex; border: 1px solid #1B2A3A; border-radius: 4px; overflow: hidden; width: max-content">
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #FFFFFF; background: #1B2A3A; border: 0; padding: 0 16px; min-height: 40px; cursor: pointer">Metric</button>
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 0; padding: 0 16px; min-height: 40px; cursor: pointer">Imperial</button>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">SLIDER · VERTICAL EXAGGERATION</div>
+<div style="display: flex; flex-direction: column; gap: 6px; max-width: 320px">
+<label for="vx" style="display: flex; justify-content: space-between; font-size: 14px"><span>Vertical exaggeration</span><span style="font-family: 'IBM Plex Mono', monospace">1.6×</span></label>
+<input id="vx" type="range" min="1" max="3" step="0.1" value="1.6" style="width: 100%; accent-color: #1B2A3A">
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">TEXT FIELD</div>
+<div style="display: flex; flex-direction: column; gap: 6px; max-width: 320px">
+<label for="ttl" style="font-size: 14px">Poster title</label>
+<input id="ttl" type="text" value="[Route name] Loop" style="font: 16px 'Archivo', sans-serif; color: #1B2A3A; background: #FFFFFF; border: 1px solid #C9D1D9; border-radius: 4px; padding: 10px 12px; min-height: 44px; box-sizing: border-box">
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; font-stretch: 75%; visibility: hidden">spacer</h2>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">DROPZONE</div>
+<div style="border: 2px dashed #5B6B7A; border-radius: 6px; padding: 28px 20px; text-align: center; display: flex; flex-direction: column; gap: 8px; align-items: center">
+<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1B2A3A" stroke-width="1.8" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 16px; font-weight: 600">Drop a .gpx file</div>
+<div style="font-size: 13px; color: #5B6B7A">or <a href="#choose">choose a file</a> · stays in your browser</div>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">ELEVATION PROFILE · scrubbable</div>
+<div style="position: relative">
+<svg viewBox="0 0 1000 120" preserveAspectRatio="none" aria-hidden="true" style="display: block; width: 100%; height: 90px">
+<path d="M0,120 L0,84 L100,90 L200,95 L300,78 L400,50 L500,110 L600,41 L643,17 L700,37 L800,64 L886,15 L943,63 L1000,84 L1000,120 Z" fill="#1B2A3A" fill-opacity="0.12"/>
+<path d="M0,84 L100,90 L200,95 L300,78 L400,50 L500,110 L600,41 L643,17 L700,37 L800,64 L886,15 L943,63 L1000,84" fill="none" stroke="#1B2A3A" stroke-width="2" vector-effect="non-scaling-stroke"/>
+<line x1="571" y1="0" x2="571" y2="120" stroke="#D9480F" stroke-width="2" vector-effect="non-scaling-stroke"/>
+</svg>
+<div style="position: absolute; left: 57.1%; top: 40px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #D9480F; border: 3px solid #FFFFFF; box-sizing: border-box"></div>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">STYLE PICKER</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<a href="#style-a" style="display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: #1B2A3A"><span style="display: block; aspect-ratio: 3 / 4; background: #E6EAEE; border: 2px solid #1B2A3A; border-radius: 4px"></span><span style="font-size: 13px; font-weight: 600">A Trail Sign</span></a>
+<a href="#style-b" style="display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: #1B2A3A"><span style="display: block; aspect-ratio: 3 / 4; background: #0F2233; border: 1px solid #C9D1D9; border-radius: 4px"></span><span style="font-size: 13px">B Night Ridge</span></a>
+<a href="#style-e" style="display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: #1B2A3A"><span style="display: block; aspect-ratio: 3 / 4; background: #F2EFE6; border: 1px solid #C9D1D9; border-radius: 4px"></span><span style="font-size: 13px">E Survey Quad</span></a>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">MARKERS · never color alone</div>
+<div style="display: flex; gap: 20px; font-size: 14px; align-items: center">
+<span style="display: flex; align-items: center; gap: 8px"><svg width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="6" fill="#FFFFFF" stroke="#1B2A3A" stroke-width="2.5"/></svg>Start / finish</span>
+<span style="display: flex; align-items: center; gap: 8px"><svg width="18" height="18" aria-hidden="true"><path d="M9 2 L16 15 L2 15 Z" fill="#1B2A3A"/></svg>Summit</span>
+<span style="display: flex; align-items: center; gap: 8px"><svg width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="5" fill="#D9480F" stroke="#FFFFFF" stroke-width="2.5"/></svg>Scrub position</span>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

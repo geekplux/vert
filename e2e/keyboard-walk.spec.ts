@@ -237,6 +237,8 @@ async function expectAccessibleAndNoSideScroll(page: Page, state: string) {
 }
 
 test('all four states can be walked by keyboard alone', async ({ page }) => {
+  // The walk ends with a real 18 × 24 export, which competes with the other specs for the CPU.
+  test.setTimeout(90_000);
   const downloads: string[] = [];
   page.on('download', (download) => downloads.push(download.suggestedFilename()));
 
@@ -414,13 +416,15 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
   });
 
   // 4. Exporting ------------------------------------------------------------------------------
-  await test.step('Exporting: progress label, Cancel, then a full (simulated) export', async () => {
+  await test.step('Exporting: progress label, Cancel, then a full export', async () => {
     await tabUntil(page, isFocused(pngButton), 5);
     await expect(pngButton).toHaveAccessibleName('Download PNG · 5400 × 7200');
     await expectVisibleFocus(page);
     await page.keyboard.press('Enter');
 
-    const progressLabel = page.locator('p', { hasText: /^(Preparing…|Rendering tile \d+ of 12)$/ });
+    const progressLabel = page.locator('p', {
+      hasText: /^(Preparing…|Rendering tile \d+ of \d+)$/,
+    });
     await expect(progressLabel).toBeFocused();
     await expect(page.getByRole('button', { name: 'Back to the run' })).toBeDisabled();
 
@@ -436,12 +440,12 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     await page.keyboard.press('Enter');
     await expect(progressLabel).toBeFocused();
     await expectAccessibleAndNoSideScroll(page, 'Exporting');
-    await expect(page.getByText(/^Saved vert-.*\.png$/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/^Saved vert-.*\.png$/)).toBeVisible({ timeout: 60_000 });
     await expect(pngButton).toBeFocused();
     await expectVisibleFocus(page);
     await expectAccessibleAndNoSideScroll(page, 'Poster mode after export');
-    // Phase 2's exporter is simulated: nothing is downloaded.
-    expect(downloads).toEqual([]);
+    // Cancelled: nothing saved; the full export: one file (e2e/export.spec.ts checks its pixels).
+    expect(downloads).toEqual([expect.stringMatching(/^vert-.*-18x24\.png$/)]);
   });
 
   // 5. Back -----------------------------------------------------------------------------------

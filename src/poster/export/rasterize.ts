@@ -135,7 +135,11 @@ export interface RasterizeOptions {
   /** Painted under the poster (the poster is opaque; this only fills sub-pixel edges). */
   readonly background?: string;
   readonly signal?: AbortSignal;
-  /** Called after each tile with the tiles done and the total. */
+  /**
+   * Called with `(0, total)` once the tiles are planned, then after each step with the steps done
+   * and the total. A step is one poster tile, or one figure tile (the part of the figure layer
+   * inside a poster tile): 18×24 with style A's terrain is 4 poster + 4 figure tiles.
+   */
   readonly onTile?: (done: number, total: number) => void;
   readonly createCanvas?: (width: number, height: number) => ProbeCanvas;
   readonly loadImage?: (svg: string) => Promise<LoadedImage>;
@@ -259,6 +263,18 @@ function figurePixels(box: Box, scale: number) {
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
+/** The part of `tile` inside the figure box (output px), or null when they do not overlap. */
+function figureIntersection(
+  tile: Tile,
+  box: { x: number; y: number; width: number; height: number },
+) {
+  const x0 = Math.max(tile.x, box.x);
+  const y0 = Math.max(tile.y, box.y);
+  const x1 = Math.min(tile.x + tile.width, box.x + box.width);
+  const y1 = Math.min(tile.y + tile.height, box.y + box.height);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : null;
+}
+
 /** Renders the poster into one canvas of the output size, tile by tile. */
 export async function rasterize({
   svg,
@@ -279,7 +295,14 @@ export async function rasterize({
     throw new CanvasLimitError(`A ${String(width)} × ${String(height)} canvas failed before`);
   }
   const tiles = planTiles(width, height, tileSize);
+  const box = figure ? figurePixels(figure.box, scale) : null;
+  const figureParts = new Map(
+    box ? tiles.map((tile) => [tile.index, figureIntersection(tile, box)] as const) : [],
+  );
+  const total = tiles.length + [...figureParts.values()].filter((part) => part !== null).length;
+  let done = 0;
   signal?.throwIfAborted();
+  onTile?.(0, total);
   if (settle) {
     const result = await settleFonts({
       svg,
@@ -314,7 +337,6 @@ export async function rasterize({
     }
     context.fillStyle = background;
     context.fillRect(0, 0, width, height);
-    const box = figure ? figurePixels(figure.box, scale) : null;
 
     for (const tile of tiles) {
       signal?.throwIfAborted();
@@ -332,26 +354,25 @@ export async function rasterize({
         loaded.release();
       }
 
-      if (figure && box) {
-        const x0 = Math.max(tile.x, box.x);
-        const y0 = Math.max(tile.y, box.y);
-        const x1 = Math.min(tile.x + tile.width, box.x + box.width);
-        const y1 = Math.min(tile.y + tile.height, box.y + box.height);
-        if (x1 > x0 && y1 > y0) {
-          const part = await figure.layer.render({
-            x: x0 - box.x,
-            y: y0 - box.y,
-            width: x1 - x0,
-            height: y1 - y0,
-            scale,
-            boxWidth: box.width,
-            boxHeight: box.height,
-          });
-          signal?.throwIfAborted();
-          context.drawImage(part, x0, y0, x1 - x0, y1 - y0);
-        }
+      done += 1;
+      onTile?.(done, total);
+
+      const part = figureParts.get(tile.index);
+      if (figure && box && part) {
+        const image = await figure.layer.render({
+          x: part.x - box.x,
+          y: part.y - box.y,
+          width: part.width,
+          height: part.height,
+          scale,
+          boxWidth: box.width,
+          boxHeight: box.height,
+        });
+        signal?.throwIfAborted();
+        context.drawImage(image, part.x, part.y, part.width, part.height);
+        done += 1;
+        onTile?.(done, total);
       }
-      onTile?.(tile.index + 1, tiles.length);
     }
     return canvas;
   } catch (error) {

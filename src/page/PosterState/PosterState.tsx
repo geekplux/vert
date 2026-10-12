@@ -118,7 +118,7 @@ export function PosterState({
 
   const download = (format: ExportFormat) => {
     rememberStarter(format);
-    start(buildExportJob(run, prefs, format));
+    start(buildExportJob(run, prefs, format, { terrain, loadFigureTerrain }));
   };
 
   const aside = (

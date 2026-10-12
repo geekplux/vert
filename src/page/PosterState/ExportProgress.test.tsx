@@ -115,7 +115,10 @@ describe('Exporting overlay', () => {
     expect(job.content.title).toBe('Coosa Backcountry Trail');
     expect(job.content.signature).toBe('@geekplux');
     // The same job buildExportJob gives for that run and those preferences.
-    expect(job).toEqual(buildExportJob(SAMPLE_RUN, job.prefs, 'png'));
+    expect(job).toEqual(buildExportJob(SAMPLE_RUN, job.prefs, 'png', job.sources));
+    // With the terrain Poster mode has, for the figures.
+    expect(job.sources?.terrain.status).toBeDefined();
+    expect(typeof job.sources?.loadFigureTerrain).toBe('function');
   });
 
   it('says Preparing… until the exporter reports its tile count', () => {

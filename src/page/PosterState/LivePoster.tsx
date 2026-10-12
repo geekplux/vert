@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { trimTrack } from '../../gpx/trim';
 import {
@@ -20,6 +20,7 @@ import type { PosterStyleId } from '../../poster/styles';
 import { SurveyQuadPoster } from '../../poster/SurveyQuadPoster';
 import { TrailSignPoster } from '../../poster/TrailSignPoster';
 import type { FigureBoxSize } from '../../poster/TrailSignPoster';
+import type { TerrainFigureScene } from '../../poster/terrainFigure';
 import type { PosterContent } from '../../poster/types';
 import type { Bounds } from '../../lib/geo';
 import type { ViewCamera } from '../../terrain/camera';
@@ -47,6 +48,68 @@ export interface LivePosterProps {
   loadFigureTerrain: LoadFigureTerrain;
   /** Output px per logical px for raster figures (the preview's scale × device pixel ratio). */
   pixelScale: number;
+  /**
+   * Set when the poster is rendered for export (`posterExporter.ts`), to the export scale
+   * (`posterLayout(size).scale`): Night Ridge and Survey Quad sample their lines for it
+   * (`detailScale`) and lay out for the box at once (no debounce), the fonts are already loaded
+   * (no loading card), and style A draws no figure of its own: the exporter composites the
+   * terrain over the figure slot, tile by tile, from the scene `onFigureStatus` reports.
+   */
+  exportScale?: number;
+  /** Export: the figure's state, whenever it changes (the exporter waits for `ready`). */
+  onFigureStatus?: (status: PosterFigureStatus) => void;
+}
+
+/**
+ * Where an exported poster's figure is: `loading` (its height grid is on its way, or it is being
+ * laid out), `ready` (B and E: drawn into the poster; A: `scene` is what the exporter renders),
+ * or `error` (its terrain could not be built).
+ */
+export type PosterFigureStatus =
+  | { readonly status: 'loading' }
+  | {
+      readonly status: 'ready';
+      /** Style A: what the exporter's terrain layer draws. */
+      readonly scene?: TerrainFigureScene;
+      /** B and E: the figure drawn (a new one means the poster was laid out again). */
+      readonly figure?: unknown;
+    }
+  | { readonly status: 'error' };
+
+const FIGURE_LOADING: PosterFigureStatus = { status: 'loading' };
+const FIGURE_ERROR: PosterFigureStatus = { status: 'error' };
+
+/** Reports `status` (memoized by the caller) to `onFigureStatus` whenever it changes. */
+function useReportFigure(
+  onFigureStatus: ((status: PosterFigureStatus) => void) | undefined,
+  status: PosterFigureStatus,
+) {
+  useEffect(() => {
+    onFigureStatus?.(status);
+  }, [onFigureStatus, status]);
+}
+
+/** B and E: ready once their own grid is in and the figure is laid out from it. */
+function useSvgFigureStatus(gridStatus: string, figure: unknown): PosterFigureStatus {
+  return useMemo(
+    () =>
+      gridStatus === 'error'
+        ? FIGURE_ERROR
+        : gridStatus === 'ready' && figure
+          ? { status: 'ready', figure }
+          : FIGURE_LOADING,
+    [gridStatus, figure],
+  );
+}
+
+/**
+ * The style A figure's own height-grid bounds: with the ends hidden, the drawn route's bounds
+ * padded as the View's (the View's grid frames the whole run, start and finish included); null
+ * to use the View's grid.
+ */
+export function trailSignOwnBounds(drawnTrack: RunTrack | null, hideEnds: number): Bounds | null {
+  const drawn = hideEnds > 0 && drawnTrack ? trackBounds(drawnTrack) : null;
+  return drawn ? padBounds(drawn) : null;
 }
 
 /** In the figure box while the terrain loads: a quiet line in the poster's own ink. */
@@ -141,14 +204,13 @@ function FigureCanvas({
 
 function TrailSignLive(props: LiveProps) {
   const { content, size, terrain, prefs, drawnTrack, pixelScale, loadFigureTerrain } = props;
+  const { exportScale, onFigureStatus } = props;
+  const exporting = exportScale !== undefined;
   const [box, setBox] = useState<FigureBoxSize | null>(null);
   // With the ends hidden, a grid of its own around the drawn route (padded as the View's); the
   // View's grid frames the whole run, start and finish included.
   const hideEnds = prefs.poster.hideEnds;
-  const ownBounds = useMemo(() => {
-    const drawn = hideEnds > 0 && drawnTrack ? trackBounds(drawnTrack) : null;
-    return drawn ? padBounds(drawn) : null;
-  }, [hideEnds, drawnTrack]);
+  const ownBounds = useMemo(() => trailSignOwnBounds(drawnTrack, hideEnds), [hideEnds, drawnTrack]);
   const own = useFigureHeightfield(ownBounds, loadFigureTerrain);
   const heightfield = ownBounds
     ? own.status === 'ready'
@@ -159,13 +221,25 @@ function TrailSignLive(props: LiveProps) {
       : null;
   const gridError = ownBounds ? own.status === 'error' : terrain.status === 'error';
   const figure = useTerrainFigure({
-    heightfield,
+    // Exporting: the exporter draws the figure at the export scale; no preview render.
+    heightfield: exporting ? null : heightfield,
     track: drawnTrack,
     camera: prefs.poster.camera,
     exaggeration: prefs.exaggeration,
     box,
     pixelScale,
   });
+  const { camera } = prefs.poster;
+  const { exaggeration } = prefs;
+  const scene = useMemo(
+    () => (heightfield ? { heightfield, track: drawnTrack, camera, exaggeration } : null),
+    [heightfield, drawnTrack, camera, exaggeration],
+  );
+  const status = useMemo<PosterFigureStatus>(
+    () => (gridError ? FIGURE_ERROR : scene ? { status: 'ready', scene } : FIGURE_LOADING),
+    [gridError, scene],
+  );
+  useReportFigure(onFigureStatus, status);
   const node =
     gridError || figure.status === 'error' ? (
       <FigureNote text={FIGURE_ERROR_TEXT} style="A" />
@@ -198,10 +272,13 @@ const boxKey = (box: FigureBoxSize | NightRidgeBox | null) =>
 
 function NightRidgeLive(props: LiveProps) {
   const { run, content, size, prefs, drawnTrack, frame, loadFigureTerrain } = props;
+  const { exportScale, onFigureStatus } = props;
   const fonts = usePosterFonts('B', posterText(content), Boolean(content.subtitle));
   const [reported, setBox] = useState<NightRidgeBox | null>(null);
-  // Typing the title moves the text's line boxes: lay the ridges out once it settles.
-  const box = useDebounced(reported, boxKey(reported));
+  // Typing the title moves the text's line boxes: lay the ridges out once it settles (the export
+  // lays out for the box at once).
+  const debounced = useDebounced(reported, boxKey(reported));
+  const box = exportScale !== undefined ? reported : debounced;
   const kind = posterLayout(size).kind;
   const stageW = box ? round10(box.width) : 0;
   const stageH = box ? round10(box.height) : 0;
@@ -224,10 +301,12 @@ function NightRidgeLive(props: LiveProps) {
         exaggeration: prefs.exaggeration,
         rows: NIGHT_RIDGE_ROWS[kind],
         drawnTrack,
+        ...(exportScale !== undefined ? { detailScale: exportScale } : {}),
       }),
-    [run, grid.heightfield, box, prefs.exaggeration, kind, drawnTrack],
+    [run, grid.heightfield, box, prefs.exaggeration, kind, drawnTrack, exportScale],
   );
-  if (!fonts) return <LoadingPoster style="B" size={size} />;
+  useReportFigure(onFigureStatus, useSvgFigureStatus(grid.status, data.ridges));
+  if (!fonts && exportScale === undefined) return <LoadingPoster style="B" size={size} />;
   return (
     <NightRidgePoster
       content={content}
@@ -246,9 +325,11 @@ function NightRidgeLive(props: LiveProps) {
 
 function SurveyQuadLive(props: LiveProps) {
   const { run, content, size, prefs, drawnTrack, frame, loadFigureTerrain } = props;
+  const { exportScale, onFigureStatus } = props;
   const fonts = usePosterFonts('E', posterText(content), Boolean(content.subtitle));
   const [reported, setBox] = useState<FigureBoxSize | null>(null);
-  const box = useDebounced(reported, boxKey(reported));
+  const debounced = useDebounced(reported, boxKey(reported));
+  const box = exportScale !== undefined ? reported : debounced;
   const layout = posterLayout(size).kind;
   // The aspect to two decimals, so a sub-pixel relayout does not rebuild the height grid.
   const aspect = box && box.height > 0 ? Math.round((box.width / box.height) * 100) / 100 : null;
@@ -261,10 +342,12 @@ function SurveyQuadLive(props: LiveProps) {
         layout,
         drawnTrack,
         frame,
+        ...(exportScale !== undefined ? { detailScale: exportScale } : {}),
       }),
-    [run, grid.heightfield, box, prefs.units, layout, drawnTrack, frame],
+    [run, grid.heightfield, box, prefs.units, layout, drawnTrack, frame, exportScale],
   );
-  if (!fonts) return <LoadingPoster style="E" size={size} />;
+  useReportFigure(onFigureStatus, useSvgFigureStatus(grid.status, data.map));
+  if (!fonts && exportScale === undefined) return <LoadingPoster style="E" size={size} />;
   return (
     <SurveyQuadPoster
       content={content}

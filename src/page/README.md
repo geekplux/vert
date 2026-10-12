@@ -63,15 +63,16 @@ This is the only place that owns application state and composes `components`, `t
   and a Quiet Cancel; afterwards "✓ Saved <file>" or "⚠ <error>" (`--route-text`). While
   exporting the settings fieldset, the Download buttons and Back to the run are disabled. A
   visually hidden polite status region announces the start, each quarter and the outcome.
-- Exporter contract (`PosterState/exporter.ts`): `buildExportJob(run, prefs, format)` builds the
-  whole `ExportJob` (run, prefs, content, resolved size, format, file name); an `Exporter` is
+- Exporter contract (`PosterState/exporter.ts`): `buildExportJob(run, prefs, format, sources)`
+  builds the whole `ExportJob` (run, prefs, content, resolved size, format, file name, and the
+  terrain Poster mode has: `sources.terrain` and `sources.loadFigureTerrain`); an `Exporter` is
   `(job, onProgress({ done, total }), signal) => Promise<{ fileName }>` and owns the tile count;
   rejecting with an `ExportError` shows its message, anything else a generic one. `useExport`
   turns that into EXPORT_STARTED / EXPORT_PROGRESS / EXPORT_DONE / EXPORT_FAILED /
-  EXPORT_CANCELLED. `defaultExporter` is what the app uses: in phase 2 the simulator
-  (`simulateExport.ts`: 12 tiles, 150 ms a step, no download), until phase 3 points it at
-  `src/poster/export.ts`. `Page` takes an `exporter` prop; tests pass one explicitly, so the
-  swap does not change them.
+  EXPORT_CANCELLED. `defaultExporter` is what the app uses: `posterExporter`
+  (`PosterState/posterExporter.ts`, see `src/poster/README.md` "Export"). The phase 2 simulator
+  (`simulateExport.ts`: 12 tiles, 150 ms a step, no download) stays for stories and tests.
+  `Page` takes an `exporter` prop; tests pass one explicitly.
 - Focus: on a screen change `Page` focuses the new screen's h1 (DECISIONS "Focus on screen changes");
   starting an export focuses the progress label, ending it focuses the Download button used.
 - `AboutDialog/`: the native modal `<dialog>` the header's About opens.

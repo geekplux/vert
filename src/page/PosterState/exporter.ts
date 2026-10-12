@@ -9,19 +9,21 @@
  * anything the exporter does after that. A rejection shows "The export failed. Try again.", or the
  * rejection's own message when it is an `ExportError`.
  *
- * PHASE 3 (export, task 6): `src/poster/export.ts` implements `Exporter` for real (tiles,
- * stitching, PNG / PDF, the browser download) and `defaultExporter` below points at it instead of
- * `simulateExport`. That is the only change outside the new module.
+ * `defaultExporter` is `posterExporter` (`posterExporter.ts`): it renders the same poster the
+ * preview shows (`LivePoster` in export mode) at the output size with the export engine
+ * (`src/poster/export/export.ts`: tiles, style A's terrain layer, PNG / PDF) and saves the file.
+ * `simulateExport` remains for stories and tests that need an exporter without a browser canvas.
  */
 import { ExportError } from '../../poster/export/errors';
 import { posterSizeById } from '../../poster/sizes';
 import type { PosterSize } from '../../poster/sizes';
 import { posterContentFromRun } from '../../poster/types';
 import type { PosterContent } from '../../poster/types';
+import type { LoadFigureTerrain } from '../hooks';
 import type { Prefs } from '../state';
-import type { Run } from '../types';
+import type { Run, Terrain } from '../types';
 import { posterFileName } from './posterCopy';
-import { simulateExport } from './simulateExport';
+import { posterExporter } from './posterExporter';
 
 export type ExportFormat = 'png' | 'pdf';
 
@@ -41,6 +43,16 @@ export interface ExportJob {
   readonly format: ExportFormat;
   /** e.g. "vert-coosa-backcountry-trail-18x24.png" (`posterFileName`). */
   readonly fileName: string;
+  /** Where the figures' height grids come from: the preview's, so the export draws the same. */
+  readonly sources?: ExportSources;
+}
+
+/** The terrain Poster mode already has, handed to the exporter so it need not fetch it again. */
+export interface ExportSources {
+  /** The run's terrain (`useTerrain()`): style A draws from its grid unless the ends are hidden. */
+  readonly terrain: Terrain;
+  /** The figures' own grids (`useFigureTerrainLoader()`: cached by bounds, as in the preview). */
+  readonly loadFigureTerrain: LoadFigureTerrain;
 }
 
 /** Tiles finished out of the total; `total` is an integer ≥ 1 and may be revised. */
@@ -75,7 +87,12 @@ export function exportErrorMessage(error: unknown): string {
 }
 
 /** The one place an export job is built, from the run and the current preferences. */
-export function buildExportJob(run: Run, prefs: Prefs, format: ExportFormat): ExportJob {
+export function buildExportJob(
+  run: Run,
+  prefs: Prefs,
+  format: ExportFormat,
+  sources?: ExportSources,
+): ExportJob {
   const size = posterSizeById(prefs.poster.size);
   const content = posterContentFromRun(run, prefs);
   return {
@@ -85,8 +102,9 @@ export function buildExportJob(run: Run, prefs: Prefs, format: ExportFormat): Ex
     size,
     format,
     fileName: posterFileName(content.title, size.id, format),
+    ...(sources ? { sources } : {}),
   };
 }
 
-/** The exporter the app uses. PHASE 3 points this at `src/poster/export.ts`. */
-export const defaultExporter: Exporter = simulateExport;
+/** The exporter the app uses: the real one (`posterExporter.ts`). */
+export const defaultExporter: Exporter = posterExporter;

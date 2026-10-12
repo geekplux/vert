@@ -54,7 +54,7 @@ import {
   type ViewCamera,
 } from './camera';
 import type { Heightfield } from './heightfield';
-import { createMarkerLayer, markerExtent, type MarkerLayer } from './markers';
+import { createMarkerLayer, markerExtent, markerTextureScale, type MarkerLayer } from './markers';
 import { APP_ROUTE_PALETTE, createRouteLayer, type RouteLayer, type RoutePalette } from './route';
 import {
   DEFAULT_BASE_DEPTH,
@@ -2016,6 +2016,7 @@ export class TerrainStage {
     this.route?.setResolution(tileWidth, tileHeight);
     this.route?.setLineScale(scale);
     this.markers?.setViewport(logical.height, this.camera.fov);
+    this.markers?.setTextureScale(markerTextureScale(scale));
     if (this.mesh) this.mesh.material.uniforms.uPixelRatio.value = scale;
 
     const pose = cameraPose(camera);

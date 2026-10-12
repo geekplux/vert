@@ -115,6 +115,7 @@ describe('rasterize', () => {
       ['svg-4', 2700, 3600],
     ]);
     expect(onTile.mock.calls).toEqual([
+      [0, 4],
       [1, 4],
       [2, 4],
       [3, 4],
@@ -125,6 +126,7 @@ describe('rasterize', () => {
   it('composites a figure layer over the figure box, tile by tile', async () => {
     const { harness, ...hooks } = setup();
     const parts: FigureTile[] = [];
+    const onTile = vi.fn();
     // Box at logical (48, 400), 624 × 300 → output (360, 3000), 4680 × 2250.
     await rasterize({
       ...hooks,
@@ -132,6 +134,7 @@ describe('rasterize', () => {
       height: size.height,
       scale,
       settle: false,
+      onTile,
       figure: {
         box: { x: 48, y: 400, width: 624, height: 300 },
         layer: {
@@ -158,6 +161,27 @@ describe('rasterize', () => {
       [360, 3600, 2340, 1650],
       [2700, 3600, 2340, 1650],
     ]);
+    // Every poster tile and every figure tile is a step: 4 + 4.
+    expect(onTile.mock.calls).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8].map((done) => [done, 8]));
+  });
+
+  it('counts only the figure tiles that overlap the figure box', async () => {
+    const { ...hooks } = setup();
+    const onTile = vi.fn();
+    const render = vi.fn(() => 'figure' as unknown as CanvasImageSource);
+    // Box in the bottom half only: two figure tiles.
+    await rasterize({
+      ...hooks,
+      width: size.width,
+      height: size.height,
+      scale,
+      settle: false,
+      onTile,
+      figure: { box: { x: 48, y: 600, width: 624, height: 200 }, layer: { render } },
+    });
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(onTile.mock.calls.map(([, total]) => total as number)).toEqual(Array(7).fill(6));
+    expect(onTile.mock.calls.at(-1)).toEqual([6, 6]);
   });
 
   it('stops between tiles when aborted', async () => {

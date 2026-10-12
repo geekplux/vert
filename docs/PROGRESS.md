@@ -26,7 +26,7 @@ verification sub-agent → merge on PASS. Max three rounds.
 | [x]  | Wordmark         | 1      | Name 30/800/62%, optional mono tagline; matches the Upload header pixel-for-pixel.                      |
 | [ ]  | StatTile         |        |                                                                                                         |
 | [ ]  | Segmented        |        |                                                                                                         |
-| [ ]  | Checkbox         |        |                                                                                                         |
+| [x]  | Checkbox         | 1      | Native checkbox in a 44px label row; within 0px of the PosterMode stats row; keyboard verified.         |
 | [ ]  | TextField        |        |                                                                                                         |
 | [ ]  | Slider           |        |                                                                                                         |
 | [ ]  | Marker           |        |                                                                                                         |

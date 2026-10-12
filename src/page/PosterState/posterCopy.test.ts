@@ -105,6 +105,18 @@ describe('posterCopy', () => {
     ).toBe('\u0915\u094D\u0937\u0924\u094D\u0930\u093F\u092F-\u092E\u093E\u0930\u094D\u0917');
   });
 
+  it('recomposes what stripping leaves decomposed, so every slug is NFC', () => {
+    // A CGJ between Hangul jamo blocks composition until it is removed: 하 (U+D558), not ᄒ + ᅡ.
+    const slug = slugify('ᄒ͏ᅡᆫ ᄀ͏ᅡᆼ');
+    expect(slug).toBe('한-강');
+    expect(slug).toBe(slug.normalize('NFC'));
+    // Other ignorables between a base and what would compose with it.
+    for (const title of ['a͏́b', 'ᄒ‍ᅡ', 'ㄱ️ᅡ']) {
+      const result = slugify(title);
+      expect(result).toBe(result.normalize('NFC'));
+    }
+  });
+
   it('names a file after an emoji-laden title without invisible characters', () => {
     const title = '\u26F0\uFE0F Morning run \u{1F3C3}\u{1F3FD}\u200D\u2640\uFE0F';
     expect(posterFileName(title, 'A', '4x5', 'png')).toBe('vert-morning-run-trail-sign-4x5.png');

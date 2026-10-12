@@ -295,6 +295,24 @@ everything.
   the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0 (the last two become U+1160 under NFKD), the
   combining grapheme joiner U+034F and Khmer U+17B4/U+17B5 draw nothing, so "ㅤㅤ" names the file
   `vert-<style>-<size>`, never `vert-ᅠᅠ-…`. Hyphens around a dropped character collapse into one.
+  The slug is recomposed (NFC) again after the stripping: a CGJ removed between Hangul jamo left
+  ᄒ + ᅡ decomposed (about 1.4% of names were not NFC), now 하.
+- **Terrain that fails or never comes.** An export waits at most 20 s (`TERRAIN_TIMEOUT_MS`,
+  from Download until the figure is ready; drawing the tiles after that has no limit) for its
+  figure's grid. When the grid fails (tiles refused, offline, too large), Night Ridge and Survey
+  Quad export as the preview shows them: "THE TERRAIN COULDN’T BE DRAWN." in the figure box. The
+  export makes its own attempt through the preview's loader (a failed grid is not cached), so if
+  the tiles are back by then it draws the terrain. Trail Sign, whose poster is its terrain, fails
+  at once with "The terrain for this poster couldn’t be loaded. Check your connection and try
+  again." (or the too-large message). A grid still loading at 20 s (tiles never answered) fails
+  every style with "The terrain for this poster is taking too long to load. Check your connection
+  and try again."; Cancel works throughout and is never reported as a timeout. Before this an
+  export with hanging tiles waited for ever, and B / E refused to export without terrain.
+- **No relief, no relief labels.** When the terrain figure could not be drawn, the poster leaves
+  out what describes it, in the preview and the file alike: Night Ridge's "ELEVATION ×2.4" (footer
+  and accessible name), Trail Sign's "ELEVATION ×1.6" (print footer) and Survey Quad's "CONTOUR
+  INTERVAL …". Night Ridge's "couldn’t be drawn" / "Drawing the terrain…" note sits at the bottom
+  of its stage, where the ridges rise, instead of centred over the hero number.
 - No WebGL at all is told apart from a draw failure: "This browser can’t draw 3D terrain, so Trail
   Sign posters can’t be exported here. Night Ridge and Survey Quad still work."
 - Progress: the engine waits for a paint after every report, so each "Rendering tile k of N" is
@@ -321,10 +339,13 @@ everything.
   proxy serves z6–15 only, so dev fails where production would. A z6 grid wider than 512 samples
   is downsampled; an area that needs more than 16 tiles even at z6 (a flight-like track hundreds of
   kilometres across, a figure grid reaching a pole) fetches nothing, and the View says "This route
-  covers too much ground to draw its terrain." instead of "Check your connection". Posters B and E
-  keep their stats and print their own "THE TERRAIN COULDN'T BE DRAWN." where the figure would be,
-  as for any failed figure grid (Night Ridge's portrait box reaches the cap sooner: a 1,200 km
-  diagonal still draws Survey Quad but not Night Ridge).
+  covers too much ground to draw its terrain." instead of "Check your connection", with no "Try
+  again" (a retry would fail the same way without a request; network and decode errors keep it).
+  Posters B and E keep their stats and print their own "THE TERRAIN COULDN'T BE DRAWN." where the
+  figure would be, as for any failed figure grid, and export that way; each figure grid has its own
+  bounds, so which of Night Ridge and Survey Quad falls back first depends on the route's shape and
+  size. A Trail Sign export says "This route covers too much ground to draw its terrain, so Trail
+  Sign posters can’t be made from it."
 - **Sample run**: a real trail, the Coosa Backcountry Trail loop (Vogel State Park, Georgia;
   ≈ 21 km, ≈ +1,070 m, matching the canvas). Geometry from OpenStreetMap (ODbL, credited in About),
   elevation from Terrarium, timestamps synthesized from a pace model, labelled SAMPLE DATA in the UI.
@@ -338,14 +359,16 @@ everything.
   coordinates are folded back (Survey Quad: "179°59′ W"; exactly 180° prints "180°00′ W"). The
   date line reads the start’s longitude as recorded (`lonForOffset`). Terrarium's own data is
   rough at 180° and Vert draws it as it is: on Taveuni the z11+ tiles just west of the line are
-  zero-filled (the island shows only at z10), and in Chukotka the tiles step ~115 m across it.
+  70–77% zeros (the island shows only at z10 and coarser), and in Chukotka the tiles step ~115 m
+  across it.
 - **Coordinates at 180°**: the Survey Quad formatter decides the hemisphere after rounding to the
   minute, so anything that rounds to 180°00′ (179.995, exactly 180, −179.996, 180.004) prints
   "180°00′ W", the side ±180 folds to; 179.991 stays "179°59′ E". By the same rule 0°00′ is
   always N or E (a centre at −0.004° printed "0°00′ W").
-- **Taveuni at z11+**: the tiles east of 180° are all ocean at those zooms too (zero-filled like
-  the ones west of it), so the island is absent on both sides of the line at z11 and finer; only
-  z10 and coarser show it.
+- **Taveuni at z11+**: the tiles east of 180° are not zero-filled: decoded, they hold real
+  bathymetry with no exact zeros (z11 still has pixels up to 59 m), while the tiles just west of
+  the line are 70–77% zeros. Either way the island itself is missing at z11 and finer; only z10 and
+  coarser show it.
 - **Tile decode errors**: tile bodies are read with `arrayBuffer()` (Chromium's `blob()` failed on
   every tile with the disk nearly full). When every tile arrives but none decodes, the View says
   "the elevation data arrived, but this browser couldn't read it. Reload the page and try again."

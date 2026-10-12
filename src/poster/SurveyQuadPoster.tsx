@@ -26,6 +26,11 @@ export interface SurveyQuadPosterProps {
   figureData?: SurveyQuadFigureData | null;
   /** Called with the map box's size in logical px (inside the frame's 6 px padding). */
   onFigureBox?: (size: FigureBoxSize) => void;
+  /**
+   * The contours could not be drawn (their terrain failed): the key leaves out the contour
+   * interval, which would describe lines that are not there.
+   */
+  figureFailed?: boolean;
   className?: string;
 }
 
@@ -92,6 +97,7 @@ export function SurveyQuadPoster({
   figureData,
   onFigureBox,
   className,
+  figureFailed = false,
 }: SurveyQuadPosterProps) {
   const layout = posterLayout(size);
   const kind = layout.kind;
@@ -190,7 +196,7 @@ export function SurveyQuadPoster({
                 room={scaleRoom}
               />
             )}
-            <div className={styles.label}>CONTOUR INTERVAL {intervalText}</div>
+            {!figureFailed && <div className={styles.label}>CONTOUR INTERVAL {intervalText}</div>}
           </div>
         </div>
       </div>

@@ -150,12 +150,14 @@ export const INTERPOLATED_ELEVATION_NOTE = 'ELEVATION GAPS INTERPOLATED';
 
 /**
  * The print footer's left side: "[SAMPLE DATA · ][<subtitle> · ][ELEVATION FROM TERRAIN DATA · ]
- * ELEVATION ×1.6". The sample note only for the sample run, the subtitle only when set, the
+ * [ELEVATION ×1.6]". The sample note only for the sample run, the subtitle only when set, the
  * terrain note only when the terrain supplied the elevations ("PARTLY" when it filled gaps), or
- * "ELEVATION GAPS INTERPOLATED" when the terrain could not fill them.
+ * "ELEVATION GAPS INTERPOLATED" when the terrain could not fill them; the exaggeration only when
+ * a relief is drawn (null: the terrain figure could not be drawn).
  */
 export function elevationNote(
-  content: Pick<PosterContent, 'isSample' | 'exaggeration'> & {
+  content: Pick<PosterContent, 'isSample'> & {
+    exaggeration: number | null;
     subtitle?: string;
     elevationSource?: ElevationSource | null;
   },
@@ -170,7 +172,7 @@ export function elevationNote(
         : content.elevationSource === 'interpolated'
           ? INTERPOLATED_ELEVATION_NOTE
           : '',
-    `ELEVATION ×${formatNumber(content.exaggeration, 1)}`,
+    content.exaggeration === null ? '' : `ELEVATION ×${formatNumber(content.exaggeration, 1)}`,
   ]
     .filter(Boolean)
     .join(' · ');

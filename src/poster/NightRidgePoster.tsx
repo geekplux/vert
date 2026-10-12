@@ -35,6 +35,11 @@ export interface NightRidgePosterProps {
    * `nightRidgeFigureData` as the box.
    */
   onFigureBox?: (size: NightRidgeBox) => void;
+  /**
+   * The ridges could not be drawn (their terrain failed): the footer and the accessible name leave
+   * out the exaggeration, which would describe a relief that is not there.
+   */
+  figureFailed?: boolean;
   className?: string;
 }
 
@@ -61,11 +66,12 @@ function distanceLabel(metres: number, units: Units): string {
 /**
  * The poster summary plus what only Night Ridge draws: the start time, the sunrise and the
  * exaggeration the ridges are drawn at, e.g. "… Sample data. Start 07:10. Sunrise 07:32 at km 2.7.
- * Elevation ×2.4."
+ * Elevation ×2.4." (no exaggeration when `figureFailed`).
  */
 export function nightRidgeAriaLabel(
   content: PosterContent,
   figureData: Pick<NightRidgeFigureData, 'sunrise' | 'startClock'> | null,
+  figureFailed = false,
 ): string {
   const parts = [posterAriaLabel(content)];
   if (figureData?.startClock) parts.push(`Start ${figureData.startClock}.`);
@@ -73,7 +79,9 @@ export function nightRidgeAriaLabel(
     const at = distanceLabel(figureData.sunrise.distance, content.units).toLowerCase();
     parts.push(`Sunrise ${figureData.sunrise.clock} at ${at}.`);
   }
-  parts.push(`Elevation ×${formatNumber(ridgeExaggeration(content.exaggeration), 1)}.`);
+  if (!figureFailed) {
+    parts.push(`Elevation ×${formatNumber(ridgeExaggeration(content.exaggeration), 1)}.`);
+  }
   return parts.join(' ');
 }
 
@@ -93,6 +101,7 @@ export function NightRidgePoster({
   figure,
   figureData,
   onFigureBox,
+  figureFailed = false,
   className,
 }: NightRidgePosterProps) {
   const layout = posterLayout(size);
@@ -128,7 +137,7 @@ export function NightRidgePoster({
     .join(' · ');
   const footerNote = elevationNote({
     isSample: false,
-    exaggeration: ridgeExaggeration(content.exaggeration),
+    exaggeration: figureFailed ? null : ridgeExaggeration(content.exaggeration),
     subtitle: content.subtitle,
     elevationSource: content.elevationSource,
   });
@@ -146,7 +155,7 @@ export function NightRidgePoster({
   return (
     <div
       role="img"
-      aria-label={nightRidgeAriaLabel(content, figureData ?? null)}
+      aria-label={nightRidgeAriaLabel(content, figureData ?? null, figureFailed)}
       className={cx(styles.poster, styles[kind], className)}
       style={vars}
       data-layout={kind}

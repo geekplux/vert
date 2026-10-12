@@ -24,6 +24,8 @@ import type { TerrainFigureScene } from '../../poster/terrainFigure';
 import type { PosterContent } from '../../poster/types';
 import type { Bounds } from '../../lib/geo';
 import type { ViewCamera } from '../../terrain/camera';
+import { HeightfieldTooLargeError } from '../../terrain/heightfield';
+import { TERRAIN_TOO_LARGE_ERROR } from '../hooks';
 import type { LoadFigureTerrain } from '../hooks';
 import type { Prefs } from '../state';
 import type { Run, RunTrack, Terrain } from '../types';
@@ -74,10 +76,15 @@ export type PosterFigureStatus =
       /** B and E: the figure drawn (a new one means the poster was laid out again). */
       readonly figure?: unknown;
     }
-  | { readonly status: 'error' };
+  | {
+      readonly status: 'error';
+      /** The area is too large to fetch tiles for (`HeightfieldTooLargeError`): no retry helps. */
+      readonly tooLarge?: boolean;
+    };
 
 const FIGURE_LOADING: PosterFigureStatus = { status: 'loading' };
 const FIGURE_ERROR: PosterFigureStatus = { status: 'error' };
+const FIGURE_TOO_LARGE: PosterFigureStatus = { status: 'error', tooLarge: true };
 
 /** Reports `status` (memoized by the caller) to `onFigureStatus` whenever it changes. */
 function useReportFigure(
@@ -220,6 +227,9 @@ function TrailSignLive(props: LiveProps) {
       ? terrain.heightfield
       : null;
   const gridError = ownBounds ? own.status === 'error' : terrain.status === 'error';
+  const tooLarge = ownBounds
+    ? own.status === 'error' && own.error instanceof HeightfieldTooLargeError
+    : terrain.status === 'error' && terrain.error === TERRAIN_TOO_LARGE_ERROR;
   const figure = useTerrainFigure({
     // Exporting: the exporter draws the figure at the export scale; no preview render.
     heightfield: exporting ? null : heightfield,
@@ -236,19 +246,34 @@ function TrailSignLive(props: LiveProps) {
     [heightfield, drawnTrack, camera, exaggeration],
   );
   const status = useMemo<PosterFigureStatus>(
-    () => (gridError ? FIGURE_ERROR : scene ? { status: 'ready', scene } : FIGURE_LOADING),
-    [gridError, scene],
+    () =>
+      gridError
+        ? tooLarge
+          ? FIGURE_TOO_LARGE
+          : FIGURE_ERROR
+        : scene
+          ? { status: 'ready', scene }
+          : FIGURE_LOADING,
+    [gridError, tooLarge, scene],
   );
   useReportFigure(onFigureStatus, status);
-  const node =
-    gridError || figure.status === 'error' ? (
-      <FigureNote text={FIGURE_ERROR_TEXT} style="A" />
-    ) : figure.status === 'ready' ? (
-      <FigureCanvas canvas={figure.canvas} version={figure.version} camera={prefs.poster.camera} />
-    ) : (
-      <FigureNote text={FIGURE_LOADING_TEXT} style="A" />
-    );
-  return <TrailSignPoster content={content} size={size} figure={node} onFigureBox={setBox} />;
+  const failed = gridError || figure.status === 'error';
+  const node = failed ? (
+    <FigureNote text={FIGURE_ERROR_TEXT} style="A" />
+  ) : figure.status === 'ready' ? (
+    <FigureCanvas canvas={figure.canvas} version={figure.version} camera={prefs.poster.camera} />
+  ) : (
+    <FigureNote text={FIGURE_LOADING_TEXT} style="A" />
+  );
+  return (
+    <TrailSignPoster
+      content={content}
+      size={size}
+      figure={node}
+      onFigureBox={setBox}
+      figureFailed={failed}
+    />
+  );
 }
 
 /** The text the poster draws, so the font loader fetches every unicode-range subset it needs. */
@@ -313,6 +338,7 @@ function NightRidgeLive(props: LiveProps) {
       size={size}
       figureData={data}
       onFigureBox={setBox}
+      figureFailed={grid.status === 'error'}
       figure={
         <FigureNote
           text={grid.status === 'error' ? FIGURE_ERROR_TEXT : FIGURE_LOADING_TEXT}
@@ -354,6 +380,7 @@ function SurveyQuadLive(props: LiveProps) {
       size={size}
       figureData={data}
       onFigureBox={setBox}
+      figureFailed={grid.status === 'error'}
       figure={
         <FigureNote
           text={grid.status === 'error' ? FIGURE_ERROR_TEXT : FIGURE_LOADING_TEXT}

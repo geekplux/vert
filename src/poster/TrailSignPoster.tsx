@@ -41,6 +41,11 @@ export interface TrailSignPosterProps {
    * changes, so the terrain renderer can render at exactly that aspect.
    */
   onFigureBox?: (size: FigureBoxSize) => void;
+  /**
+   * The terrain figure could not be drawn: the print footer leaves out the exaggeration, which
+   * would describe a relief that is not there.
+   */
+  figureFailed?: boolean;
   className?: string;
 }
 
@@ -64,6 +69,7 @@ export function TrailSignPoster({
   figure,
   figureAspect = DEFAULT_FIGURE_ASPECT,
   onFigureBox,
+  figureFailed = false,
   className,
 }: TrailSignPosterProps) {
   const layout = posterLayout(size);
@@ -105,7 +111,7 @@ export function TrailSignPoster({
     >
       <div className={styles.inner} aria-hidden="true">
         {layout.kind === 'print' ? (
-          <PrintLayout content={content} figure={figureSlot} />
+          <PrintLayout content={content} figure={figureSlot} figureFailed={figureFailed} />
         ) : (
           <SocialLayout content={content} figure={figureSlot} rule={rule} />
         )}
@@ -179,7 +185,7 @@ interface LayoutProps {
   figure: ReactNode;
 }
 
-function PrintLayout({ content, figure }: LayoutProps) {
+function PrintLayout({ content, figure, figureFailed }: LayoutProps & { figureFailed: boolean }) {
   const stats = posterStatList(content.stats);
   const area = useProfileArea(content.profile);
   const { measure, ink } = useTitleFonts(content.title);
@@ -222,7 +228,7 @@ function PrintLayout({ content, figure }: LayoutProps) {
         {area && <path d={area} fill="currentColor" />}
       </svg>
       <div className={styles.footer} data-slot="footer">
-        <PrintFooterNote content={content} />
+        <PrintFooterNote content={content} figureFailed={figureFailed} />
         <span className={styles.footerSign}>{content.signature || POSTER_URL}</span>
       </div>
     </>
@@ -230,18 +236,27 @@ function PrintLayout({ content, figure }: LayoutProps) {
 }
 
 /**
- * "[SAMPLE DATA · ][<subtitle> · ][ELEVATION FROM TERRAIN DATA · ]ELEVATION ×1.6" on one line (the
- * text of `elevationNote`). Only the subtitle truncates, so the sample note, the terrain note and
- * the exaggeration always stay readable.
+ * "[SAMPLE DATA · ][<subtitle> · ][ELEVATION FROM TERRAIN DATA · ][ELEVATION ×1.6]" on one line
+ * (the text of `elevationNote`; no exaggeration when the figure failed). Only the subtitle
+ * truncates, so the sample note, the terrain note and the exaggeration always stay readable.
  */
-function PrintFooterNote({ content }: { content: PosterContent }) {
-  const { isSample, subtitle, exaggeration, elevationSource } = content;
+function PrintFooterNote({
+  content,
+  figureFailed,
+}: {
+  content: PosterContent;
+  figureFailed: boolean;
+}) {
+  const { isSample, subtitle, elevationSource } = content;
+  const exaggeration = figureFailed ? null : content.exaggeration;
   const elevation = elevationNote({ isSample: false, exaggeration, elevationSource });
+  // "SAMPLE DATA" alone when nothing follows it.
+  const more = Boolean(subtitle || elevation);
   return (
     <span className={styles.footerLeft}>
-      {isSample && <span className={styles.keep}>SAMPLE DATA · </span>}
+      {isSample && <span className={styles.keep}>SAMPLE DATA{more ? ' · ' : ''}</span>}
       {subtitle && <span className={styles.footerNote}>{subtitle}</span>}
-      <span className={styles.keep}>{subtitle ? ` · ${elevation}` : elevation}</span>
+      {elevation && <span className={styles.keep}>{subtitle ? ` · ${elevation}` : elevation}</span>}
     </span>
   );
 }

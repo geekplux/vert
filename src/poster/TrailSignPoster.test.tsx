@@ -71,6 +71,29 @@ describe('TrailSignPoster', () => {
     );
   });
 
+  it('leaves the exaggeration out of the print footer when the terrain could not be drawn', () => {
+    const footer = (run: typeof SAMPLE_RUN, subtitle = '') => {
+      const content = posterContentFromRun(run, {
+        ...INITIAL_PREFS,
+        poster: { ...INITIAL_PREFS.poster, subtitle },
+      });
+      const view = render(
+        <TrailSignPoster
+          content={content}
+          size={posterSizeById('18x24')}
+          figure={<span>The terrain couldn’t be drawn.</span>}
+          figureFailed
+        />,
+      );
+      const text = view.container.querySelector('[data-slot="footer"]')?.textContent;
+      view.unmount();
+      return text;
+    };
+    expect(footer(SAMPLE_RUN)).toBe('SAMPLE DATAVERT.GEEKPLUX.COM');
+    expect(footer(SAMPLE_RUN, 'Vogel SP')).toBe('SAMPLE DATA · Vogel SPVERT.GEEKPLUX.COM');
+    expect(footer({ ...SAMPLE_RUN, isSample: false })).toBe('VERT.GEEKPLUX.COM');
+  });
+
   it('draws a flat run as a flat band, not full-height mountains (minimum span)', () => {
     const flat = Array.from({ length: 500 }, (_, i) => ({
       d: (i * 10_000) / 499,

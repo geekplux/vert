@@ -8,10 +8,12 @@ import type { ExportPosterOptions } from '../../poster/export/export';
 import type { FigureTile } from '../../poster/export/rasterize';
 import { POSTER_SIZES } from '../../poster/sizes';
 import type { TerrainFigureScene } from '../../poster/terrainFigure';
+import { HeightfieldTooLargeError } from '../../terrain/heightfield';
 import type { Heightfield } from '../../terrain/heightfield';
 import { DEFAULT_VIEW_CAMERA } from '../../terrain/camera';
 import type { ViewCamera } from '../../terrain/camera';
 import { hills } from '../../terrain/testing';
+import { TERRAIN_TOO_LARGE_ERROR } from '../hooks';
 import type { LoadFigureTerrain, LoadTerrain } from '../hooks';
 import { SAMPLE_RUN } from '../sample';
 import { INITIAL_PREFS, posterTextFor } from '../state';
@@ -25,6 +27,9 @@ import {
   NO_WEBGL_MESSAGE,
   TERRAIN_DRAW_MESSAGE,
   TERRAIN_DRAW_SMALLEST_MESSAGE,
+  TERRAIN_TIMEOUT_MESSAGE,
+  TERRAIN_TIMEOUT_MS,
+  TERRAIN_TOO_LARGE_MESSAGE,
   TERRAIN_UNAVAILABLE_MESSAGE,
   createPosterExporter,
   terrainDrawMessage,
@@ -192,6 +197,7 @@ function setup({
   loadFigureTerrain = vi.fn<LoadFigureTerrain>(() => Promise.resolve(hills())),
   createFigureRenderer,
   hasWebGL = () => true,
+  terrainTimeoutMs,
 }: {
   engine?: ReturnType<typeof fakeEngine>;
   renderer?: ReturnType<typeof fakeRenderer>;
@@ -199,6 +205,7 @@ function setup({
   loadFigureTerrain?: LoadFigureTerrain;
   createFigureRenderer?: PosterExporterDeps['createFigureRenderer'];
   hasWebGL?: () => boolean;
+  terrainTimeoutMs?: number;
 } = {}) {
   const deps: PosterExporterDeps = {
     loadEngine: () => Promise.resolve(engine.engine),
@@ -206,6 +213,7 @@ function setup({
     loadTerrain,
     loadFigureTerrain: vi.fn<LoadFigureTerrain>(() => Promise.reject(new Error('unused'))),
     hasWebGL,
+    ...(terrainTimeoutMs !== undefined ? { terrainTimeoutMs } : {}),
   };
   const exporter = createPosterExporter(deps);
   return { exporter, engine, renderer, loadTerrain, loadFigureTerrain };
@@ -387,16 +395,147 @@ describe('posterExporter', () => {
     expect(engine.downloads).toEqual([]);
   });
 
-  it('says the terrain could not be loaded when a figure grid fails', async () => {
+  it.each([
+    ['B', 'ELEVATION ×', 'offline'],
+    ['E', 'CONTOUR INTERVAL', 'offline'],
+    ['B', 'ELEVATION ×', 'too large'],
+    ['E', 'CONTOUR INTERVAL', 'too large'],
+  ] as const)(
+    'exports style %s as the preview shows it when its figure grid fails (%s, %s): the note, nothing about the relief',
+    async (style, relief, cause) => {
+      const failure = cause === 'offline' ? new Error('offline') : new HeightfieldTooLargeError(40);
+      const failing = vi.fn<LoadFigureTerrain>(() => Promise.reject(failure));
+      const seen: { figure: string; text: string; drawn: boolean }[] = [];
+      const engine = fakeEngine({
+        afterReady: () => {
+          const root = document.querySelector('[role="img"]');
+          seen.push({
+            figure: root?.querySelector('[data-slot="figure"]')?.textContent ?? '',
+            text: root?.textContent ?? '',
+            drawn: root?.querySelector('[data-figure="ridges"], [data-figure="contours"]') != null,
+          });
+        },
+      });
+      const t = setup({ engine, loadFigureTerrain: failing });
+      const job = jobFor(prefsWith({ style, size: '18x24' }), 'png', READY(hills()), failing);
+      await expect(t.exporter(job, () => undefined, new AbortController().signal)).resolves.toEqual(
+        { fileName: job.fileName },
+      );
+      expect(failing).toHaveBeenCalled();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ figure: 'The terrain couldn’t be drawn.', drawn: false });
+      expect(seen[0]?.text).not.toContain(relief);
+      expect(t.engine.downloads).toHaveLength(1);
+    },
+  );
+
+  it('fails style A at once when its own figure grid fails (its poster is its terrain)', async () => {
     const failing = vi.fn<LoadFigureTerrain>(() => Promise.reject(new Error('offline')));
     const t = setup({ loadFigureTerrain: failing });
-    const job = jobFor(prefsWith({ style: 'E' }), 'png', READY(hills()), failing);
+    const job = jobFor(prefsWith({ style: 'A', hideEnds: 300 }), 'png', READY(hills()), failing);
     const error = await t
       .exporter(job, () => undefined, new AbortController().signal)
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ExportError);
     expect((error as Error).message).toBe(TERRAIN_UNAVAILABLE_MESSAGE);
     expect(t.engine.downloads).toEqual([]);
+    expect(t.renderer.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a route too large to fetch tiles for cannot be a Trail Sign poster, not "check your connection"', async () => {
+    const tooLarge = () => Promise.reject(new HeightfieldTooLargeError(40));
+    // Its own grid (the ends hidden)…
+    const own = vi.fn<LoadFigureTerrain>(tooLarge);
+    const a = setup({ loadFigureTerrain: own });
+    const ownJob = jobFor(prefsWith({ style: 'A', hideEnds: 300 }), 'png', READY(hills()), own);
+    await expect(a.exporter(ownJob, () => undefined, new AbortController().signal)).rejects.toThrow(
+      TERRAIN_TOO_LARGE_MESSAGE,
+    );
+    // …and the run's grid.
+    const b = setup({ loadTerrain: vi.fn<LoadTerrain>(tooLarge) });
+    const runJob = jobFor(
+      prefsWith({ style: 'A', hideEnds: 0 }),
+      'png',
+      { status: 'error', error: TERRAIN_TOO_LARGE_ERROR },
+      b.loadFigureTerrain,
+    );
+    await expect(b.exporter(runJob, () => undefined, new AbortController().signal)).rejects.toThrow(
+      TERRAIN_TOO_LARGE_MESSAGE,
+    );
+    expect(TERRAIN_TOO_LARGE_MESSAGE).toBe(
+      'This route covers too much ground to draw its terrain, so Trail Sign posters can’t be made from it.',
+    );
+  });
+
+  it('waits at most 20 s for the terrain by default', () => {
+    expect(TERRAIN_TIMEOUT_MS).toBe(20_000);
+  });
+
+  it.each(['A', 'B', 'E'] as const)(
+    'gives up on style %s with a message when its figure grid never arrives',
+    async (style) => {
+      const never = vi.fn<LoadFigureTerrain>(() => new Promise<Heightfield>(() => undefined));
+      const t = setup({ loadFigureTerrain: never, terrainTimeoutMs: 40 });
+      // A draws its own grid with the ends hidden; B and E always do.
+      const job = jobFor(prefsWith({ style, hideEnds: 300 }), 'png', READY(hills()), never);
+      const error = await t
+        .exporter(job, () => undefined, new AbortController().signal)
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ExportError);
+      expect((error as Error).message).toBe(TERRAIN_TIMEOUT_MESSAGE);
+      expect(never).toHaveBeenCalled();
+      expect(t.engine.downloads).toEqual([]);
+      if (style === 'A') expect(t.renderer.dispose).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("gives up with a message when the run's grid never arrives (style A, View still loading)", async () => {
+    const loadTerrain = vi.fn<LoadTerrain>(
+      (_run, signal) =>
+        new Promise<Heightfield>((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        }),
+    );
+    const t = setup({ loadTerrain, terrainTimeoutMs: 40 });
+    const job = jobFor(
+      prefsWith({ style: 'A', hideEnds: 0 }),
+      'png',
+      { status: 'loading' },
+      t.loadFigureTerrain,
+    );
+    await expect(t.exporter(job, () => undefined, new AbortController().signal)).rejects.toThrow(
+      TERRAIN_TIMEOUT_MESSAGE,
+    );
+    // The load was told to stop.
+    expect(loadTerrain.mock.calls[0]?.[1].aborted).toBe(true);
+    expect(t.engine.calls).toEqual([]);
+  });
+
+  it('reports Cancel as a cancel, not a timeout, while the terrain hangs', async () => {
+    const never = vi.fn<LoadFigureTerrain>(() => new Promise<Heightfield>(() => undefined));
+    const t = setup({ loadFigureTerrain: never, terrainTimeoutMs: 10_000 });
+    const controller = new AbortController();
+    const job = jobFor(prefsWith({ style: 'B' }), 'png', READY(hills()), never);
+    const run = t.exporter(job, () => undefined, controller.signal);
+    await vi.waitFor(() => {
+      expect(never).toHaveBeenCalled();
+    });
+    controller.abort();
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    expect(t.engine.downloads).toEqual([]);
+  });
+
+  it('puts no limit on drawing once the terrain is in', async () => {
+    const engine = fakeEngine({
+      afterReady: () => new Promise((resolve) => setTimeout(resolve, 600)),
+    });
+    const t = setup({ engine, terrainTimeoutMs: 300 });
+    const job = jobFor(prefsWith({ style: 'B' }), 'png', READY(hills()), t.loadFigureTerrain);
+    await expect(
+      t.exporter(job, () => undefined, new AbortController().signal),
+    ).resolves.toMatchObject({ fileName: job.fileName });
   });
 
   it("says the terrain could not be loaded when the run's grid cannot be built", async () => {

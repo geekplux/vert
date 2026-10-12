@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hills } from '../../terrain/testing';
 import { expectNoAxeViolations } from '../../test/axe';
 import { fakeTerrainView } from '../../test/fakeTerrainView';
-import { TERRAIN_OFFLINE_ERROR, immediateSchedule } from '../hooks';
+import {
+  TERRAIN_DECODE_ERROR,
+  TERRAIN_OFFLINE_ERROR,
+  TERRAIN_TOO_LARGE_ERROR,
+  immediateSchedule,
+} from '../hooks';
 import type { LoadTerrain } from '../hooks';
 import { Page } from '../Page';
 import { SAMPLE_RUN } from '../sample';
@@ -172,6 +177,17 @@ describe('TerrainBox', () => {
     expect(screen.queryByRole('img')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no Try again when the route is too large to draw (it would fail the same way)', () => {
+    renderBox({ terrain: { status: 'error', error: TERRAIN_TOO_LARGE_ERROR } });
+    expect(status().textContent).toBe(TERRAIN_TOO_LARGE_ERROR);
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('keeps Try again for tiles that arrived but could not be read', () => {
+    renderBox({ terrain: { status: 'error', error: TERRAIN_DECODE_ERROR } });
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 
   it('catches a view that cannot draw (no WebGL) and remounts it on Try again', async () => {

@@ -146,5 +146,8 @@ describe('summit and elevation source', () => {
     expect(elevationSourceText({ ...gaps, elevationSource: null }, 'error')).toBe(
       "This file's elevation has gaps, and the terrain couldn't load to fill them.",
     );
+    expect(elevationSourceText({ ...none, elevationSource: 'interpolated' }, 'error')).toBe(
+      "Elevation gaps interpolated; the terrain couldn't load.",
+    );
   });
 });

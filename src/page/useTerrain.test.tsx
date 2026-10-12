@@ -1,7 +1,7 @@
 import { act, render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HeightfieldError } from '../terrain/heightfield';
+import { HeightfieldError, HeightfieldTooLargeError } from '../terrain/heightfield';
 import { TileDecodeError } from '../terrain/tiles';
 import type { Heightfield } from '../terrain/heightfield';
 import { hills, makeTrack } from '../terrain/testing';
@@ -10,6 +10,7 @@ import {
   TERRAIN_DECODE_ERROR,
   TERRAIN_GENERIC_ERROR,
   TERRAIN_OFFLINE_ERROR,
+  TERRAIN_TOO_LARGE_ERROR,
   useRetryTerrain,
   useRun,
   useRunLoader,
@@ -163,6 +164,24 @@ describe('useTerrain lifecycle', () => {
     expect(TERRAIN_DECODE_ERROR).not.toMatch(/connection/);
   });
 
+  it('says a route too large for the tiles is too large, not a connection problem', async () => {
+    const loadTerrain: LoadTerrain = () => Promise.reject(new HeightfieldTooLargeError(256));
+    const { result } = renderHook(useTerrainProbe, {
+      wrapper: wrapper({ initialRun: SAMPLE_RUN, loadTerrain }),
+    });
+    await settle();
+    expect(result.current.terrain).toEqual({ status: 'error', error: TERRAIN_TOO_LARGE_ERROR });
+    expect(TERRAIN_TOO_LARGE_ERROR).toBe('This route covers too much ground to draw its terrain.');
+    // Even offline: the size, not the connection, is why.
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    act(() => {
+      result.current.retry();
+    });
+    await settle();
+    expect(result.current.terrain).toEqual({ status: 'error', error: TERRAIN_TOO_LARGE_ERROR });
+    vi.restoreAllMocks();
+  });
+
   it('says offline when the browser is offline, whatever the error', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const loadTerrain: LoadTerrain = () => Promise.reject(new Error('anything'));
@@ -313,6 +332,34 @@ describe('elevations from the terrain', () => {
     await settle();
     expect(result.current.terrain.status).toBe('error');
     expect(result.current.run).toBe(NO_ELE);
+  });
+
+  it("interpolates a mostly recorded file's long gaps when the terrain fails, and fills them on retry", async () => {
+    // Recorded 300–900 m, a gap (NaN) over the last third: mostly recorded.
+    const partialEle = Float64Array.from({ length: 61 }, (_, i) => (i < 40 ? 300 + 15 * i : NaN));
+    const GAPS: Run = { ...NO_ELE, id: 'gaps', track: { ...track, partialEle } };
+    const terrain = manualTerrain();
+    const { result } = renderHook(useTerrainProbe, {
+      wrapper: wrapper({ initialRun: GAPS, loadTerrain: terrain.loadTerrain }),
+    });
+    expect(result.current.run).toBe(GAPS);
+    terrain.build(0).reject(new HeightfieldError([], new Error('offline')));
+    await settle();
+    expect(result.current.terrain.status).toBe('error');
+    const run = result.current.run;
+    expect(run?.elevationSource).toBe('interpolated');
+    expect(run?.hasElevation).toBe(true);
+    expect(Math.round(run?.highPoint ?? 0)).toBe(885);
+    expect(Math.round(run?.vert ?? 0)).toBe(585);
+    expect(run?.profile.length).toBe(500);
+
+    act(() => {
+      result.current.retry();
+    });
+    expect(result.current.run).toBe(GAPS);
+    terrain.build(1).resolve(hills());
+    await settle();
+    expect(result.current.run?.elevationSource).toBe('mixed');
   });
 
   it('keeps a run with its own elevations as it is', async () => {

@@ -122,9 +122,16 @@ export function recordAuxiliaryCanvasFailure(width: number, height: number): voi
 
 /**
  * Whether `canvas` really has its size: draws one opaque pixel at the far corner and reads it
- * back (the caller paints over it). Records the result for `knownCanvasResult`.
+ * back (the caller paints over it). Records the result for `knownCanvasResult`: a failure always,
+ * a success unless `recordSuccess` is false (the caller records it once the canvas has been
+ * encoded).
  */
-export function verifyCanvas(canvas: ProbeCanvas, expectWidth: number, expectHeight: number) {
+export function verifyCanvas(
+  canvas: ProbeCanvas,
+  expectWidth: number,
+  expectHeight: number,
+  recordSuccess = true,
+) {
   let ok = false;
   try {
     if (canvas.width === expectWidth && canvas.height === expectHeight) {
@@ -139,7 +146,7 @@ export function verifyCanvas(canvas: ProbeCanvas, expectWidth: number, expectHei
   } catch {
     ok = false;
   }
-  recordCanvasResult(expectWidth, expectHeight, ok);
+  if (!ok || recordSuccess) recordCanvasResult(expectWidth, expectHeight, ok);
   return ok;
 }
 

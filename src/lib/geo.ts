@@ -55,6 +55,13 @@ export const MAX_MERCATOR_LAT = 85.0511287798066;
 /** Highest zoom of the AWS Terrain Tiles (Terrarium) set. */
 export const TERRARIUM_MAX_ZOOM = 15;
 
+/**
+ * Lowest tile zoom the app requests: the tile Worker serves z6–15 only (`MIN_ZOOM` in
+ * `worker/src/tiles.ts`) and the dev proxy is capped the same way, so a lower zoom would fail in
+ * production as if the network were down.
+ */
+export const MIN_SERVED_ZOOM = 6;
+
 const DEG = Math.PI / 180;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));

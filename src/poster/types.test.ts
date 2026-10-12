@@ -113,6 +113,9 @@ describe('elevationNote', () => {
     expect(elevationNote({ isSample: false, exaggeration: 1.6, elevationSource: 'mixed' })).toBe(
       'ELEVATION PARTLY FROM TERRAIN DATA · ELEVATION ×1.6',
     );
+    expect(
+      elevationNote({ isSample: false, exaggeration: 1.6, elevationSource: 'interpolated' }),
+    ).toBe('ELEVATION GAPS INTERPOLATED · ELEVATION ×1.6');
     expect(elevationNote({ isSample: false, exaggeration: 1.6, elevationSource: 'gpx' })).toBe(
       'ELEVATION ×1.6',
     );
@@ -161,6 +164,15 @@ describe('posterAriaLabel', () => {
     const none = { distance: false, vert: false, time: false, highPoint: false };
     const content = posterContentFromRun(run, prefs({ stats: none, subtitle: 'Georgia' }));
     expect(posterAriaLabel(content)).toBe(`Poster: ${NAME}, SAT · 2026-10-03, Georgia.`);
+  });
+
+  it('says when the elevation gaps were interpolated', () => {
+    const run = { ...SAMPLE_RUN, isSample: false, elevationSource: 'interpolated' as const };
+    const none = { distance: false, vert: false, time: false, highPoint: false };
+    const content = posterContentFromRun(run, prefs({ stats: none }));
+    expect(posterAriaLabel(content)).toBe(
+      `Poster: ${NAME}, SAT · 2026-10-03. Elevation gaps interpolated.`,
+    );
   });
 
   it('has a site URL for posters without a signature', () => {

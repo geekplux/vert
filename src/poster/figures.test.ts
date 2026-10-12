@@ -69,6 +69,20 @@ describe('formatLatLon', () => {
     expect(formatLatLon(-16.86, 540 - 0.5).lon).toBe('179°30′ E');
     expect(formatLatLon(-16.86, 180).lon).toBe('180°00′ W');
   });
+
+  it('prints anything that rounds to 180°00′ with one hemisphere, W', () => {
+    for (const lon of [179.995, 179.9999, 180, 180.004, -180, -179.996, -180.004, 539.997]) {
+      expect(formatLatLon(-16.86, lon).lon).toBe('180°00′ W');
+    }
+    // Either side of the rounding, the hemisphere is the longitude's own.
+    expect(formatLatLon(-16.86, 179.991).lon).toBe('179°59′ E');
+    expect(formatLatLon(-16.86, -179.991).lon).toBe('179°59′ W');
+    expect(formatLatLon(-16.86, 180.009).lon).toBe('179°59′ W');
+    // At 0°00′ the same rule: one hemisphere whichever side it rounded from.
+    expect(formatLatLon(-0.004, -0.004)).toEqual({ lat: '0°00′ N', lon: '0°00′ E' });
+    expect(formatLatLon(0.004, 0.004)).toEqual({ lat: '0°00′ N', lon: '0°00′ E' });
+    expect(formatLatLon(-0.01, -0.01)).toEqual({ lat: '0°01′ S', lon: '0°01′ W' });
+  });
 });
 
 describe('quadBounds and ridgeBounds', () => {

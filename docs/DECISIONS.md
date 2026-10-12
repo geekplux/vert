@@ -224,16 +224,30 @@ everything.
   meet the recorded values on either side (the offset blends linearly by distance across the gap;
   one side at the route's ends), so a recorder reading 30 m above the DEM adds no step or false
   climb. `elevationSource: 'mixed'`, or `'terrain'` when the file's own values cover under 5% of
-  the points (they are then ignored). Measured in the browser on the sample (+1,102 m with all its
+  the route's distance (they are then ignored). Measured in the browser on the sample (+1,102 m with all its
   `<ele>`): second half removed +1,122 m, mixed (was +698); a lone first `<ele>` or all-zero
   `<ele>` +1,176 m, terrain (was flat / 0 m); every tenth point +1,092 m, GPX.
 - **Copy.** Until the terrain loads, or if it fails, every elevation figure stays "–" and no ▲ is
-  drawn (gaps included: half a profile would mislead). The aside says why under the stats, in a
+  drawn (gaps included: half a profile would mislead; a mostly recorded file is interpolated instead
+  when the terrain fails, below). The aside says why under the stats, in a
   polite status region: "This file has no usable elevation. Reading it from the terrain…" / "…, and
   the terrain couldn't load."; with gaps "This file's elevation has gaps. Filling them from the
   terrain…" / "…, and the terrain couldn't load to fill them."; once filled "Elevation from terrain
   data. This file has no usable elevation." or "Elevation partly from terrain data, where this
   file has gaps."
+- **Gaps when the terrain fails.** A file whose own values cover at least half the route's
+  distance ("mostly recorded") does not stay at "–" when the terrain fails: each long gap is drawn
+  as a straight line between the recorded values around it (held level at the route's ends), the
+  same median filter and rules give the stats, profile and climbs (`withInterpolatedGaps`,
+  `elevationSource: 'interpolated'`), and the aside says "Elevation gaps interpolated; the terrain
+  couldn't load." Posters say "ELEVATION GAPS INTERPOLATED" in the A (print) and B footers and
+  "Elevation gaps interpolated." in every poster's name. Try again, if the terrain then loads,
+  fills the gaps from it (`'mixed'`). A file covering under half keeps "–" and the gaps copy above
+  (a straight line would be most of its profile), and so does one with no usable elevation.
+- **Recorded share by distance.** "Cover" is measured along the route: the steps whose two ends
+  both have a value (recorded, or a short gap already interpolated) over the total distance, by
+  points only for a route with no length. Ten points bunched in the first 10 m of a 1 km route are
+  1%, not 83%.
 - **The route is built once** when the track changes in the render that brings the heightfield
   (terrain elevations): `TerrainView` hands the current track to `stage.show()`, which takes it
   before building the route, and the `setTrack` effect after it finds nothing to do.
@@ -273,6 +287,14 @@ everything.
   clears the failures of every size no larger in both sides and counts as proof they work; a
   failure drops any working size at least as large in both sides. Error messages suggest a
   smaller size only when one exists (not at 4 : 5).
+- A size counts as working once its file is encoded, not when its canvas verifies: a canvas that
+  verifies but cannot be encoded (`toBlob` gives null, `convertToBlob` rejects, the bytes do not
+  fit) is recorded as an output-canvas failure, so the retry rule above applies to it too. A cancel
+  records nothing.
+- File names also drop every default-ignorable code point (`\p{Default_Ignorable_Code_Point}`):
+  the Hangul fillers U+115F, U+1160, U+3164 and U+FFA0 (the last two become U+1160 under NFKD), the
+  combining grapheme joiner U+034F and Khmer U+17B4/U+17B5 draw nothing, so "ㅤㅤ" names the file
+  `vert-<style>-<size>`, never `vert-ᅠᅠ-…`. Hyphens around a dropped character collapse into one.
 - No WebGL at all is told apart from a draw failure: "This browser can’t draw 3D terrain, so Trail
   Sign posters can’t be exported here. Night Ridge and Survey Quad still work."
 - Progress: the engine waits for a paint after every report, so each "Rendering tile k of N" is
@@ -295,6 +317,14 @@ everything.
   routes, then samples one zoom finer; z6–7 covers 100+ km courses). Anything else, and any query
   string, is a 400.
 - **Dev tiles**: Vite proxies `/tiles/:z/:x/:y.png` to the public AWS Terrarium bucket in dev only.
+- **Zoom floor**: the heightfield never asks for a zoom below 6 (`MIN_SERVED_ZOOM`), and the dev
+  proxy serves z6–15 only, so dev fails where production would. A z6 grid wider than 512 samples
+  is downsampled; an area that needs more than 16 tiles even at z6 (a flight-like track hundreds of
+  kilometres across, a figure grid reaching a pole) fetches nothing, and the View says "This route
+  covers too much ground to draw its terrain." instead of "Check your connection". Posters B and E
+  keep their stats and print their own "THE TERRAIN COULDN'T BE DRAWN." where the figure would be,
+  as for any failed figure grid (Night Ridge's portrait box reaches the cap sooner: a 1,200 km
+  diagonal still draws Survey Quad but not Night Ridge).
 - **Sample run**: a real trail, the Coosa Backcountry Trail loop (Vogel State Park, Georgia;
   ≈ 21 km, ≈ +1,070 m, matching the canvas). Geometry from OpenStreetMap (ODbL, credited in About),
   elevation from Terrarium, timestamps synthesized from a pace model, labelled SAMPLE DATA in the UI.
@@ -309,6 +339,13 @@ everything.
   date line reads the start’s longitude as recorded (`lonForOffset`). Terrarium's own data is
   rough at 180° and Vert draws it as it is: on Taveuni the z11+ tiles just west of the line are
   zero-filled (the island shows only at z10), and in Chukotka the tiles step ~115 m across it.
+- **Coordinates at 180°**: the Survey Quad formatter decides the hemisphere after rounding to the
+  minute, so anything that rounds to 180°00′ (179.995, exactly 180, −179.996, 180.004) prints
+  "180°00′ W", the side ±180 folds to; 179.991 stays "179°59′ E". By the same rule 0°00′ is
+  always N or E (a centre at −0.004° printed "0°00′ W").
+- **Taveuni at z11+**: the tiles east of 180° are all ocean at those zooms too (zero-filled like
+  the ones west of it), so the island is absent on both sides of the line at z11 and finer; only
+  z10 and coarser show it.
 - **Tile decode errors**: tile bodies are read with `arrayBuffer()` (Chromium's `blob()` failed on
   every tile with the disk nearly full). When every tile arrives but none decodes, the View says
   "the elevation data arrived, but this browser couldn't read it. Reload the page and try again."

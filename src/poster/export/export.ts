@@ -29,7 +29,7 @@ import { loadPosterFonts } from '../fonts';
 import { posterLayout } from '../layout';
 import type { PosterSize } from '../sizes';
 import type { PosterStyleId } from '../styles';
-import { MAX_TILE, knownCanvasResult } from './canvasLimits';
+import { MAX_TILE, knownCanvasResult, recordCanvasResult } from './canvasLimits';
 import type { ProbeCanvas } from './canvasLimits';
 import { ExportError, TOO_LARGE_MESSAGE, tooLargeMessage } from './errors';
 import { preloadFonts } from './fontPreload';
@@ -260,6 +260,33 @@ function titleFromFileName(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '');
 }
 
+/**
+ * The output canvas as a file of `type`, and what the size did, for `knownCanvasResult`: it works
+ * once encoded. A canvas that verified but cannot be encoded (`toBlob` hands back null,
+ * `convertToBlob` rejects with an encoding error, the bytes do not fit) failed all the same:
+ * recorded as an output-canvas failure, so the retry policy applies (two in a row and the size
+ * fails at once). A cancel is neither.
+ */
+async function encodeOutput(
+  deps: ExportDeps,
+  canvas: ProbeCanvas,
+  size: PosterSize,
+  signal: AbortSignal | undefined,
+  type: string,
+  quality?: number,
+): Promise<Blob> {
+  try {
+    const blob = await untilAborted(deps.encode(canvas, type, quality), signal);
+    recordCanvasResult(size.width, size.height, true);
+    return blob;
+  } catch (error) {
+    if (!signal?.aborted && isCanvasLimitError(error)) {
+      recordCanvasResult(size.width, size.height, false);
+    }
+    throw error;
+  }
+}
+
 /** Renders the poster and encodes it; resolves with the file's Blob. */
 export async function exportPoster(
   options: ExportPosterOptions,
@@ -300,6 +327,8 @@ export async function exportPoster(
       onSettled: options.onSettled,
       figure: figure && poster.figureBox ? { layer: figure, box: poster.figureBox } : undefined,
       signal,
+      // A size works once its file is written: recorded after the encode, below.
+      recordSuccess: false,
       onTile: async (done, tiles) => {
         tileTotal = tiles;
         onProgress?.({ done, total: tiles });
@@ -312,7 +341,7 @@ export async function exportPoster(
     signal?.throwIfAborted();
 
     if (format === 'pdf') {
-      const jpeg = await untilAborted(deps.encode(canvas, 'image/jpeg', PDF_JPEG_QUALITY), signal);
+      const jpeg = await encodeOutput(deps, canvas, size, signal, 'image/jpeg', PDF_JPEG_QUALITY);
       signal?.throwIfAborted();
       const page = pdfPageSize(size);
       return writeSingleImagePdf({
@@ -322,7 +351,7 @@ export async function exportPoster(
         title: options.title ?? titleFromFileName(fileName),
       });
     }
-    const png = await untilAborted(deps.encode(canvas, 'image/png'), signal);
+    const png = await encodeOutput(deps, canvas, size, signal, 'image/png');
     signal?.throwIfAborted();
     return size.use === 'print' ? await withPngDensity(png, PRINT_DPI) : png;
   } catch (error) {

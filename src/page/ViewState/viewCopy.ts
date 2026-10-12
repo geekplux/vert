@@ -125,11 +125,14 @@ export const MISSING_ELEVATION_TEXT =
   "This file has no usable elevation, and the terrain couldn't load.";
 export const MISSING_GAPS_TEXT =
   "This file's elevation has gaps, and the terrain couldn't load to fill them.";
+/** …when the terrain could not load, so a mostly recorded file's gaps were interpolated. */
+export const INTERPOLATED_GAPS_TEXT = "Elevation gaps interpolated; the terrain couldn't load.";
 
 /**
  * The plain-words note under the stats about where the elevations come from: `null` for a file
  * with complete elevations of its own; otherwise whether the terrain supplied all or part of them,
- * is on its way, or failed (no usable elevation, or gaps in it: `track.partialEle`).
+ * is on its way, or failed (no usable elevation, or gaps in it: `track.partialEle`; gaps
+ * interpolated instead).
  */
 export function elevationSourceText(
   run: Pick<Run, 'elevationSource'> & { readonly track: Pick<RunTrack, 'partialEle'> },
@@ -138,6 +141,7 @@ export function elevationSourceText(
   if (run.elevationSource === 'gpx') return null;
   if (run.elevationSource === 'terrain') return TERRAIN_ELEVATION_TEXT;
   if (run.elevationSource === 'mixed') return MIXED_ELEVATION_TEXT;
+  if (run.elevationSource === 'interpolated') return INTERPOLATED_GAPS_TEXT;
   const gaps = run.track.partialEle != null;
   if (terrainStatus === 'error') return gaps ? MISSING_GAPS_TEXT : MISSING_ELEVATION_TEXT;
   return gaps ? PENDING_GAPS_TEXT : PENDING_ELEVATION_TEXT;

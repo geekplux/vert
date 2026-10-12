@@ -15,9 +15,11 @@ import type { Heightfield } from '../terrain/heightfield';
 
 /**
  * Where a run's elevations come from: the GPX's `<ele>`, sampled from the terrain grid (the file
- * has none, or none usable), or both (the terrain filled the file's long gaps).
+ * has none, or none usable), or both (the terrain filled the file's long gaps); or the GPX's
+ * `<ele>` with its long gaps drawn as straight lines because the terrain could not load
+ * (`interpolated`).
  */
-export type ElevationSource = 'gpx' | 'terrain' | 'mixed';
+export type ElevationSource = 'gpx' | 'terrain' | 'mixed' | 'interpolated';
 
 /** One point of the elevation profile: distance from the start and elevation, both in metres. */
 export interface ProfilePoint {

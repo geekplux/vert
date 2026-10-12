@@ -23,3 +23,6 @@ docs/verify/
 .env
 .env.*
 .DS_Store
+
+# sample generator cache (OSM + elevation tiles)
+scripts/.cache/

@@ -13,6 +13,7 @@
  * stitching, PNG / PDF, the browser download) and `defaultExporter` below points at it instead of
  * `simulateExport`. That is the only change outside the new module.
  */
+import { ExportError } from '../../poster/export/errors';
 import { posterSizeById } from '../../poster/sizes';
 import type { PosterSize } from '../../poster/sizes';
 import { posterContentFromRun } from '../../poster/types';
@@ -60,10 +61,11 @@ export type Exporter = (
   signal: AbortSignal,
 ) => Promise<ExportResult>;
 
-/** A failure whose message is fit to show the user (any other rejection shows a generic one). */
-export class ExportError extends Error {
-  override name = 'ExportError';
-}
+/**
+ * A failure whose message is fit to show the user (any other rejection shows a generic one).
+ * Defined with the export engine (`src/poster/export/errors.ts`), which must not import page code.
+ */
+export { ExportError };
 
 export const GENERIC_EXPORT_ERROR = 'The export failed. Try again.';
 

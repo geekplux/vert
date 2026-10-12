@@ -76,6 +76,11 @@ everything.
 - **ElevationProfile**: climbs shaded `--surface`, the steepest one `--surface-strong`; the scrub
   is an ARIA `slider` (`aria-valuetext` like "km 12.2, 640 m"); arrow keys ±1%, Shift+arrow ±10%,
   Home/End to the ends; pointer drag scrubs. km ticks under it: "0 km", round steps, total.
+  Ticks are placed by distance (the canvas spaces them evenly; the spec says by distance); an
+  interior tick within 10% of the total, or overlapping an end label, is dropped. Each climb band
+  carries its number in its top-left corner (clear of the scrub line); the steepest band's number
+  is `--ink` because `--muted` on `--surface-strong` is 4.20:1. Readouts come from the data, not the
+  canvas copy (its "640 m at km 12.2" doesn't match its own curve).
 - **Marker**: renders an inline `<svg>` (default 18px). With `label` it is `role="img"` +
   `aria-label`; without, `aria-hidden`. Shapes per spec; never told apart by color alone.
 - **Wordmark**: "VERT" 30/800/62%, `letter-spacing: 0.04em`; optional tagline per the type

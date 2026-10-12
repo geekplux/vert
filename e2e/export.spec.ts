@@ -180,7 +180,7 @@ test('style A: 18 × 24 PNG and PDF and the 4 : 5 PNG, with terrain and text; no
 
   await test.step('18 × 24 PNG', async () => {
     const { name, bytes } = await download(page, pngButton(page));
-    expect(name).toBe('vert-coosa-backcountry-trail-18x24.png');
+    expect(name).toBe('vert-coosa-backcountry-trail-trail-sign-18x24.png');
     const info = pngInfo(bytes);
     expect([info.width, info.height]).toEqual([5400, 7200]);
     expect(info.phys).toEqual({ x: DPI_300, y: DPI_300, unit: 1 });
@@ -199,7 +199,7 @@ test('style A: 18 × 24 PNG and PDF and the 4 : 5 PNG, with terrain and text; no
 
   await test.step('18 × 24 PDF', async () => {
     const { name, bytes } = await download(page, pdfButton(page));
-    expect(name).toBe('vert-coosa-backcountry-trail-18x24.pdf');
+    expect(name).toBe('vert-coosa-backcountry-trail-trail-sign-18x24.pdf');
     const pdf = pdfSummary(bytes);
     expect(pdf.header).toBe('%PDF-');
     expect(pdf.pageCount).toBe(1);
@@ -213,7 +213,7 @@ test('style A: 18 × 24 PNG and PDF and the 4 : 5 PNG, with terrain and text; no
     await chooseSize(page, /^4 : 5/);
     await previewReady(page, 'terrain');
     const { name, bytes } = await download(page, pngButton(page));
-    expect(name).toBe('vert-coosa-backcountry-trail-4x5.png');
+    expect(name).toBe('vert-coosa-backcountry-trail-trail-sign-4x5.png');
     const info = pngInfo(bytes);
     expect([info.width, info.height]).toEqual([1080, 1350]);
     expect(info.phys).toBeNull();
@@ -236,7 +236,8 @@ test('styles B and E: 18 × 24 PNGs with their figures drawn', async ({ page, ba
   await test.step('B · Night Ridge', async () => {
     await chooseStyle(page, 'B Night Ridge');
     await previewReady(page, 'ridges');
-    const { bytes } = await download(page, pngButton(page));
+    const { name, bytes } = await download(page, pngButton(page));
+    expect(name).toBe('vert-coosa-backcountry-trail-night-ridge-18x24.png');
     const info = pngInfo(bytes);
     expect([info.width, info.height]).toEqual([5400, 7200]);
     expect(info.phys).toEqual({ x: DPI_300, y: DPI_300, unit: 1 });
@@ -258,7 +259,8 @@ test('styles B and E: 18 × 24 PNGs with their figures drawn', async ({ page, ba
   await test.step('E · Survey Quad', async () => {
     await chooseStyle(page, 'E Survey Quad');
     await previewReady(page, 'contours');
-    const { bytes } = await download(page, pngButton(page));
+    const { name, bytes } = await download(page, pngButton(page));
+    expect(name).toBe('vert-coosa-backcountry-trail-survey-quad-18x24.png');
     const info = pngInfo(bytes);
     expect([info.width, info.height]).toEqual([5400, 7200]);
     const pixels = decodePng(bytes);
@@ -422,7 +424,7 @@ test('a one-time canvas failure can be retried, and every progress label is pain
     (window as unknown as { vertPainted: string[] }).vertPainted.length = 0;
   });
   const { name } = await download(page, pngButton(page));
-  expect(name).toBe('vert-coosa-backcountry-trail-18x24.png');
+  expect(name).toBe('vert-coosa-backcountry-trail-trail-sign-18x24.png');
   const painted = await page.evaluate(
     () => (window as unknown as { vertPainted: string[] }).vertPainted,
   );

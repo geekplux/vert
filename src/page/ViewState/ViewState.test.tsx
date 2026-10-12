@@ -79,8 +79,8 @@ describe('ViewState', () => {
     expect(within(aside()).getByRole('heading', { level: 1, name: ROUTE })).toBeDefined();
     expect(stats()).toEqual([
       'Distance: 21.5 km',
-      'Vert: +1,092 m',
-      'Moving time: 3:04:53',
+      'Vert: +1,102 m',
+      'Moving time: 3:04:58',
       'High point: 1,267 m',
     ]);
     expect(climbRows()).toEqual([
@@ -116,8 +116,8 @@ describe('ViewState', () => {
 
     expect(within(main()).getByRole('heading', { name: 'Elevation · 616–1,267 m' })).toBeDefined();
     // Default scrub: the steepest climb's midpoint, km 12.2; pace from the track's timestamps.
-    expect(readout()).toBe('km 12.2 · 898 m · grade 24% · 8:36 /km');
-    expect(profile().getAttribute('aria-valuetext')).toBe('km 12.2, 898 m, grade 24%, 8:36 /km');
+    expect(readout()).toBe('km 12.2 · 898 m · grade 24% · 8:37 /km');
+    expect(profile().getAttribute('aria-valuetext')).toBe('km 12.2, 898 m, grade 24%, 8:37 /km');
   });
 
   it('leaves the SAMPLE DATA tag off a run from the user’s own file', () => {
@@ -153,12 +153,13 @@ describe('ViewState', () => {
     expect(within(aside()).getByText('SAMPLE DATA').closest('p')?.textContent).toBe('SAMPLE DATA');
   });
 
-  it('shows "–" for the elevation figures of a file without elevations', () => {
+  it('shows "–" and no ▲ for a file without elevations until the terrain supplies them', () => {
     renderView(
       {},
       {
         ...SAMPLE_RUN,
         hasElevation: false,
+        elevationSource: null,
         vert: Number.NaN,
         descent: Number.NaN,
         highPoint: Number.NaN,
@@ -169,6 +170,24 @@ describe('ViewState', () => {
     );
     expect(stats()).toEqual(expect.arrayContaining(['Vert: –', 'High point: –']));
     expect(within(main()).getByRole('heading', { name: 'Elevation · –' })).toBeDefined();
+    expect(within(aside()).getByRole('status').textContent).toBe(
+      'This file has no usable elevation. Reading it from the terrain…',
+    );
+    expect(within(main()).queryByText(/Summit/)).toBeNull();
+  });
+
+  it('says in plain words when the elevations come from the terrain', () => {
+    renderView({}, { ...SAMPLE_RUN, elevationSource: 'terrain' });
+    expect(within(aside()).getByRole('status').textContent).toBe(
+      'Elevation from terrain data. This file has no usable elevation.',
+    );
+    expect(stats()).toContain('Vert: +1,102 m');
+  });
+
+  it('draws no summit in the legend for a flat run, and says nothing about the source', () => {
+    renderView({}, { ...SAMPLE_RUN, highPoint: 1.2, lowPoint: 0.3 });
+    expect(within(main()).queryByText(/Summit/)).toBeNull();
+    expect(within(aside()).queryByRole('status')).toBeNull();
   });
 
   it('lists climbs as an ordered list and marks the steepest in words, not only shading', () => {
@@ -205,8 +224,8 @@ describe('ViewState', () => {
 
     expect(stats()).toEqual([
       'Distance: 13.3 mi',
-      'Vert: +3,583 ft',
-      'Moving time: 3:04:53',
+      'Vert: +3,615 ft',
+      'Moving time: 3:04:58',
       'High point: 4,157 ft',
     ]);
     expect(climbRows()).toEqual([
@@ -232,7 +251,7 @@ describe('ViewState', () => {
   it('updates the scrub readout from the profile’s keyboard input', () => {
     renderView();
     fireEvent.keyDown(profile(), { key: 'Home' });
-    expect(readout()).toBe('km 0.0 · 709 m · grade 1% · 8:36 /km');
+    expect(readout()).toBe('km 0.0 · 709 m · grade 1% · 8:37 /km');
     fireEvent.keyDown(profile(), { key: 'End' });
     expect(readout()).toMatch(/^km 21\.5 · 709 m · grade /);
     fireEvent.keyDown(profile(), { key: 'Home' });

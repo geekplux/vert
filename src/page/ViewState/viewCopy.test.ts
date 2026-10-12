@@ -4,10 +4,12 @@ import {
   defaultScrub,
   elevationAt,
   elevationRangeText,
+  elevationSourceText,
   gradeAt,
   isLoop,
   LOOP_DISTANCE_M,
   readoutParts,
+  summitText,
   terrainLabel,
 } from './viewCopy';
 import { LOOP_DISTANCE_M as MARKERS_LOOP_DISTANCE_M } from '../../terrain/markers';
@@ -92,6 +94,57 @@ describe('viewCopy', () => {
     ]);
     expect(terrainLabel({ ...SAMPLE_RUN, track }, 'imperial')).toBe(
       '3D terrain of Coosa Backcountry Trail: 13.3 mi from start to finish, start marked with a circle, finish with a dotted circle, summit 4,157 ft marked with a triangle',
+    );
+  });
+});
+
+describe('summit and elevation source', () => {
+  const flat = { ...SAMPLE_RUN, highPoint: 1.2, lowPoint: 0.4 };
+  const unknown = {
+    ...SAMPLE_RUN,
+    hasElevation: false,
+    elevationSource: null,
+    highPoint: NaN,
+    lowPoint: NaN,
+  };
+
+  it('names a summit only when it stands 10 m or more above the low point', () => {
+    expect(summitText(SAMPLE_RUN, 'metric')).toBe('Summit 1,267 m');
+    expect(summitText(flat, 'metric')).toBeNull();
+    expect(summitText(unknown, 'metric')).toBeNull();
+    expect(summitText({ ...SAMPLE_RUN, highPoint: 626, lowPoint: 616 }, 'metric')).toBe(
+      'Summit 626 m',
+    );
+  });
+
+  it('leaves the summit out of the terrain label when there is none', () => {
+    expect(terrainLabel(flat, 'metric')).toBe(
+      '3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and finish marked with a circle',
+    );
+    expect(terrainLabel(unknown, 'metric')).not.toContain('summit');
+  });
+
+  it('says where the elevations come from, in plain words', () => {
+    const none = { track: { partialEle: null } };
+    const gaps = { track: { partialEle: Float64Array.from([600, NaN, NaN]) } };
+    expect(elevationSourceText(SAMPLE_RUN, 'ready')).toBeNull();
+    expect(elevationSourceText({ ...none, elevationSource: 'terrain' }, 'ready')).toBe(
+      'Elevation from terrain data. This file has no usable elevation.',
+    );
+    expect(elevationSourceText({ ...gaps, elevationSource: 'mixed' }, 'ready')).toBe(
+      'Elevation partly from terrain data, where this file has gaps.',
+    );
+    expect(elevationSourceText({ ...none, elevationSource: null }, 'loading')).toBe(
+      'This file has no usable elevation. Reading it from the terrain…',
+    );
+    expect(elevationSourceText({ ...none, elevationSource: null }, 'error')).toBe(
+      "This file has no usable elevation, and the terrain couldn't load.",
+    );
+    expect(elevationSourceText({ ...gaps, elevationSource: null }, 'loading')).toBe(
+      "This file's elevation has gaps. Filling them from the terrain…",
+    );
+    expect(elevationSourceText({ ...gaps, elevationSource: null }, 'error')).toBe(
+      "This file's elevation has gaps, and the terrain couldn't load to fill them.",
     );
   });
 });

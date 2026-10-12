@@ -2,27 +2,35 @@
  * PLACEHOLDER DATA, for tests and stories that need a run without a worker or a fetch. The app
  * itself loads the real sample (`public/samples/coosa-backcountry.gpx`) through `src/gpx/loadRun`.
  *
- * The totals are the real sample's (DECISIONS: the Coosa Backcountry Trail loop): 21,480 m,
- * +1,092 m, 3:04:53 moving, 616–1,267 m, starting 2026-10-03T11:10:00Z at lon −83.926. The profile
+ * The totals are the real sample's as the app computes them (DECISIONS: the Coosa Backcountry
+ * Trail loop; `SAMPLE_TOTALS`, which `sample.test.ts` checks against the parsed GPX): 21,480 m,
+ * +1,102 m, 3:04:58 moving, 616–1,267 m, starting 2026-10-03T11:10:00Z at lon −83.926. The profile
  * is synthetic: smooth, a loop (ends where it starts), with three climbs placed as in the canvas's
  * View frame and scaled so its range is exactly 616–1,267 m and its ascent exactly the run's vert.
  */
 import type { Climb, ProfilePoint, Run, RunTrack } from './types';
 
+/**
+ * The real sample's distance (m, to 10 m), vert (m) and moving time (s), as `computeStats` gives
+ * them for `public/samples/coosa-backcountry.gpx`: what the View shows once the sample loads.
+ * `sample.test.ts` parses the file and fails if these drift (regenerated sample, new stats rules).
+ */
+export const SAMPLE_TOTALS = { distance: 21_480, vert: 1_102, movingTime: 11_098 } as const;
+
 /** Points in the placeholder profile. */
 export const SAMPLE_PROFILE_POINTS = 500;
 
-const DISTANCE = 21_480;
+const DISTANCE = SAMPLE_TOTALS.distance;
 
 /**
  * Profile anchors (distance m, elevation m). Between anchors the elevation follows an even blend of
  * a straight line and a half cosine: eased at the anchors, steepest mid-way at 1.29× the average
  * grade, and monotonic, so every rise between anchors is ascent and the anchors are the extremes.
- * Ascent: 20 + 9 + 230 + 12 + 564 + 257 = 1,092 m; descent the same (it is a loop).
+ * Ascent: 30 + 9 + 230 + 12 + 564 + 257 = 1,102 m; descent the same (it is a loop).
  */
 const ANCHORS: readonly (readonly [number, number])[] = [
   [0, 709],
-  [1_200, 729],
+  [1_200, 739],
   [3_000, 681],
   [4_400, 690],
   [5_600, 664], // climb 1 starts
@@ -77,7 +85,7 @@ function makeProfile(): ProfilePoint[] {
 }
 
 const START_TIME = Date.UTC(2026, 9, 3, 11, 10, 0);
-const MOVING_TIME = 11_093;
+const MOVING_TIME = SAMPLE_TOTALS.movingTime;
 const BOUNDS = { west: -83.9607, south: 34.7471, east: -83.9239, north: 34.7938 };
 
 /**
@@ -120,9 +128,10 @@ export const SAMPLE_RUN: Run = {
   isSample: true,
   hasTime: true,
   hasElevation: true,
+  elevationSource: 'gpx',
   distance: DISTANCE,
-  vert: 1_092,
-  descent: 1_092,
+  vert: SAMPLE_TOTALS.vert,
+  descent: SAMPLE_TOTALS.vert,
   movingTime: MOVING_TIME,
   elapsedTime: 11_244,
   highPoint: 1_267,

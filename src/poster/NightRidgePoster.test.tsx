@@ -83,7 +83,7 @@ describe('NightRidgePoster', () => {
   it('is one image named by the poster summary; the drawn text is hidden', () => {
     const { root } = renderPoster('18x24');
     expect(root.getAttribute('aria-label')).toBe(
-      `Poster: ${NAME}, SAT · 2026-10-03. Distance 21.5 km, vert +1,092 m, time 3:04:53, high point 1,267 m. Sample data. Start 05:42. Sunrise 07:31 at km 14.8. Elevation ×2.4.`,
+      `Poster: ${NAME}, SAT · 2026-10-03. Distance 21.5 km, vert +1,102 m, time 3:04:58, high point 1,267 m. Sample data. Start 05:42. Sunrise 07:31 at km 14.8. Elevation ×2.4.`,
     );
     expect(root.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
     expect(root.dataset.style).toBe('B');
@@ -114,9 +114,9 @@ describe('NightRidgePoster', () => {
     expect(slot('header')?.textContent).toBe('VERT');
     expect(slot('eyebrow')?.textContent).toBe('05:42 START · SAT · 2026-10-03 · SAMPLE DATA');
     expect(slot('title')?.textContent).toBe(NAME);
-    expect(slot('vert')?.textContent).toBe('+1,092 m');
+    expect(slot('vert')?.textContent).toBe('+1,102 m');
     expect(slot('stats')?.textContent).toBe(
-      '21.5 km · 3:04:53high point 1,267 m · sunrise at km 14.8',
+      '21.5 km · 3:04:58high point 1,267 m · sunrise at km 14.8',
     );
     expect(slot('sunrise')?.textContent).toBe('SUNRISE 07:31 · KM 14.8');
     expect(slot('profile')?.textContent).toBe('0 KMSUNRISE 07:31 · KM 14.821.5 KM');
@@ -212,7 +212,7 @@ describe('NightRidgePoster', () => {
     expect(slot('sunrise')).toBeNull();
     expect(slot('profile')?.querySelector('[data-marker="sunrise"]')).toBeNull();
     expect(slot('eyebrow')?.textContent).toBe('SAT · 2026-10-03 · SAMPLE DATA');
-    expect(slot('stats')?.textContent).toBe('21.5 km · 3:04:53high point 1,267 m');
+    expect(slot('stats')?.textContent).toBe('21.5 km · 3:04:58high point 1,267 m');
   });
 
   it('shows the fallback figure until the ridges are built', () => {
@@ -224,12 +224,82 @@ describe('NightRidgePoster', () => {
     expect(slot('figure')?.querySelector('svg')).toBeNull();
   });
 
-  it('leaves out the stats that are switched off', () => {
+  it('leaves out the stats that are switched off; the distance is the hero without the vert', () => {
     const { slot } = renderPoster('18x24', {
       poster: { stats: { distance: true, vert: false, time: false, highPoint: false } },
     });
+    expect(slot('vert')?.textContent).toBe('21.5 km');
+    expect(slot('vert')?.getAttribute('data-hero')).toBe('distance');
+    expect(slot('stats')?.textContent).toBe('sunrise at km 14.8');
+  });
+
+  describe('a run without elevation (no <ele>, terrain not in yet)', () => {
+    const NO_ELE = {
+      ...SAMPLE_RUN,
+      hasElevation: false,
+      elevationSource: null,
+      vert: NaN,
+      descent: NaN,
+      highPoint: NaN,
+      lowPoint: NaN,
+      profile: [],
+      climbs: [],
+      track: { ...SAMPLE_RUN.track, ele: null },
+    };
+    const renderNoEle = () => {
+      const content = posterContentFromRun(NO_ELE, {
+        ...INITIAL_PREFS,
+        poster: { ...INITIAL_PREFS.poster, stats: ALL },
+      });
+      render(
+        <NightRidgePoster content={content} size={posterSizeById('18x24')} figureData={DATA} />,
+      );
+      const root = screen.getByRole('img', { name: /^Poster: / });
+      return (name: string) => root.querySelector<HTMLElement>(`[data-slot="${name}"]`);
+    };
+
+    it('never makes "–" the hero: the distance takes its place', () => {
+      const slot = renderNoEle();
+      expect(slot('vert')?.textContent).toBe('21.5 km');
+      expect(slot('vert')?.getAttribute('data-hero')).toBe('distance');
+      expect(slot('stats')?.textContent).toBe('3:04:58sunrise at km 14.8');
+      expect(slot('stats')?.textContent).not.toContain('–');
+    });
+
+    it('ends the axis at the real distance and places the sunrise by distance', () => {
+      const slot = renderNoEle();
+      const labels = slot('profile')?.lastElementChild;
+      expect(labels?.lastElementChild?.textContent).toBe('21.5 KM');
+      const tick = slot('profile')?.querySelector('[data-marker="sunrise"]');
+      const width = 720 - 2 * 48;
+      expect(Number(tick?.getAttribute('x1'))).toBeCloseTo(
+        (14_800 / SAMPLE_RUN.distance) * width,
+        1,
+      );
+      expect(slot('profile')?.querySelector('path')).toBeNull();
+    });
+
+    it('notes terrain elevations in the footer once they are filled in', () => {
+      const content = posterContentFromRun(
+        { ...SAMPLE_RUN, elevationSource: 'terrain' },
+        { ...INITIAL_PREFS, poster: { ...INITIAL_PREFS.poster, stats: ALL } },
+      );
+      render(
+        <NightRidgePoster content={content} size={posterSizeById('18x24')} figureData={DATA} />,
+      );
+      const root = screen.getByRole('img', { name: /^Poster: / });
+      expect(root.querySelector('[data-slot="footer"]')?.textContent).toBe(
+        'ELEVATION FROM TERRAIN DATA · ELEVATION ×2.4VERT.GEEKPLUX.COM',
+      );
+      expect(root.getAttribute('aria-label')).toContain('Elevation from terrain data.');
+    });
+  });
+
+  it('has no hero when both the vert and the distance are off', () => {
+    const { slot } = renderPoster('18x24', {
+      poster: { stats: { distance: false, vert: false, time: true, highPoint: false } },
+    });
     expect(slot('vert')).toBeNull();
-    expect(slot('stats')?.textContent).toBe('21.5 kmsunrise at km 14.8');
   });
 
   it('puts the subtitle before the exaggeration in the footer', () => {
@@ -248,7 +318,7 @@ describe('NightRidgePoster', () => {
   it('names the start time and sunrise only when they were computed', () => {
     const { root } = renderPoster('18x24', { data: { ...DATA, sunrise: null, startClock: null } });
     expect(root.getAttribute('aria-label')).toBe(
-      `Poster: ${NAME}, SAT · 2026-10-03. Distance 21.5 km, vert +1,092 m, time 3:04:53, high point 1,267 m. Sample data. Elevation ×2.4.`,
+      `Poster: ${NAME}, SAT · 2026-10-03. Distance 21.5 km, vert +1,102 m, time 3:04:58, high point 1,267 m. Sample data. Elevation ×2.4.`,
     );
     expect(
       nightRidgeAriaLabel(

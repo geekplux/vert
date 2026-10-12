@@ -152,11 +152,68 @@ everything.
   28% → 4% at 600), and the heightfield samples one tile zoom finer than its 512-sample grid needs
   (CCC: z10 → z11, 6 → 12 tiles, 107 → 77 m samples from 2× finer data), capped at 32 tiles.
 
+## Flat and elevation-less runs
+
+- **Profile minimum span.** Every elevation profile (the View's ElevationProfile and the poster A
+  and B bands, all through `plotProfile`) is drawn over at least max(100 m, 1% grade over the
+  route), the run's range centred in it: a flat 10 km loop with 0.8 m of noise is a flat line
+  half-way up, a 2 km run with 23 m of climb a gentle slope. 1% rather than 2%: at 2% the CCC
+  (1,521 m of range over 99.4 km) would have been squashed. The sample, Lavaredo and the CCC draw
+  pixel-identically to before.
+- **Plotted line smoothing.** Only when the drawn span is under 300 m (a metre is then ≥ 0.5 px at
+  140 px): a centred moving average over ±(4 m / span) of the points (at most ±5%), ends kept.
+  Removes the whole-metre stairs of watch and course files. Stats, readouts, climbs and ticks keep
+  the real values; the scrub dot sits on the drawn line, its readout gives the real elevation.
+- **No usable `<ele>`: elevations from the terrain.** A file has no usable elevation when no point
+  has an `<ele>`, or every `<ele>` is the same value (all 0, a fixed altitude, or a lone `<ele>` on
+  a longer route). When the terrain grid is ready, `RunProvider` samples it along the track
+  (bilinear, the same DEM the View draws), applies the same median filter and rules as a file's own
+  elevations (`elevationStats`) and serves the run with profile, vert, high/low point, climbs and
+  `track.ele` filled and `elevationSource: 'terrain'`, in the same render that reports the terrain
+  ready. O(n) on the main thread; the run's id is unchanged.
+- **Gaps in `<ele>`.** A gap without `<ele>` spanning under 200 m (measured between the recorded
+  points around it, or from the route's start or end) is interpolated as before: a straight line
+  over 200 m can hide a 20–40 m bump, under it the line is within a recorder's own noise, and
+  every-tenth-point files (≈ 40 m gaps, the sample stays +1,092 m) stay GPX-based. Longer gaps are
+  left for the terrain (`track.partialEle`, `NaN` there): only those points are sampled, shifted to
+  meet the recorded values on either side (the offset blends linearly by distance across the gap;
+  one side at the route's ends), so a recorder reading 30 m above the DEM adds no step or false
+  climb. `elevationSource: 'mixed'`, or `'terrain'` when the file's own values cover under 5% of
+  the points (they are then ignored). Measured in the browser on the sample (+1,102 m with all its
+  `<ele>`): second half removed +1,122 m, mixed (was +698); a lone first `<ele>` or all-zero
+  `<ele>` +1,176 m, terrain (was flat / 0 m); every tenth point +1,092 m, GPX.
+- **Copy.** Until the terrain loads, or if it fails, every elevation figure stays "–" and no ▲ is
+  drawn (gaps included: half a profile would mislead). The aside says why under the stats, in a
+  polite status region: "This file has no usable elevation. Reading it from the terrain…" / "…, and
+  the terrain couldn't load."; with gaps "This file's elevation has gaps. Filling them from the
+  terrain…" / "…, and the terrain couldn't load to fill them."; once filled "Elevation from terrain
+  data. This file has no usable elevation." or "Elevation partly from terrain data, where this
+  file has gaps."
+- **The route is built once** when the track changes in the render that brings the heightfield
+  (terrain elevations): `TerrainView` hands the current track to `stage.show()`, which takes it
+  before building the route, and the `setTrack` effect after it finds nothing to do.
+- **Posters without elevation** leave vert and high point out (as they leave out time without
+  timestamps), so nothing prints "–". Night Ridge's hero is the vert, else the distance (whether the
+  vert is switched off or unknown), and the distance then leaves the line under it; its profile
+  axis ends at the run's distance and the sunrise tick is placed by distance even with no profile.
+  Terrain-sampled elevations add "ELEVATION FROM TERRAIN DATA" ("ELEVATION PARTLY FROM TERRAIN
+  DATA" for gaps) to the A (print) and B footers and "Elevation [partly] from terrain data." to
+  every poster's accessible name; the share card and Survey Quad have no natural slot and say it
+  only in the name.
+- **Summit threshold.** A ▲ summit (terrain marker, legend entry, terrain label) only when the high
+  point stands ≥ 10 m above the route's lowest point (`hasSummit`, `src/lib/summit.ts`), the same
+  rule in the View, poster A's figure and the legend. Unknown elevation: no summit.
+- **Sample chip.** The Upload chip reads `SAMPLE_TOTALS` (21,480 m, +1,102 m, 3:04:58), the loaded
+  sample's own figures; a test parses `coosa-backcountry.gpx` with the worker's handler and fails if
+  they drift. The placeholder `SAMPLE_RUN` (tests and stories) carries the same totals.
+
 ## Export
 
 - Exports reuse the preview's height grids (the View's grid, or the figure loader's cache by
   bounds), so a download normally fetches no tiles and draws exactly what the preview shows.
-- File names: `vert-<title slug>-<size>.<ext>`. Latin letters lose their accents and the ones
+- File names: `vert-<title slug>-<style>-<size>.<ext>`, the style as `trail-sign`, `night-ridge`
+  or `survey-quad`, so A, B and E downloads of one run never share a name (the 200-byte cap cuts
+  the title, never the style or size). Latin letters lose their accents and the ones
   without a decomposition are transliterated (ł→l, ø→o, đ/ð→d, æ→ae, œ→oe, ß→ss, þ→th, ı→i,
   ŋ→n, ħ→h, ŧ→t, ĸ→k, capitals too); every other script is kept as written, marks included
   (NFC), so Japanese voiced kana and Indic vowel signs survive. Invisible leftovers are dropped:

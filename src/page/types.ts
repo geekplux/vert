@@ -6,10 +6,18 @@
  *
  * Missing data: a GPX may have no timestamps (a planned route) or no elevations. The quantities
  * that need them are then `NaN` rather than `null`, so every formatter in `lib/format.ts` shows
- * "–" for them without a special case; `hasTime` and `hasElevation` say which is which.
+ * "–" for them without a special case; `hasTime` and `hasElevation` say which is which. A run
+ * without elevations gets them from the terrain once it loads (`withTerrainElevation`,
+ * `elevationSource: 'terrain'`).
  */
 import type { Bounds, TileCoord } from '../lib/geo';
 import type { Heightfield } from '../terrain/heightfield';
+
+/**
+ * Where a run's elevations come from: the GPX's `<ele>`, sampled from the terrain grid (the file
+ * has none, or none usable), or both (the terrain filled the file's long gaps).
+ */
+export type ElevationSource = 'gpx' | 'terrain' | 'mixed';
 
 /** One point of the elevation profile: distance from the start and elevation, both in metres. */
 export interface ProfilePoint {
@@ -45,9 +53,15 @@ export interface RunTrack {
   readonly lon: Float64Array;
   /**
    * Elevation, metres, as the stats use it: gaps filled along the route and a 3-point median
-   * filter applied. `null` when the file has no elevations (the terrain supplies them).
+   * filter applied. `null` when the file has no elevations, until the terrain supplies them.
    */
   readonly ele: Float64Array | null;
+  /**
+   * The file's usable elevations when long gaps in them wait for the terrain: unfiltered, `NaN`
+   * where the terrain must fill (`recordedElevation` in src/gpx/stats.ts). Absent or `null` when
+   * the file's elevations are complete or unusable.
+   */
+  readonly partialEle?: Float64Array | null;
   /** Distance from the start, metres; non-decreasing, the last entry is `Run.distance`. */
   readonly cumulative: Float64Array;
   /** Timestamp, ms since the Unix epoch, gaps filled along the route; `null` without times. */
@@ -73,8 +87,13 @@ export interface Run {
   readonly distance: number;
   /** Whether the points carry timestamps; when false, time quantities are `NaN`. */
   readonly hasTime: boolean;
-  /** Whether the points carry elevations; when false, elevation quantities are `NaN`. */
+  /**
+   * Whether the elevation figures are known (from the file or the terrain); when false, elevation
+   * quantities are `NaN`, the profile and climbs are empty and `track.ele` is `null`.
+   */
   readonly hasElevation: boolean;
+  /** Where the elevations come from; `null` while unknown (no `<ele>`, terrain not loaded). */
+  readonly elevationSource: ElevationSource | null;
   /** Total ascent, metres (2 m hysteresis on the median-filtered elevations). */
   readonly vert: number;
   /** Total descent, metres, positive. */

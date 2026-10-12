@@ -8,7 +8,8 @@
  * - finish (only when the route does not end within {@link LOOP_DISTANCE_M} of its start): the
  *   start circle with a solid ink dot in the middle (◉), so it never reads as a second start;
  *   a loop gets one ○ ("Start / finish" in the legend);
- * - summit: solid ink triangle with a 2.5 px white edge, its centroid on the highest point;
+ * - summit: solid ink triangle with a 2.5 px white edge, its centroid on the highest point (only
+ *   when that stands 10 m or more above the lowest, `hasSummit`);
  * - scrub: route-coloured dot with a 3 px white ring and a 1 px ink hairline outside it (the
  *   hairline keeps the white ring visible over the route's white halo).
  *
@@ -27,6 +28,7 @@
  */
 import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
 import { haversine } from '../lib/geo';
+import { hasSummit } from '../lib/summit';
 import { sampleBilinear } from '../lib/terrarium';
 import type { RunTrack } from '../page/types';
 import { elevationAt, type Heightfield } from './heightfield';
@@ -85,13 +87,15 @@ export interface RouteMarkerIndices {
   readonly start: number;
   /** Null for a loop (the start marker stands for both). */
   readonly finish: number | null;
-  readonly summit: number;
+  /** Null when the high point is no summit (`hasSummit`: under 10 m above the lowest point). */
+  readonly summit: number | null;
 }
 
 /**
  * Where the markers go: start at the first point, finish at the last unless the route is a loop,
  * summit at the highest point (the track's elevations as the stats use them, so it matches the
- * high point shown in the aside; the terrain's elevations when the file has none).
+ * high point shown in the aside; the terrain's elevations when the file has none), and only when
+ * it stands out (`hasSummit`, the same rule as the legend and the posters).
  */
 export function routeMarkerIndices(
   track: Pick<RunTrack, 'lat' | 'lon' | 'ele'>,
@@ -111,14 +115,20 @@ export function routeMarkerIndices(
   };
   let summit = 0;
   let highest = -Infinity;
+  let lowest = Infinity;
   for (let i = 0; i < n; i++) {
     const e = elevation(i);
     if (e > highest) {
       highest = e;
       summit = i;
     }
+    if (e < lowest) lowest = e;
   }
-  return { start: 0, finish: n > 1 && gap > LOOP_DISTANCE_M ? last : null, summit };
+  return {
+    start: 0,
+    finish: n > 1 && gap > LOOP_DISTANCE_M ? last : null,
+    summit: hasSummit(highest, lowest) ? summit : null,
+  };
 }
 
 /**
@@ -400,7 +410,7 @@ export function createMarkerLayer(
   };
   add('start', indices.start);
   if (indices.finish !== null) add('finish', indices.finish);
-  add('summit', indices.summit);
+  if (indices.summit !== null) add('summit', indices.summit);
   const scrub = add('scrub', null);
   scrub.sprite.visible = false;
 

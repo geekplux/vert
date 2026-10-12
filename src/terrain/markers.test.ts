@@ -104,6 +104,35 @@ describe('routeMarkerIndices', () => {
     ]);
     expect(routeMarkerIndices(track, hf).summit).toBe(1);
   });
+
+  it('marks no summit on a flat route (high point under 10 m above the lowest)', () => {
+    const flat = makeTrack(
+      [
+        [34.705, -83.99],
+        [34.71, -83.985],
+        [34.714, -83.972],
+        [34.712, -83.965],
+      ],
+      [0.4, 1.2, 0.9, 0.5],
+    );
+    expect(routeMarkerIndices(flat).summit).toBeNull();
+    const nine = makeTrack(
+      [
+        [34.705, -83.99],
+        [34.714, -83.972],
+      ],
+      [500, 509.9],
+    );
+    expect(routeMarkerIndices(nine).summit).toBeNull();
+    const ten = makeTrack(
+      [
+        [34.705, -83.99],
+        [34.714, -83.972],
+      ],
+      [500, 510],
+    );
+    expect(routeMarkerIndices(ten).summit).toBe(1);
+  });
 });
 
 describe('drawMarker', () => {
@@ -155,6 +184,22 @@ describe('markerExtent', () => {
 });
 
 describe('createMarkerLayer', () => {
+  it('draws no ▲ for a flat route', () => {
+    const flat = makeTrack(
+      [
+        [34.705, -83.99],
+        [34.714, -83.972],
+        [34.712, -83.965],
+      ],
+      [1, 2, 1],
+    );
+    const layer = createMarkerLayer(hills(), flat, { exaggeration: 1 });
+    expect(layer.indices.summit).toBeNull();
+    expect(layer.sprite('summit')).toBeNull();
+    expect(layer.fixedMarkers().map((m) => m.kind)).toEqual(['start', 'finish']);
+    layer.dispose();
+  });
+
   it('places start and summit on the terrain, one circle for a loop', () => {
     const hf = hills();
     const layer = createMarkerLayer(hf, LOOP, { exaggeration: 1 });

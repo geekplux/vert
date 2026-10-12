@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { scaleProfile } from '../components/ElevationProfile/profileGeometry';
+import { plotProfile } from '../components/ElevationProfile/profileGeometry';
 import { formatDistance, formatNumber } from '../lib/format';
 import type { Units } from '../lib/format';
 import type { ProfilePoint } from '../page/types';
@@ -113,7 +113,13 @@ export function NightRidgePoster({
   ]
     .filter(Boolean)
     .join(' · ');
-  const line1 = [stats.distance?.text, stats.time].filter(Boolean).join(' · ');
+  // The hero is the vert; without it (switched off, or the elevation unknown) the distance, so the
+  // hero is never "–". The distance then leaves the line under it.
+  const hero = stats.vert?.text ?? stats.distance?.text ?? null;
+  const heroIsDistance = !stats.vert && hero !== null;
+  const line1 = [heroIsDistance ? undefined : stats.distance?.text, stats.time]
+    .filter(Boolean)
+    .join(' · ');
   const line2 = [
     stats.highPoint ? `high point ${stats.highPoint.text}` : '',
     sunrise ? `sunrise at ${distanceLabel(sunrise.distance, units).toLowerCase()}` : '',
@@ -124,6 +130,7 @@ export function NightRidgePoster({
     isSample: false,
     exaggeration: ridgeExaggeration(content.exaggeration),
     subtitle: content.subtitle,
+    elevationSource: content.elevationSource,
   });
 
   const vars = {
@@ -167,9 +174,14 @@ export function NightRidgePoster({
           >
             {content.title}
           </div>
-          {stats.vert && (
-            <div className={styles.vert} data-slot="vert" data-keep-out>
-              {stats.vert.text}
+          {hero !== null && (
+            <div
+              className={styles.vert}
+              data-slot="vert"
+              data-hero={heroIsDistance ? 'distance' : 'vert'}
+              data-keep-out
+            >
+              {hero}
             </div>
           )}
           {(line1 || line2) && (
@@ -182,6 +194,7 @@ export function NightRidgePoster({
         <div className={styles.profileBlock} data-slot="profile">
           <ProfileStrip
             profile={content.profile}
+            total={content.distance}
             width={profileWidth}
             height={PROFILE_HEIGHT[kind]}
             sunrise={sunrise?.distance ?? null}
@@ -194,7 +207,7 @@ export function NightRidgePoster({
                 SUNRISE {sunrise.clock} · {distanceLabel(sunrise.distance, units)}
               </span>
             )}
-            <span>{totalLabel(content.profile, units)}</span>
+            <span>{totalLabel(content.distance, units)}</span>
           </div>
         </div>
         <div className={styles.footer} data-slot="footer">
@@ -206,9 +219,8 @@ export function NightRidgePoster({
   );
 }
 
-/** "21.5 KM": the route's length at the right end of the strip. */
-function totalLabel(profile: readonly ProfilePoint[], units: Units): string {
-  const total = profile.at(-1)?.d ?? 0;
+/** "21.5 KM": the route's length at the right end of the strip (with or without a profile). */
+function totalLabel(total: number, units: Units): string {
   const { value, unit } = formatDistance(total, units);
   return `${value} ${unit.toUpperCase()}`;
 }
@@ -391,6 +403,8 @@ function Ridges({ figure, k }: { figure: RidgeFigure; k: number }) {
 
 interface ProfileStripProps {
   profile: readonly ProfilePoint[];
+  /** The route's length, metres: the strip's x axis, also without a profile (the sunrise). */
+  total: number;
   width: number;
   height: number;
   /** Distance of the sunrise, metres, or null. */
@@ -402,20 +416,21 @@ interface ProfileStripProps {
  * The elevation strip as a line in `ridge` (canvas: 1.5 px, not filled), drawn at its real pixel
  * size so the stroke is exact, with the sunrise as a dashed vertical line in `route`.
  */
-function ProfileStrip({ profile, width, height, sunrise, k }: ProfileStripProps) {
+function ProfileStrip({ profile, total, width, height, sunrise, k }: ProfileStripProps) {
   const { line, sunriseX } = useMemo(() => {
-    const scale = scaleProfile(profile);
+    // The same minimum span and smoothing as every profile (`plotProfile`).
+    const { scale, points } = plotProfile(profile);
     const pad = sc(3, k);
     const y = (ele: number) => pad + ((scale.y(ele) - 15) / 95) * (height - 2 * pad);
-    const x = (d: number) => (scale.total > 0 ? (d / scale.total) * width : 0);
+    const x = (d: number) => (total > 0 ? Math.min(width, Math.max(0, (d / total) * width)) : 0);
     let d = '';
-    profile.forEach((point, index) => {
+    points.forEach((point, index) => {
       d += `${index === 0 ? 'M' : 'L'}${(Math.round(x(point.d) * 10) / 10).toString()},${(
         Math.round(y(point.ele) * 10) / 10
       ).toString()}`;
     });
     return { line: d, sunriseX: sunrise === null ? null : x(sunrise) };
-  }, [profile, width, height, sunrise, k]);
+  }, [profile, total, width, height, sunrise, k]);
   return (
     <svg
       className={styles.profile}

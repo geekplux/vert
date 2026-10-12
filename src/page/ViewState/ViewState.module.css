@@ -169,3 +169,17 @@
   line-height: normal;
   font-variant-numeric: tabular-nums;
 }
+
+/* A file without <ele>: the stats and the note on where their elevations come from. */
+.statsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.elevationSource {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}

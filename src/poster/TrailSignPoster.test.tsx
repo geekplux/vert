@@ -36,11 +36,63 @@ describe('TrailSignPoster', () => {
     vi.unstubAllGlobals();
   });
 
+  it('prints no "–" stat and an empty band for a run whose elevation is still unknown', () => {
+    const run = {
+      ...SAMPLE_RUN,
+      hasElevation: false,
+      elevationSource: null,
+      vert: NaN,
+      highPoint: NaN,
+      lowPoint: NaN,
+      profile: [],
+      climbs: [],
+    };
+    const content = posterContentFromRun(run, {
+      ...INITIAL_PREFS,
+      poster: { ...INITIAL_PREFS.poster, stats: ALL },
+    });
+    render(<TrailSignPoster content={content} size={posterSizeById('18x24')} figure={null} />);
+    const root = screen.getByRole('img', { name: /^Poster: / });
+    const stats = root.querySelector('[data-slot="stats"]');
+    expect(stats?.textContent).toBe('DISTANCE21.5 kmTIME3:04:58');
+    expect(stats?.textContent).not.toContain('–');
+    expect(root.querySelector('[data-slot="profile"] path')).toBeNull();
+  });
+
+  it('notes terrain elevations in the print footer', () => {
+    const content = posterContentFromRun(
+      { ...SAMPLE_RUN, isSample: false, elevationSource: 'terrain' },
+      INITIAL_PREFS,
+    );
+    render(<TrailSignPoster content={content} size={posterSizeById('18x24')} figure={null} />);
+    const root = screen.getByRole('img', { name: /^Poster: / });
+    expect(root.querySelector('[data-slot="footer"]')?.textContent).toBe(
+      'ELEVATION FROM TERRAIN DATA · ELEVATION ×1.6VERT.GEEKPLUX.COM',
+    );
+  });
+
+  it('draws a flat run as a flat band, not full-height mountains (minimum span)', () => {
+    const flat = Array.from({ length: 500 }, (_, i) => ({
+      d: (i * 10_000) / 499,
+      ele: 0.5 + 0.4 * Math.sin(i / 3),
+    }));
+    const content = posterContentFromRun({ ...SAMPLE_RUN, profile: flat }, INITIAL_PREFS);
+    render(<TrailSignPoster content={content} size={posterSizeById('18x24')} figure={null} />);
+    const root = screen.getByRole('img', { name: /^Poster: / });
+    const d = root.querySelector('[data-slot="profile"] path')?.getAttribute('d') ?? '';
+    const ys = [...d.matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)]
+      .map((m) => Number(m[2]))
+      .filter((y) => y < 120);
+    // 0.8 m over the 100 m minimum span is under one viewBox unit of the 95 drawn.
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(1);
+    expect(Math.min(...ys)).toBeGreaterThan(55);
+  });
+
   it('is one image with a summary as its name, its text hidden from assistive tech', () => {
     const { poster } = renderPoster('18x24');
     expect(poster).toHaveProperty(
       'ariaLabel',
-      `Poster: ${NAME}, SAT · 2026-10-03. Distance 21.5 km, vert +1,092 m, time 3:04:53. Sample data.`,
+      `Poster: ${NAME}, SAT · 2026-10-03. Distance 21.5 km, vert +1,102 m, time 3:04:58. Sample data.`,
     );
     const inner = poster.firstElementChild;
     expect(inner?.getAttribute('aria-hidden')).toBe('true');
@@ -80,10 +132,10 @@ describe('TrailSignPoster', () => {
       const { slot, poster, unmount } = renderPoster(size, { stats: ALL, signature: '@geekplux' });
       expect(poster.dataset.layout).toBe('social');
       expect(slot('header')?.textContent).toBe('VERTSAT · 2026-10-03');
-      expect(slot('headline')?.textContent).toBe(`+1,092 mof climbing in 21.5 km on ${NAME}`);
+      expect(slot('headline')?.textContent).toBe(`+1,102 mof climbing in 21.5 km on ${NAME}`);
       expect(slot('figure')?.querySelector('canvas')).not.toBeNull();
       expect(slot('footer')?.textContent).toBe(
-        'SAMPLE DATA · 3:04:53 · HIGH POINT 1,267 m@geekplux',
+        'SAMPLE DATA · 3:04:58 · HIGH POINT 1,267 m@geekplux',
       );
       expect(slot('stats')).toBeNull();
       expect(slot('profile') !== null).toBe(size === '9x16');
@@ -116,7 +168,7 @@ describe('TrailSignPoster', () => {
     const title = slot('title');
     expect(title?.textContent).toBe(NAME);
     expect(title?.style.fontSize).toBe(`${String(fitTitle(NAME, SHARE_TITLE).size)}px`);
-    expect(slot('headline')?.lastElementChild?.textContent).toBe('3:04:53 · High point 1,267 m');
+    expect(slot('headline')?.lastElementChild?.textContent).toBe('3:04:58 · High point 1,267 m');
     // The footer does not repeat the stats the line already shows.
     expect(slot('footer')?.textContent).toBe('SAMPLE DATA@geekplux');
     unmount();

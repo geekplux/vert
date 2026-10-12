@@ -3,8 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import type { Heightfield } from './heightfield';
 import type { StageRenderer } from './stage';
+import { createRouteLayer } from './route';
 import { makeTrack } from './testing';
 import { TerrainView, type TerrainViewHandle } from './TerrainView';
+
+// Counts route builds (each rebuild of the route also rebuilds the markers).
+vi.mock('./route', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./route')>();
+  return { ...actual, createRouteLayer: vi.fn(actual.createRouteLayer) };
+});
 
 /** jsdom has no WebGL: a renderer that records calls. */
 function fakeRenderer() {
@@ -205,6 +212,30 @@ describe('TerrainView', () => {
     expect(before && scrub?.position.equals(before)).toBe(false);
     rerender(<TerrainView ref={ref} {...props} track={null} />);
     expect(scene?.getObjectByName('route')).toBeUndefined();
+    vi.restoreAllMocks();
+  });
+
+  it('builds the route once when the track changes in the render that brings the heightfield', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const builds = vi.mocked(createRouteLayer);
+    builds.mockClear();
+    const { factory } = fakeRenderer();
+    const points: [number, number][] = [
+      [46.002, 10.002],
+      [46.005, 10.005],
+      [46.008, 10.004],
+    ];
+    // A GPX without <ele>: the track while the terrain loads, then with the terrain's elevations.
+    const unfilled = makeTrack(points);
+    const filled = makeTrack(points, [110, 125, 120]);
+    const props = { exaggeration: 1, ariaLabel: 'Terrain', createRenderer: factory };
+    const { rerender } = render(<TerrainView {...props} heightfield={null} track={unfilled} />);
+    await flushFrames();
+    expect(builds).not.toHaveBeenCalled();
+    rerender(<TerrainView {...props} heightfield={heightfield()} track={filled} />);
+    await flushFrames();
+    expect(builds).toHaveBeenCalledTimes(1);
+    expect(builds.mock.calls[0]?.[1]).toBe(filled);
     vi.restoreAllMocks();
   });
 });

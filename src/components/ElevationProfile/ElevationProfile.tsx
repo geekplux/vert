@@ -15,8 +15,8 @@ import {
   defaultValueText,
   describeClimbs,
   elevationAt,
+  plotProfile,
   profilePaths,
-  scaleProfile,
   type Climb,
   type ProfilePoint,
   type Units,
@@ -72,9 +72,11 @@ export function ElevationProfile({
   const drag = useRef<{ pointerId: number; left: number; width: number } | null>(null);
   const [widthPx, setWidthPx] = useState<number | undefined>(undefined);
 
-  // Paths depend on the points only: scrubbing never rebuilds them.
-  const scale = useMemo(() => scaleProfile(points), [points]);
-  const paths = useMemo(() => profilePaths(points, scale), [points, scale]);
+  // Paths depend on the points only: scrubbing never rebuilds them. The line is drawn from the
+  // plotted (minimum-span, smoothed) points; the value text keeps the real elevations.
+  const plot = useMemo(() => plotProfile(points), [points]);
+  const { scale } = plot;
+  const paths = useMemo(() => profilePaths(plot.points, scale), [plot, scale]);
   const { total } = scale;
 
   const bands = useMemo(
@@ -131,7 +133,9 @@ export function ElevationProfile({
   const ele = elevationAt(points, value);
   const text = valueText ? valueText(value, ele) : defaultValueText(value, ele, units);
   const scrubX = scale.x(value);
-  const dotTop = Number.isFinite(ele) ? (scale.y(ele) / VIEW_H) * height : height / 2;
+  // The dot sits on the line as drawn.
+  const drawnEle = elevationAt(plot.points, value);
+  const dotTop = Number.isFinite(drawnEle) ? (scale.y(drawnEle) / VIEW_H) * height : height / 2;
 
   const commit = (d: number) => {
     if (total <= 0) return;

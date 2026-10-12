@@ -1122,6 +1122,12 @@ export interface ShowOptions {
   camera?: ViewCamera;
   /** Called after the first frame with this heightfield has been drawn. */
   onFirstFrame?: () => void;
+  /**
+   * The route to drape, when it changes together with the heightfield (a GPX without `<ele>` gets
+   * its elevations from this very grid): taken before the route is built, so it is built once.
+   * Omitted: the track from `setTrack` stays.
+   */
+  track?: RunTrack | null;
 }
 
 const raf = (callback: FrameRequestCallback): number =>
@@ -1810,6 +1816,7 @@ export class TerrainStage {
       this.mesh = null;
     }
     this.heightfield = heightfield;
+    if (options.track !== undefined) this.track = options.track;
     this.tween = null;
     this.obliqueReturn = null;
     this.controls.enabled = true;

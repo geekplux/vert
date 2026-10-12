@@ -1,0 +1,14 @@
+pnpm-lock.yaml
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+.wrangler/
+public/fonts/
+worker/worker-configuration.d.ts
+# Plan documents are authored outside this repo; keep them byte-for-byte.
+docs/BRIEF.md
+docs/DESIGN-SPEC.md
+docs/PLAN.md
+docs/prompts/

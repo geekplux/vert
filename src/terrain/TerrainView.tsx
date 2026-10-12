@@ -1,16 +1,24 @@
 import { useEffect, useId, useImperativeHandle, useRef, type Ref } from 'react';
+import type { RunTrack } from '../page/types';
 import type { Heightfield } from './heightfield';
 import { readPalette, type TerrainPalette } from './mesh';
-import { TerrainStage, type RendererFactory, type TerrainViewMode } from './stage';
+import { readRoutePalette, type RoutePalette } from './route';
+import {
+  NO_INSETS,
+  TerrainStage,
+  type Insets,
+  type RendererFactory,
+  type TerrainViewMode,
+} from './stage';
 import styles from './TerrainView.module.css';
 
-/** Imperative controls for the page's Rotate button and, in task 3b, the route layer. */
+/** Imperative controls for the page's Rotate button, the poster export and instrumentation. */
 export interface TerrainViewHandle {
   /** Orbit by `radians` (eased; instant with reduced motion). Ignored in the flat view. */
   rotateBy: (radians: number) => void;
   /** Back to the default framing of the current view. */
   resetView: () => void;
-  /** Redraw after changing something in the scene (e.g. the route). */
+  /** Redraw after changing something in the scene (on the next animation frame). */
   requestRender: () => void;
   /** The three.js stage (scene and camera) while mounted. */
   readonly stage: TerrainStage | null;
@@ -34,6 +42,18 @@ export interface TerrainViewProps {
   createRenderer?: RendererFactory;
   /** Called after each rendered frame with the time spent in `render`, ms (instrumentation). */
   onRenderFrame?: (renderMs: number) => void;
+  /** The run's points: the route is draped on the terrain with ○ start and ▲ summit markers. */
+  track?: RunTrack | null;
+  /** Scrub position, metres along the route: moves the scrub marker (no rebuild). Null hides it. */
+  scrub?: number | null;
+  /**
+   * Room the page reserves for overlays on top of the box (legend chip, icon buttons), CSS px per
+   * side: the model is fitted inside the box minus these (plus a small gap), and never closer to
+   * an edge than the default inset.
+   */
+  insets?: Insets;
+  /** Route and marker colours; defaults to `--route`, `--white`, `--ink` read from the page. */
+  routePalette?: RoutePalette;
   ref?: Ref<TerrainViewHandle>;
 }
 
@@ -56,6 +76,10 @@ export function TerrainView({
   palette,
   createRenderer,
   onRenderFrame,
+  track = null,
+  scrub = null,
+  insets = NO_INSETS,
+  routePalette,
   ref,
 }: TerrainViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +95,7 @@ export function TerrainView({
 
   // One stage per mount: renderer, camera, controls, resize observer, key handling.
   const paletteRef = useRef(palette);
+  const routePaletteRef = useRef(routePalette);
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
@@ -78,6 +103,8 @@ export function TerrainView({
     const stage = new TerrainStage(canvas, {
       createRenderer,
       palette: paletteRef.current ?? readPalette(getComputedStyle(document.documentElement)),
+      routePalette:
+        routePaletteRef.current ?? readRoutePalette(getComputedStyle(document.documentElement)),
       onFrame: (ms) => latest.current.onRenderFrame?.(ms),
     });
     stageRef.current = stage;
@@ -128,6 +155,24 @@ export function TerrainView({
   useEffect(() => {
     stageRef.current?.setExaggeration(exaggeration);
   }, [exaggeration]);
+
+  // After the heightfield effect, so a new heightfield and track build the route once each.
+  useEffect(() => {
+    stageRef.current?.setTrack(track);
+  }, [track, createRenderer]);
+
+  useEffect(() => {
+    stageRef.current?.setScrub(scrub);
+  }, [scrub, createRenderer]);
+
+  useEffect(() => {
+    if (routePalette) stageRef.current?.setRoutePalette(routePalette);
+  }, [routePalette]);
+
+  const { top, right, bottom, left } = insets;
+  useEffect(() => {
+    stageRef.current?.setInsets({ top, right, bottom, left });
+  }, [top, right, bottom, left, createRenderer]);
 
   useEffect(() => {
     stageRef.current?.setView(view);

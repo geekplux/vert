@@ -12,10 +12,12 @@ import { decodeTerrariumImage } from '../lib/terrarium';
 import {
   HeightfieldError,
   MAX_GRID_SIZE,
+  MAX_LONG_ROUTE_TILES,
   buildHeightfield,
   chooseHeightfieldZoom,
   elevationAt,
   gridPosition,
+  groundExtent,
   type Heightfield,
 } from './heightfield';
 import {
@@ -236,6 +238,28 @@ describe('buildHeightfield', () => {
     expect(chooseZoom(half, 1)).toBeLessThan(13);
   });
 
+  it('samples a long route one zoom finer than its grid needs, then downsamples to 512', async () => {
+    // ~39 × 28 km around Chamonix (the CCC's padded box): 368 px at z10, too wide for z11's 512.
+    const ccc: Bounds = { west: 6.84, south: 45.78, east: 7.34, north: 46.03 };
+    expect(chooseHeightfieldZoom(ccc, { maxLongRouteTiles: 0 })).toBe(10);
+    expect(chooseHeightfieldZoom(ccc)).toBe(11);
+    expect(tileCount(ccc, 11)).toBeLessThanOrEqual(MAX_LONG_ROUTE_TILES);
+    // Not when the finer zoom would need more tiles than the long-route budget.
+    expect(chooseHeightfieldZoom(ccc, { maxLongRouteTiles: tileCount(ccc, 11) - 1 })).toBe(10);
+    // A short route (native fit at z12 or finer) is unchanged.
+    expect(chooseHeightfieldZoom(BOUNDS)).toBe(12);
+
+    const source = fakeSource();
+    const hf = await buildHeightfield(ccc, { padding: 0, fetchTile: source.fetchTile });
+    expect(hf.zoom).toBe(11);
+    expect(source.requested.every((tile) => tile.z === 11)).toBe(true);
+    expect(source.requested.length).toBe(tileCount(ccc, 11));
+    expect(Math.max(hf.width, hf.height)).toBe(MAX_GRID_SIZE);
+    expect(groundExtent(hf)).toBeGreaterThan(38_000);
+    expect(groundExtent(hf)).toBeLessThan(40_000);
+    expect(elevationAt(hf, 7.1, 45.9)).toBeCloseTo(surface(7.1, 45.9), 0);
+  });
+
   it('gives a single point a small area instead of an empty one', async () => {
     const point = { west: 7.45, south: 46, east: 7.45, north: 46 };
     const hf = await buildHeightfield(point, { fetchTile: fakeSource().fetchTile });
@@ -270,6 +294,8 @@ describe('buildHeightfield', () => {
     const same = (a: TileCoord, b: TileCoord) => a.x === b.x && a.y === b.y;
     const hf = await buildHeightfield(bounds, {
       maxTiles: 4,
+      // A huge area samples one zoom finer by default (a long route); keep this test to the 2×2.
+      maxLongRouteTiles: 4,
       padding: 0,
       fetchTile: (tile) => {
         if (same(tile, first)) return Promise.resolve(new Float32Array(TILE_SIZE ** 2).fill(9));

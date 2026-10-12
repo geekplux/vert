@@ -27,7 +27,12 @@ slots, and export.
   with canvas `measureText` on the real font stack; before that, and in jsdom, a fixed table of
   Archivo 800 / wdth 62% advances (East Asian wide characters at 1 em). Wide-script titles render
   in the system CJK face (Archivo has no CJK) with line-height 1 instead of 0.88, so their lines
-  do not touch.
+  do not touch. Poster A titles with diacritics (Ż, Ó, É, Å above; Ç, Ę below) are set by
+  `fitTitleSetting`: where the lines as broken (`breakLines`) put an accent under a line or a mark
+  below over one, a looser line-height (`titleLineHeight`, from each line's ink extents:
+  canvas `TextMetrics` via `useTitleFonts`, a table of Archivo's extremes in jsdom) keeps them 5 logical px apart (10 on the share card), and the size shrinks
+  until those lines fit the box height the plain fit takes, so the layout never moves; one-line and
+  Latin-only titles keep 0.88.
 - Share card without vert or distance: the title takes the big number's slot (uppercase display
   type, `SHARE_TITLE`: fitted to ≤ 3 lines from 160 px), the line under it shows the remaining
   stats or else the date, and the free height is spread evenly between the blocks.

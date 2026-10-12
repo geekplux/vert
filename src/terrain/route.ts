@@ -9,9 +9,10 @@
  * shared `uExaggeration`, so the slider never rebuilds the line.
  *
  * Three `Line2` objects share one `LineGeometry`: the halo (9 px) and the core (4 px) where the
- * route is in sight, and a faded line (2 px, 40% opacity, no halo) where the terrain hides it, so a
- * route that runs behind a ridge still reads as one line and the hidden stretches differ by width,
- * opacity and the missing halo, not by colour. Widths are CSS pixels whatever the zoom
+ * route is in sight, and a thinner line (2 px, no halo; the route colour a shade darker, at 85%)
+ * where the terrain hides it, so a route that runs behind a ridge still reads as one line and the
+ * hidden stretches differ by width and the missing halo, not by colour. It keeps ≥ 3:1 against the
+ * terrain fill (WCAG 1.4.11), so a colour-weak viewer still sees it. Widths are CSS pixels whatever the zoom
  * (`worldUnits: false`) times the layer's line scale ({@link RouteLayer.setLineScale}: 1 in the
  * View, output px per logical px in a poster figure).
  *
@@ -27,18 +28,20 @@
  * at all, and a mixed one up to its middle from the shown end (the core stops 2.5 px short of the
  * halo, so the halo closes around it). Caps take their point's verdict. The core draws after the
  * halo (render order); both read the same verdicts, so the core never shows without its halo. The
- * faded line takes the opposite verdicts (whole between two hidden points, from the hidden end to
+ * hidden line takes the opposite verdicts (whole between two hidden points, from the hidden end to
  * the middle of a mixed segment), so the two styles meet end to end and, since the clean-up keeps
  * every hidden and every shown run whole, neither leaves slivers. It is drawn before the halo,
  * blended, and each pixel once (one constant fragment depth nearer than the terrain, depth test
  * `less`), so its round joints never darken where they overlap.
  */
 import {
+  Color,
   CustomBlending,
   Group,
   LessDepth,
   OneFactor,
   OneMinusSrcAlphaFactor,
+  SRGBColorSpace,
   SrcAlphaFactor,
   Vector2,
   type Camera,
@@ -98,9 +101,31 @@ export const DEFAULT_LIFT_M = 2;
 /** Route core and halo widths, CSS px (DESIGN-SPEC §4, style A). */
 export const ROUTE_WIDTH_PX = 4;
 export const HALO_WIDTH_PX = 9;
-/** Where the terrain hides the route: a thinner, faded route-colour line with no halo, CSS px. */
+/** Where the terrain hides the route: a thinner line with no halo, CSS px. */
 export const HIDDEN_ROUTE_WIDTH_PX = 2;
-export const HIDDEN_ROUTE_OPACITY = 0.4;
+/**
+ * The hidden line is the route colour mixed this far towards the ink, drawn at
+ * {@link HIDDEN_ROUTE_OPACITY}: on the terrain fill (`#E6EAEE`) 3.5:1 in the View (`--route`) and
+ * 4.0:1 on poster A (its accent), against 1.7–1.8:1 for the route colour at 40% (DECISIONS.md
+ * "Terrain look").
+ */
+export const HIDDEN_ROUTE_INK_MIX = 0.15;
+export const HIDDEN_ROUTE_OPACITY = 0.85;
+
+/** The hidden line's colour for `palette`: the route a shade towards the ink (in sRGB), CSS hex. */
+export function hiddenRouteColour(palette: Pick<RoutePalette, 'route' | 'ink'>): string {
+  const route = new Color(palette.route).getRGB({ r: 0, g: 0, b: 0 }, SRGBColorSpace);
+  const ink = new Color(palette.ink).getRGB({ r: 0, g: 0, b: 0 }, SRGBColorSpace);
+  const k = HIDDEN_ROUTE_INK_MIX;
+  const mix = (a: number, b: number) => a + (b - a) * k;
+  const colour = new Color().setRGB(
+    mix(route.r, ink.r),
+    mix(route.g, ink.g),
+    mix(route.b, ink.b),
+    SRGBColorSpace,
+  );
+  return `#${colour.getHexString(SRGBColorSpace)}`;
+}
 /**
  * How far in front of a route point terrain must be to hide it, in pixels' worth of depth at the
  * point's distance (the line is a chord between samples and the depth texture is sampled at one
@@ -331,7 +356,7 @@ export function patchRouteShader(source: string): string {
  * caps count as the end) and draws if that lies within half the segment of the shown end, less
  * `uRouteCutInset` CSS px (the core's, so the halo's flat end closes around it; caps at the shown
  * end always draw). All fragments of a cross-section reach the same verdict, in every line. The
- * faded line (`uRouteHidden` 1) swaps shown and hidden, so it draws exactly the rest; with
+ * hidden line (`uRouteHidden` 1) swaps shown and hidden, so it draws exactly the rest; with
  * `ROUTE_FLAT_DEPTH` defined it writes one constant depth (nearer than any terrain) from the
  * fragment shader, exactly the same value everywhere, so with depth test `less` each pixel draws
  * once. (A depth set per vertex picks up rounding in the perspective divide, and joints draw twice.)
@@ -359,7 +384,7 @@ export function patchRouteFragmentShader(source: string): string {
     .replace(
       FRAGMENT_MAIN_LINE,
       [
-        '// The faded line (uRouteHidden = 1) draws what the halo and core do not.',
+        '// The hidden line (uRouteHidden = 1) draws what the halo and core do not.',
         'vec2 routeShown = uRouteHidden > 0.5 ? vec2( 1.0 ) - vRouteShown : vRouteShown;',
         'if ( routeShown.x < 0.5 || routeShown.y < 0.5 ) {',
         '  if ( routeShown.x < 0.5 && routeShown.y < 0.5 ) discard;',
@@ -449,7 +474,7 @@ export interface RouteLayer {
   readonly group: Group;
   readonly halo: Line2;
   readonly core: Line2;
-  /** The faded line where the terrain hides the route. */
+  /** The hidden line where the terrain hides the route. */
   readonly hidden: Line2;
   /** The draped samples (positions at exaggeration 1). */
   readonly samples: ResampledTrack;
@@ -473,7 +498,7 @@ export interface RouteLayer {
 }
 
 /**
- * Draw order after the terrain (0): the faded hidden line, the halo, then the core. Markers come
+ * Draw order after the terrain (0): the hidden line, the halo, then the core. Markers come
  * later (see markers.ts).
  */
 export const HIDDEN_RENDER_ORDER = 0.5;
@@ -481,7 +506,7 @@ export const HALO_RENDER_ORDER = 1;
 export const CORE_RENDER_ORDER = 2;
 
 /**
- * The route on `heightfield`: halo and core lines over the draped, resampled track, and the faded
+ * The route on `heightfield`: halo and core lines over the draped, resampled track, and the hidden
  * line where it is hidden.
  */
 export function createRouteLayer(
@@ -508,7 +533,13 @@ export function createRouteLayer(
   const widths = routeLineWidths(1);
   const haloMaterial = createRouteMaterial(palette.halo, widths.halo, 0, uniforms);
   const coreMaterial = createRouteMaterial(palette.route, widths.core, widths.coreInset, uniforms);
-  const hiddenMaterial = createRouteMaterial(palette.route, widths.hidden, 0, uniforms, true);
+  const hiddenMaterial = createRouteMaterial(
+    hiddenRouteColour(palette),
+    widths.hidden,
+    0,
+    uniforms,
+    true,
+  );
   let visibility: RouteVisibility | null = null;
   const halo = new Line2(geometry, haloMaterial);
   const core = new Line2(geometry, coreMaterial);
@@ -542,7 +573,7 @@ export function createRouteLayer(
     setPalette(next) {
       haloMaterial.color.set(next.halo);
       coreMaterial.color.set(next.route);
-      hiddenMaterial.color.set(next.route);
+      hiddenMaterial.color.set(hiddenRouteColour(next));
     },
     setResolution(width, height) {
       haloMaterial.resolution.set(width, height);

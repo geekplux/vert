@@ -35,8 +35,10 @@ import {
   placeCamera,
   ringPoints,
   setLensShift,
+  viewInset,
   type ScreenRect,
 } from './stage';
+import { LONG_ROUTE_EXTENT_M, LONG_ROUTE_POLAR } from './camera';
 import { markerExtent, type TerrainMarkerKind } from './markers';
 import { makeTrack } from './testing';
 import type { RouteLayer } from './route';
@@ -185,6 +187,22 @@ describe('fitMargins', () => {
     const margins = fitMargins(100, 80);
     expect(((1 - margins.x) / 2) * 100).toBeCloseTo(12);
     expect(((1 - margins.y) / 2) * 80).toBeCloseTo(9.6);
+  });
+
+  it('scales the View’s inset with the box’s short side, so a phone’s model is larger', () => {
+    // 390 wide: the 358 × 269 box keeps 4% of 269 px; 1440 (1059 × 720) keeps the full 16 px.
+    expect(viewInset(358, 269)).toBeCloseTo(10.76, 2);
+    expect(viewInset(1059, 720)).toBe(FIT_INSET_PX);
+    expect(viewInset(400, 400)).toBe(FIT_INSET_PX);
+    const phone = fitMargins(358, 269, undefined, viewInset(358, 269));
+    expect(((1 - phone.x) / 2) * 358).toBeCloseTo(10.76, 2);
+    expect(((1 - phone.y) / 2) * 269).toBeCloseTo(10.76, 2);
+    expect(fitMargins(358, 269).x).toBeLessThan(phone.x);
+    // The stage uses it for the View's box (and keeps 16 px in a poster figure).
+    const { stage } = makeStage();
+    stage.resize(358, 269);
+    expect((stage as unknown as { margins: unknown }).margins).toEqual(phone);
+    stage.dispose();
   });
 });
 
@@ -451,6 +469,78 @@ describe('TerrainStage camera moves', () => {
     stage.dispose();
   });
 
+  it.each([false, true])(
+    'turning Flat map off goes back to the angle and zoom it was turned on from (reduced motion %s)',
+    (reducedMotion) => {
+      const hf = hills();
+      const { stage } = makeStage();
+      stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion });
+      vi.advanceTimersByTime(2000);
+      // The user turns the model, tilts it towards the map and zooms in a little.
+      stage.rotateBy(Math.PI * 0.75);
+      vi.advanceTimersByTime(2000);
+      for (let k = 0; k < 2; k++) {
+        stage.handleKey('ArrowUp', true);
+        vi.advanceTimersByTime(16);
+      }
+      stage.handleKey('+');
+      vi.advanceTimersByTime(2000);
+      const before = stage.viewCamera();
+      expect(before.polar).toBeLessThan(DEFAULT_POLAR - 10 * DEG);
+      expect(before.zoom).toBeLessThan(1);
+
+      stage.setView('flat');
+      vi.advanceTimersByTime(2000);
+      expect(stage.viewCamera().view).toBe('flat');
+      stage.setView('oblique');
+      vi.advanceTimersByTime(2000);
+      const after = stage.viewCamera();
+      expect(after.view).toBe('oblique');
+      expect(after.azimuth).toBeCloseTo(before.azimuth, 4);
+      expect(after.polar).toBeCloseTo(before.polar, 4);
+      expect(after.zoom).toBeCloseTo(before.zoom, 4);
+      stage.dispose();
+    },
+  );
+
+  it('turning Flat map off goes to the default view when the View opened flat', () => {
+    const hf = hills();
+    const { stage } = makeStage();
+    stage.show(hf, {
+      exaggeration: 1.6,
+      view: 'flat',
+      reducedMotion: true,
+      camera: { azimuth: 0, polar: FLAT_POLAR, zoom: 1, view: 'flat' },
+    });
+    stage.setView('oblique');
+    expect(spherical(stage).phi).toBeCloseTo(DEFAULT_POLAR);
+    expect(spherical(stage).theta).toBeCloseTo(DEFAULT_AZIMUTH);
+    stage.dispose();
+  });
+
+  it(`opens a long route more top-down (${String(LONG_ROUTE_POLAR / DEG)}°), so ridges hide less of it`, () => {
+    const short = hills();
+    // The same hills spread over ~42 km (a 100 km ultra's terrain).
+    const long: Heightfield = { ...short, metresPerSample: { x: 350, y: 350 } };
+    expect(LONG_ROUTE_EXTENT_M).toBeLessThan(350 * (long.width - 1));
+    expect(LONG_ROUTE_EXTENT_M).toBeGreaterThan(30 * (short.width - 1));
+    const { stage } = makeStage();
+    stage.show(long, { exaggeration: 1.6, view: 'oblique', reducedMotion: false });
+    vi.advanceTimersByTime(2000);
+    expect(spherical(stage).phi).toBeCloseTo(LONG_ROUTE_POLAR);
+    expect(spherical(stage).theta).toBeCloseTo(DEFAULT_AZIMUTH);
+    // Reset view and Flat map off (opened oblique, so it returns to where Flat map left) agree.
+    stage.rotateBy(1);
+    vi.advanceTimersByTime(2000);
+    stage.resetView();
+    vi.advanceTimersByTime(2000);
+    expect(spherical(stage).phi).toBeCloseTo(LONG_ROUTE_POLAR);
+    // A short route keeps the canvas's 62°.
+    stage.show(short, { exaggeration: 1.6, view: 'oblique', reducedMotion: true });
+    expect(spherical(stage).phi).toBeCloseTo(DEFAULT_POLAR);
+    stage.dispose();
+  });
+
   it('turns Rotate view by exactly an eighth of a turn after arrow keys, with nothing added', () => {
     const hf = hills();
     const { stage } = makeStage();
@@ -710,7 +800,7 @@ describe('TerrainStage framing with overlays', () => {
           expect(gapTo(stage, points, width, height, rect)).toBeGreaterThanOrEqual(OVERLAY_GAP_PX);
         }
         expect(extentIn(stage, points, width, height).edge).toBeGreaterThanOrEqual(
-          Math.min(FIT_INSET_PX, 0.12 * Math.min(width, height)) - 4,
+          viewInset(width, height) - 4,
         );
         stage.rotateBy(Math.PI / 4); // reduced motion: jumps
       }
@@ -836,7 +926,7 @@ describe('TerrainStage zoom while turning', () => {
       stage.show(hf, { exaggeration: 1.6, view: 'oblique', reducedMotion: true });
       stage.controls.enableDamping = false;
       const distances: number[] = [];
-      const edge = Math.min(FIT_INSET_PX, 0.12 * Math.min(width, height)) - 4;
+      const edge = viewInset(width, height) - 4;
       for (let k = 0; k < 72; k++) {
         const s = spherical(stage);
         expect(s.phi).toBeCloseTo(DEFAULT_POLAR, 6);
@@ -1178,6 +1268,47 @@ describe('TerrainStage route and markers', () => {
         check(new Vector3(p[k], (p[k + 1] ?? 0) * 3, p[k + 2]), 'scrub');
       }
       expect(tightest).toBeGreaterThanOrEqual(FIT_INSET_PX - 0.5);
+      stage.dispose();
+    },
+  );
+
+  it.each(BOXES.map(([name, w, h, rects]) => [name, w, h, rects] as const))(
+    'keeps the ▲ summit and the ○ start 12 px clear of the legend chip and buttons (%s box)',
+    (_name, width, height, rects) => {
+      // Summit on the high hill near the north-east corner, which turns past the top-left chip.
+      const summitTrack = makeTrack(
+        [
+          [34.705, -83.995],
+          [34.712, -83.975],
+          [34.717, -83.966],
+        ],
+        [420, 700, 990],
+      );
+      const { stage } = makeStage();
+      stage.resize(width, height);
+      stage.setOverlays(rects);
+      stage.show(hills(), { exaggeration: 3, view: 'oblique', reducedMotion: true });
+      stage.setTrack(summitTrack);
+      const ndc = new Vector3();
+      let tightest = Infinity;
+      for (let k = 0; k < 16; k++) {
+        stage.camera.updateMatrixWorld();
+        for (const kind of ['start', 'finish', 'summit'] as const) {
+          const sprite = stage.scene.getObjectByName(`marker-${kind}`);
+          if (!sprite) throw new Error(`no ${kind} marker`);
+          const e = markerExtent(kind);
+          ndc.copy(sprite.position).project(stage.camera);
+          const x = ((ndc.x + 1) / 2) * width;
+          const y = ((1 - ndc.y) / 2) * height;
+          for (const r of rects) {
+            const dx = Math.max(r.x - (x + e.right), x - e.left - (r.x + r.width));
+            const dy = Math.max(r.y - (y + e.down), y - e.up - (r.y + r.height));
+            tightest = Math.min(tightest, Math.max(dx, dy));
+          }
+        }
+        stage.rotateBy(Math.PI / 8); // reduced motion: jumps
+      }
+      expect(tightest).toBeGreaterThanOrEqual(OVERLAY_GAP_PX - 0.5);
       stage.dispose();
     },
   );

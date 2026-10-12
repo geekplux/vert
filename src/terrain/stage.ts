@@ -50,10 +50,11 @@ import {
   FLAT_POLAR,
   MAX_POLAR,
   MIN_POLAR,
+  defaultPolarFor,
   normalizeAzimuth,
   type ViewCamera,
 } from './camera';
-import type { Heightfield } from './heightfield';
+import { groundExtent, type Heightfield } from './heightfield';
 import { createMarkerLayer, markerExtent, markerTextureScale, type MarkerLayer } from './markers';
 import { APP_ROUTE_PALETTE, createRouteLayer, type RouteLayer, type RoutePalette } from './route';
 import {
@@ -127,6 +128,17 @@ export const FOV = 30;
  */
 export const FIT_INSET_PX = 16;
 const FIT_INSET_MAX_FRACTION = 0.12;
+/**
+ * In the View the edge clearance also scales with the box: at most this fraction of its shorter
+ * side, so a phone's 358 × 269 box keeps 11 px instead of 16 and the model is drawn larger (from
+ * 400 px up, the full {@link FIT_INSET_PX}). Poster figures keep {@link FIT_INSET_PX}.
+ */
+export const VIEW_INSET_SHORT_FRACTION = 0.04;
+
+/** The View's edge clearance for a `width × height` box, CSS px. */
+export function viewInset(width: number, height: number): number {
+  return Math.min(FIT_INSET_PX, VIEW_INSET_SHORT_FRACTION * Math.max(1, Math.min(width, height)));
+}
 /** Zoom factor limits, relative to the fitted distance. */
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.2;
@@ -488,15 +500,20 @@ export interface FitMargins {
 }
 
 /**
- * The fit region of a `width × height` box: each side keeps the default clearance
- * ({@link FIT_INSET_PX}, or 12% of a small side), or the page's inset on that side plus
+ * The fit region of a `width × height` box: each side keeps the default clearance (`inset`,
+ * {@link FIT_INSET_PX} unless given, or 12% of a small side), or the page's inset on that side plus
  * {@link OVERLAY_GAP_PX}, whichever is larger. If the two sides of an axis would leave less than
  * 30% of it, both shrink in proportion.
  */
-export function fitMargins(width: number, height: number, insets: Insets = NO_INSETS): FitMargins {
+export function fitMargins(
+  width: number,
+  height: number,
+  insets: Insets = NO_INSETS,
+  inset: number = FIT_INSET_PX,
+): FitMargins {
   const axis = (side: number, a: number, b: number) => {
     const size = Math.max(side, 1);
-    const rule = Math.min(FIT_INSET_PX, size * FIT_INSET_MAX_FRACTION);
+    const rule = Math.min(inset, size * FIT_INSET_MAX_FRACTION);
     const clear = (inset: number) => Math.max(rule, inset > 0 ? inset + OVERLAY_GAP_PX : 0);
     let near = clear(a);
     let far = clear(b);
@@ -1141,6 +1158,10 @@ export class TerrainStage {
   private obstacles: NdcRect[] = [];
   private exaggeration = 1;
   private view: TerrainViewMode = 'oblique';
+  /** The default oblique polar angle for the current heightfield (more top-down for a long route). */
+  private defaultPolar = DEFAULT_POLAR;
+  /** The oblique pose Flat map left from, so turning it off goes back there (not the default). */
+  private obliqueReturn: ViewPose | null = null;
   private readonly target = new Vector3();
   /** The model's box (for the line fade's depth range). */
   private box = { width: 1, depth: 1, bottom: 0, top: 0 };
@@ -1740,7 +1761,9 @@ export class TerrainStage {
       return;
     }
     this.insets = { ...insets };
-    this.margins = fitMargins(this.size.width, this.size.height, this.insets);
+    const { width, height } = this.size;
+    const inset = this.figureScale === null ? viewInset(width, height) : FIT_INSET_PX;
+    this.margins = fitMargins(width, height, this.insets, inset);
     this.invalidateFit();
     if (this.mesh) {
       this.updateFit();
@@ -1788,6 +1811,7 @@ export class TerrainStage {
     }
     this.heightfield = heightfield;
     this.tween = null;
+    this.obliqueReturn = null;
     this.controls.enabled = true;
     stopControlsMotion(this.controls);
     if (!heightfield) {
@@ -1812,6 +1836,7 @@ export class TerrainStage {
     this.edgeSamples = edgePoints(heightfield);
     this.surfaceSamples = surfaceSamples(heightfield);
     this.envelopeSamples = surfaceEnvelope(heightfield);
+    this.defaultPolar = defaultPolarFor(groundExtent(heightfield));
     this.updateFit();
     this.zoom = 1;
 
@@ -1819,7 +1844,7 @@ export class TerrainStage {
     const end: ViewPose = options.camera
       ? cameraPose(options.camera)
       : {
-          phi: flat ? FLAT_POLAR : DEFAULT_POLAR,
+          phi: flat ? FLAT_POLAR : this.defaultPolar,
           theta: flat ? 0 : DEFAULT_AZIMUTH,
           zoom: 1,
         };
@@ -1847,13 +1872,19 @@ export class TerrainStage {
     this.requestRender();
   }
 
-  /** Oblique (orbitable) or flat (top-down, north up, rotation off). */
+  /**
+   * Oblique (orbitable) or flat (top-down, north up, rotation off). Turning Flat map off goes back
+   * to the oblique pose it was turned on from (angles and zoom), or to the default view if the
+   * View opened flat.
+   */
   setView(view: TerrainViewMode): void {
     if (view === this.view) return;
     this.view = view;
     if (!this.mesh) return;
     const theta = this.pose().theta;
     if (view === 'flat') {
+      // Where a running move (the intro, Rotate view) is headed, else where the camera is now.
+      this.obliqueReturn = this.tween ? this.tween.to : this.livePose();
       // Turn the short way round to north-up.
       this.animateTo(
         { phi: FLAT_POLAR, theta: nearestTurn(0, theta), zoom: 1 },
@@ -1863,9 +1894,19 @@ export class TerrainStage {
         },
       );
     } else {
+      const back = this.obliqueReturn ?? {
+        phi: this.defaultPolar,
+        theta: DEFAULT_AZIMUTH,
+        zoom: 1,
+      };
+      this.obliqueReturn = null;
       this.applyViewLimits('oblique');
       this.animateTo(
-        { phi: DEFAULT_POLAR, theta: nearestTurn(DEFAULT_AZIMUTH, theta), zoom: 1 },
+        {
+          phi: Math.min(MAX_POLAR, Math.max(MIN_POLAR, back.phi)),
+          theta: nearestTurn(back.theta, theta),
+          zoom: clampZoom(back.zoom),
+        },
         VIEW_CHANGE_MS,
       );
     }
@@ -1885,7 +1926,7 @@ export class TerrainStage {
     const flat = this.view === 'flat';
     this.animateTo(
       {
-        phi: flat ? FLAT_POLAR : DEFAULT_POLAR,
+        phi: flat ? FLAT_POLAR : this.defaultPolar,
         theta: nearestTurn(flat ? 0 : DEFAULT_AZIMUTH, theta),
         zoom: 1,
       },
@@ -1952,7 +1993,7 @@ export class TerrainStage {
     this.camera.aspect = w / h;
     this.size = { width: w, height: h };
     setLensShift(this.camera, w, h, 0, 0); // updates the projection; the refit below re-centres
-    this.margins = fitMargins(w, h, this.insets);
+    this.margins = fitMargins(w, h, this.insets, viewInset(w, h));
     // The overlays sit on the page's box, not on an exported image.
     this.obstacles = overlays ? overlayRects(this.overlays, w, h) : [];
     this.invalidateFit();

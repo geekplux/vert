@@ -5,12 +5,13 @@ import { SHARE_PROFILE_GAP, SHARE_PROFILE_HEIGHT, figureBoxRule, posterLayout } 
 import type { FigureBoxRule } from './layout';
 import type { PosterSize } from './sizes';
 import { POSTER_STYLES } from './styles';
-import { SHARE_TITLE, fitTitle, hasWide } from './titleFit';
-import type { MeasureEm } from './titleFit';
+import { SHARE_STACKED_LINE_GAP_PX, SHARE_TITLE, fitTitleSetting } from './titleFit';
+import type { TitleSetting } from './titleFit';
 import { POSTER_URL, elevationNote, posterAriaLabel, posterStatList, shareDateLine } from './types';
 import type { PosterContent } from './types';
 import type { ProfilePoint } from '../page/types';
-import { useTitleMeasure } from './useTitleMeasure';
+import { useTitleFonts } from './useTitleMeasure';
+import type { TitleFonts } from './useTitleMeasure';
 import styles from './TrailSignPoster.module.css';
 
 /** Width / height of the canvas's terrain illustration (viewBox 0 0 1000 680). */
@@ -178,8 +179,8 @@ interface LayoutProps {
 function PrintLayout({ content, figure }: LayoutProps) {
   const stats = posterStatList(content.stats);
   const area = useProfileArea(content.profile);
-  const measure = useTitleMeasure();
-  const title = fitTitle(content.title, undefined, measure);
+  const { measure, ink } = useTitleFonts(content.title);
+  const title = fitTitleSetting(content.title, undefined, measure, undefined, ink);
   return (
     <>
       <div className={styles.header} data-slot="header">
@@ -188,7 +189,7 @@ function PrintLayout({ content, figure }: LayoutProps) {
       </div>
       <div
         className={styles.title}
-        style={{ fontSize: title.size, lineHeight: hasWide(content.title) ? 1 : undefined }}
+        style={titleStyle(title)}
         data-slot="title"
         data-lines={title.lines}
       >
@@ -271,19 +272,28 @@ function headline(content: PosterContent): Headline {
   return { big: title, bigIsTitle: true, line: rest || content.date, footerStats: false };
 }
 
-/** The title in the big slot: uppercase display type fitted to ≤ 3 lines from 160 px. */
-function bigTitleStyle(title: string, measure: MeasureEm | undefined): CSSProperties {
+/**
+ * A fitted title's inline style: its size, and for diacritics a looser line-height inside the box
+ * height the plain fit takes (`fitTitleSetting`), so nothing around it moves.
+ */
+function titleStyle(setting: TitleSetting): CSSProperties {
   return {
-    fontSize: fitTitle(title, SHARE_TITLE, measure).size,
-    lineHeight: hasWide(title) ? 1 : undefined,
+    fontSize: setting.size,
+    lineHeight: setting.lineHeight,
+    height: setting.boxHeight,
   };
+}
+
+/** The title in the big slot: uppercase display type fitted to ≤ 3 lines from 160 px. */
+function bigTitleStyle(title: string, { measure, ink }: TitleFonts): CSSProperties {
+  return titleStyle(fitTitleSetting(title, SHARE_TITLE, measure, SHARE_STACKED_LINE_GAP_PX, ink));
 }
 
 function SocialLayout({ content, figure, rule }: LayoutProps & { rule: FigureBoxRule }) {
   const { big, bigIsTitle, line, footerStats } = headline(content);
   const { time, highPoint } = content.stats;
   const area = useProfileArea(content.profile);
-  const measure = useTitleMeasure();
+  const fonts = useTitleFonts(content.title);
   const footer = [
     content.isSample ? 'SAMPLE DATA' : '',
     footerStats ? (time ?? '') : '',
@@ -309,7 +319,7 @@ function SocialLayout({ content, figure, rule }: LayoutProps & { rule: FigureBox
         {bigIsTitle ? (
           <div
             className={cx(styles.big, styles.bigTitle)}
-            style={bigTitleStyle(big, measure)}
+            style={bigTitleStyle(big, fonts)}
             data-slot="title"
           >
             {big}

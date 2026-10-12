@@ -96,6 +96,180 @@ export const SHARE_TITLE: TitleFitOptions = {
 export const hasWide = (text: string): boolean => Array.from(text).some(isWide);
 
 /**
+ * Combining marks drawn above a letter (acute, grave, circumflex, tilde, ring, dot, caron, …), as
+ * opposed to those below it (cedilla, ogonek, dot below), which hang into the line's own descent.
+ */
+const MARK_ABOVE =
+  /[\u0300-\u0315\u031A\u033D-\u0344\u0346\u034A-\u034C\u0350-\u0352\u0357\u035B\u0363-\u036F]/u;
+
+/**
+ * True when the title, uppercased as CSS sets it, has an accented capital (Ż, Ó, É, Å, Ñ): its mark
+ * stacks on the cap height and reaches up into the line above.
+ */
+export const hasStackedDiacritics = (text: string): boolean =>
+  MARK_ABOVE.test(text.toUpperCase().normalize('NFD'));
+
+/**
+ * Top of the tallest accented capital above the baseline, em: Archivo 800 at wdth 62%, canvas
+ * `actualBoundingBoxAscent` of "ŻÓÉÅ" (0.937; capitals are 0.688), measured by
+ * `docs/verify/polish-3/title.mjs`.
+ */
+export const STACKED_ACCENT_ASCENT_EM = 0.937;
+
+/**
+ * Clear space kept between one line's glyphs and the next line's, logical px, on the 720 px print
+ * poster: 4.2 px in the 18 × 24 preview (600 px wide), 3.9 px in A3's (566 px), so at least 3
+ * whole pixel rows stay clear even with antialiased edges; 37 px in the 5400 px print.
+ */
+export const STACKED_LINE_GAP_PX = 5;
+/**
+ * The same on the 1080 px share card, whose preview is smaller (600 px for 4:5, 450 px for 9:16):
+ * 4.2 px at 9:16's preview scale, 5.6 px at 4:5's.
+ */
+export const SHARE_STACKED_LINE_GAP_PX = 10;
+
+/**
+ * Top of a capital without an accent above the baseline, em, round ones' overshoot included (O,
+ * C, Ç reach 0.700; flat ones 0.688). Same measurement as {@link STACKED_ACCENT_ASCENT_EM}.
+ */
+export const CAP_HEIGHT_EM = 0.7;
+/** How far round capitals (O, G, C, S) overshoot below the baseline, em. */
+export const CAP_OVERSHOOT_EM = 0.012;
+
+/** Combining marks drawn below a letter (cedilla, ogonek, dot below, …). */
+const MARK_BELOW =
+  /[\u0316-\u0319\u031C-\u0333\u0339-\u033C\u0345\u0347-\u0349\u034D\u034E\u0353-\u0356\u0359\u035A]/u;
+
+/** True when the title, uppercased, has a letter with a mark below it (Ç, Ę, Ą, Ş). */
+export const hasMarksBelow = (text: string): boolean =>
+  MARK_BELOW.test(text.toUpperCase().normalize('NFD'));
+
+/** How far a line's ink reaches above and below its baseline, em. */
+export interface InkExtent {
+  readonly ascent: number;
+  readonly descent: number;
+}
+
+/** The ink extent of a line of title text (already uppercased), at the title face. */
+export type MeasureInk = (upper: string) => InkExtent;
+
+/**
+ * The fallback ink measure, where there is no canvas `TextMetrics` (jsdom, before the face has
+ * loaded): Archivo's measured extremes. Below: Ç and Ę hang 0.205 em, Q and J 0.131, round
+ * capitals overshoot {@link CAP_OVERSHOOT_EM}. Above: an accented capital
+ * {@link STACKED_ACCENT_ASCENT_EM}, else {@link CAP_HEIGHT_EM}. Doubled Vietnamese marks (Ề, Ỗ)
+ * rise higher; the canvas measure ({@link canvasInk}) sees them.
+ */
+export const tableInk: MeasureInk = (upper) => {
+  const nfd = upper.normalize('NFD');
+  const descent = MARK_BELOW.test(nfd) ? 0.205 : /[QJ]/.test(upper) ? 0.131 : CAP_OVERSHOOT_EM;
+  const ascent = MARK_ABOVE.test(nfd) ? STACKED_ACCENT_ASCENT_EM : CAP_HEIGHT_EM;
+  return { ascent, descent };
+};
+
+/**
+ * The line-height (× size, rounded up to 0.01) at which every pair of neighbouring `lines` keeps
+ * `gap` px between the lowest ink of the upper line and the highest ink of the lower one, as
+ * `ink` measures them. 0 for a single line: it has nothing to touch.
+ */
+export function neededLineHeight(
+  lines: readonly string[],
+  size: number,
+  gap: number,
+  ink: MeasureInk = tableInk,
+): number {
+  if (lines.length < 2) return 0;
+  let most = 0;
+  for (let k = 1; k < lines.length; k++) {
+    const reach =
+      ink((lines[k - 1] ?? '').toUpperCase()).descent + ink((lines[k] ?? '').toUpperCase()).ascent;
+    most = Math.max(most, reach + gap / size);
+  }
+  return Math.ceil(most * 100 - 1e-9) / 100;
+}
+
+/**
+ * The display title's line-height when the CSS one (`base`, 0.88) would not do: 1 for East Asian
+ * wide text, and, for a title with diacritics (an accent above a capital, or a cedilla or ogonek
+ * below one), enough that, wherever two of its words could sit on neighbouring lines, the deeper
+ * glyph above stays `gap` px clear of the taller one below (round capitals' overshoot included).
+ * Pass `lines` (the title as broken at `size`) to count only the neighbours that really meet.
+ * Undefined when the stylesheet's value already does, so other titles keep it exactly.
+ */
+export function titleLineHeight(
+  title: string,
+  size: number,
+  {
+    base = 0.88,
+    gap = STACKED_LINE_GAP_PX,
+    lines,
+    ink = tableInk,
+  }: { base?: number; gap?: number; lines?: readonly string[]; ink?: MeasureInk } = {},
+): number | undefined {
+  const wide = hasWide(title) ? 1 : undefined;
+  if ((!hasStackedDiacritics(title) && !hasMarksBelow(title)) || !(size > 0)) return wide;
+  // Without the breaks, the worst case: the whole title above itself.
+  const needed = neededLineHeight(lines ?? [title, title], size, gap, ink);
+  const floor = Math.max(base, wide ?? 0);
+  return needed > floor ? needed : wide;
+}
+
+/** How a display title is set: size, lines, and (for diacritics) line-height and box height. */
+export interface TitleSetting extends TitleFit {
+  /** Inline line-height; undefined keeps the stylesheet's 0.88. */
+  lineHeight?: number;
+  /**
+   * The title box's height, px, when the text is set looser than 0.88: the height the plain fit
+   * takes (lines × size × 0.88, or × 1 for wide text), so the layout around it never moves.
+   */
+  boxHeight?: number;
+}
+
+/** The smallest size a title with diacritics shrinks to so its looser lines fit the box, px. */
+const MIN_DIACRITIC_SIZE = 16;
+
+/**
+ * {@link fitTitle}, then room for diacritics: the box keeps the plain fit's height (lines × size ×
+ * the stylesheet's line-height). Only when the title's lines, as broken at that size, put an
+ * accent under another line (or a cedilla over one) closer than `gap` does it set them looser
+ * ({@link titleLineHeight}), at the largest size (in `step`s) whose lines fit that height. So the
+ * figure, stats and footer sit exactly where they would for the same title without its accents,
+ * and a one-line title is never touched. Line extents come from `ink`: the real glyphs' ink with
+ * the loaded face in a browser ({@link canvasInk}), the table elsewhere.
+ */
+export function fitTitleSetting(
+  title: string,
+  options: TitleFitOptions = TRAIL_SIGN_TITLE,
+  measure: MeasureEm = tableMeasure,
+  gap: number = STACKED_LINE_GAP_PX,
+  ink: MeasureInk = tableInk,
+): TitleSetting {
+  const fit = fitTitle(title, options, measure);
+  const wide = hasWide(title);
+  const base = wide ? 1 : 0.88;
+  const plain = wide ? { ...fit, lineHeight: 1 } : fit;
+  const { width, letterSpacing, step, uppercase = true } = options;
+  const usable = width * 0.98;
+  const linesAt = (size: number) =>
+    breakLines(title, usable / size, letterSpacing, measure, uppercase);
+  const lineHeightAt = (size: number, lines: readonly string[]) =>
+    titleLineHeight(title, size, { base, gap, lines, ink });
+  if ((lineHeightAt(fit.size, linesAt(fit.size)) ?? base) <= base) return plain;
+  const boxHeight = fit.lines * fit.size * base;
+  let size = fit.size;
+  for (; size > MIN_DIACRITIC_SIZE; size -= step) {
+    const lines = linesAt(size);
+    const lineHeight = lineHeightAt(size, lines) ?? base;
+    if (lines.length * size * lineHeight <= boxHeight + 1e-6) {
+      return { size, lines: lines.length, lineHeight, boxHeight };
+    }
+  }
+  size = MIN_DIACRITIC_SIZE;
+  const lines = linesAt(size);
+  return { size, lines: lines.length, lineHeight: lineHeightAt(size, lines) ?? base, boxHeight };
+}
+
+/**
  * Width of `text` in em at the title face (uppercased, as CSS shows it, unless `uppercase` is
  * false), with letter-spacing.
  */
@@ -178,6 +352,40 @@ export function countLines(
   return lines;
 }
 
+/**
+ * The lines {@link countLines} counts, as text (joined by single spaces). A word wider than the
+ * line fills as many lines as it needs; each of them is given the whole word (its diacritics could
+ * be on any of them).
+ */
+export function breakLines(
+  text: string,
+  widthEm: number,
+  letterSpacing = 0,
+  measure: MeasureEm = tableMeasure,
+  uppercase = true,
+): string[] {
+  const tokens = tokenize(text);
+  const space = titleWidthEm(' ', letterSpacing, measure, uppercase);
+  const lines: string[] = [];
+  let current = 0;
+  const startLine = (word: string, w: number) => {
+    const count = Math.max(1, Math.ceil(w / widthEm));
+    for (let k = 0; k < count; k++) lines.push(word);
+    current = w > widthEm ? w - (count - 1) * widthEm : w;
+  };
+  for (const token of tokens) {
+    const w = titleWidthEm(token.text, letterSpacing, measure, uppercase);
+    const gap = token.space ? space : 0;
+    if (lines.length === 0) startLine(token.text, w);
+    else if (current + gap + w <= widthEm) {
+      current += gap + w;
+      const last = lines.length - 1;
+      lines[last] = `${lines[last] ?? ''}${token.space ? ' ' : ''}${token.text}`;
+    } else startLine(token.text, w);
+  }
+  return lines;
+}
+
 export interface TitleFit {
   /** Font size, px. */
   size: number;
@@ -213,6 +421,67 @@ export function fitTitleSize(
 
 const FALLBACK_STACK = "'Archivo', sans-serif";
 let canvasMeasureFn: MeasureEm | null | undefined;
+let canvasInkFn: MeasureInk | null | undefined;
+
+/** A 2D context set to the title face at 100 px (as `canvasMeasure` uses it), or null. */
+function titleContext(): CanvasRenderingContext2D | null {
+  if (typeof document === 'undefined') return null;
+  let context: CanvasRenderingContext2D | null = null;
+  try {
+    context = document.createElement('canvas').getContext('2d');
+  } catch {
+    context = null;
+  }
+  return context;
+}
+
+/**
+ * Canvas `TextMetrics` ink extents of a line at the display face, weight 800 (as
+ * {@link canvasMeasure} sets it), em: `actualBoundingBoxAscent` / `Descent`, so every mark the
+ * line really has counts (Vietnamese Ề, Ỗ rise past the table's accent height). Measure only once
+ * the face has loaded (`useTitleFonts`). Null without a 2D canvas or `TextMetrics` (jsdom).
+ */
+export function canvasInk(): MeasureInk | null {
+  if (canvasInkFn !== undefined) return canvasInkFn;
+  canvasInkFn = null;
+  const ctx = titleContext();
+  if (!ctx) return null;
+  const stack =
+    getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim() ||
+    FALLBACK_STACK;
+  canvasInkFn = createCanvasInk(ctx, stack);
+  return canvasInkFn;
+}
+
+/**
+ * The ink measure over a 2D context (see {@link canvasInk}): `font` at weight 800, 100 px,
+ * extra-condensed. Null when the context's `TextMetrics` has no ink bounds.
+ */
+export function createCanvasInk(
+  ctx: Pick<CanvasRenderingContext2D, 'font' | 'fontStretch' | 'measureText'>,
+  font: string,
+): MeasureInk | null {
+  const set = () => {
+    ctx.font = `800 100px ${font}`;
+    ctx.fontStretch = 'extra-condensed';
+  };
+  set();
+  if (typeof ctx.measureText('H').actualBoundingBoxAscent !== 'number') return null;
+  const cache = new Map<string, InkExtent>();
+  return (upper) => {
+    let extent = cache.get(upper);
+    if (extent === undefined) {
+      set();
+      const metrics = ctx.measureText(upper);
+      extent = {
+        ascent: Math.max(0, metrics.actualBoundingBoxAscent) / 100,
+        descent: Math.max(0, metrics.actualBoundingBoxDescent) / 100,
+      };
+      cache.set(upper, extent);
+    }
+    return extent;
+  };
+}
 
 /**
  * Canvas `measureText` with the display font stack (`--font-display`) at weight 800. Canvas has

@@ -15,6 +15,22 @@ export const MAX_POLAR = 80 * DEG;
 /** The default oblique view. */
 export const DEFAULT_POLAR = 62 * DEG;
 /**
+ * A route whose terrain grid spans at least this much ground on its longer side, metres, is a long
+ * route: a 100 km ultra rather than a 20 km trail run.
+ */
+export const LONG_ROUTE_EXTENT_M = 15_000;
+/**
+ * The default oblique view of a long route: 12° more top-down than {@link DEFAULT_POLAR}, so the
+ * ridges in front hide less of the route (CCC at 1440: 42% of the route hidden at 62°, 11% at
+ * 50°; docs/DECISIONS.md "Long routes").
+ */
+export const LONG_ROUTE_POLAR = 50 * DEG;
+
+/** The default oblique polar angle for terrain spanning `extentMetres` on its longer side. */
+export function defaultPolarFor(extentMetres: number): number {
+  return extentMetres >= LONG_ROUTE_EXTENT_M ? LONG_ROUTE_POLAR : DEFAULT_POLAR;
+}
+/**
  * The default azimuth: the camera 18° east of south (DECISIONS.md's "−18°", a bearing measured the
  * other way round), so the east wall shows its stepped row ends on the right, as in the canvas.
  */

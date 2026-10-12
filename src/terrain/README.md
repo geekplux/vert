@@ -8,8 +8,9 @@ scrub marker. No map library, no basemap.
   network error, AbortError propagated.
 - `heightfield.ts`: `buildHeightfield(bounds)` pads the bbox 15%, picks z12–14 so the area is
   ≤ 512 samples a side at native resolution and ≤ 16 tiles (below z12 only when a long route needs
-  it), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`) and
-  resamples to a regular Web Mercator grid. `elevationAt` drapes the route.
+  it; a long route then samples one zoom finer, ≤ 32 tiles, and downsamples to 512), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`) and
+  resamples to a regular Web Mercator grid. `elevationAt` drapes the route; `groundExtent` is the
+  grid's longer side in metres.
 - `mesh.ts`: `createTerrainMesh(heightfield, options)` builds the grid (`width × height` vertices,
   plus a skirt) in a local frame: x east, y up, z south, origin at the grid
   centre and lowest point, 1 unit = the longer horizontal side, true metres vertically. The style A
@@ -27,7 +28,7 @@ scrub marker. No map library, no basemap.
 - `stage.ts`: `TerrainStage`, the imperative half of the view: one `WebGLRenderer` (transparent,
   pixel ratio ≤ 2), a perspective camera framed by `frameModel`: the distance fits the model as
   the current azimuth sees it (convex hull of the surface envelope plus the walls' bottom) inside
-  a 16 px inset and 12 px clear of the overlays on the box (`setOverlays`: legend chip, icon
+  a 16 px inset (in the View at most 4% of the box's short side, `viewInset`: 11 px on a phone) and 12 px clear of the overlays on the box (`setOverlays`: legend chip, icon
   buttons, as rectangles); a lens shift (`setViewOffset`) centres the model itself, and moves it
   away from an overlay (along a fixed direction per overlay, so it never jumps) before the camera
   backs off. At each polar angle the distance stays in a zoom band: no farther than the farthest
@@ -35,7 +36,9 @@ scrub marker. No map library, no basemap.
   than that ÷ 1.13, so turning changes the distance by under 1.15× (the flat map has no band, and
   tweens blend between their ends' bands). A camera tween
   first drops OrbitControls' leftover damping, so Flat map is exactly north-up after a drag.
-  The default view is 62° from vertical, 18° east of south. OrbitControls (polar 20°–80°, damping,
+  The default view is 62° from vertical (50° for a long route, terrain ≥ 15 km across:
+  `defaultPolarFor`), 18° east of south. Flat map off returns to the pose Flat map was turned on
+  from. OrbitControls (polar 20°–80°, damping,
   zoom as a factor on the fit, no pan); camera tweens (intro top-down → oblique in 1.2 s, ease-out
   cubic; Flat map; rotate); arrow-key orbit. It renders only while something moves: no frames when
   idle. `dispose` forces the WebGL context loss before disposing the renderer, so remounts never
@@ -54,10 +57,10 @@ scrub marker. No map library, no basemap.
   whole, between hidden points not at all, a mixed one up to its middle (the core 2.5 px shorter,
   so the halo closes around it). Halo and core read the same verdicts, so side-on slopes never
   thin the halo, crests leave no slivers, and the core never shows without its halo. Hidden
-  stretches are not dropped: a third line (2 px, 40% opacity, route colour, no halo) takes the
-  opposite verdicts, drawn before the halo and each pixel once (a constant `gl_FragDepth`, depth
-  test `less`), so a route behind a ridge still reads as one line, told apart by width, opacity
-  and the missing halo. Widths scale with `setLineScale` (poster figures).
+  stretches are not dropped: a third line (2 px, no halo, the route colour 15% towards the ink at
+  85% opacity: ≥ 3:1 on the terrain fill) takes the opposite verdicts, drawn before the halo and each pixel once (a constant `gl_FragDepth`, depth
+  test `less`), so a route behind a ridge still reads as one line, told apart by width and the
+  missing halo. Widths scale with `setLineScale` (poster figures).
   `pointAtDistance` (binary search) maps metres along the track to lon/lat.
 - `markers.ts`: screen-size sprites (`sizeAttenuation: false`, no depth test, drawn after the
   route) from small canvas textures, shapes as the 2D `Marker`: ○ start (white fill, 3 px ink

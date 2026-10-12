@@ -10,6 +10,7 @@ import {
   formatNumber,
   formatPace,
   metresToDistance,
+  MISSING,
   mToFt,
 } from '../../lib/format';
 import type { Units } from '../../lib/format';
@@ -71,13 +72,14 @@ export function positionText(metres: number, units: Units): string {
 
 /** "616–1,267 m" / "2,021–4,157 ft": the run's elevation range. */
 export function elevationRangeText(run: Run, units: Units): string {
+  if (!Number.isFinite(run.lowPoint) || !Number.isFinite(run.highPoint)) return MISSING;
   const low = units === 'imperial' ? mToFt(run.lowPoint) : run.lowPoint;
   return `${formatNumber(low)}–${formatElevation(run.highPoint, units).text}`;
 }
 
 /**
- * Seconds per km at a distance, or `null` when unknown. PHASE 3 supplies it from the track's
- * timestamps; phase 2 has none, so the readout leaves pace out.
+ * Seconds per km at a distance, or `null` when unknown (no timestamps): the readout then leaves
+ * pace out. The View supplies it from the run's track (`runPaceAt`).
  */
 export type PaceAt = (d: number) => number | null;
 
@@ -109,7 +111,7 @@ export function exaggerationText(exaggeration: number): string {
 }
 
 /**
- * The terrain's accessible name: "3D terrain of Coosa Backcountry Loop: 21.5 km loop, start and
+ * The terrain's accessible name: "3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and
  * finish marked with a circle, summit 1,267 m marked with a triangle".
  *
  * The legend's "Start / finish" (Main frame) treats every run as a loop, so the label does too.

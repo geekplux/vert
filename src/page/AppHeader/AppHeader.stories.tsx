@@ -34,7 +34,7 @@ const View = () => {
 };
 
 const Poster = () => (
-  <AppHeader state="poster" routeName="Coosa Backcountry Loop">
+  <AppHeader state="poster" routeName="Coosa Backcountry Trail">
     <PosterNav onBack={log('back')} />
   </AppHeader>
 );

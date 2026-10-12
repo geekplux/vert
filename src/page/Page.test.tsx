@@ -17,17 +17,17 @@ describe('Page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' }),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
     ).toBeDefined();
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getByRole('banner').textContent).toContain('TRAIL RUNS AS TERRAIN');
 
     fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
     expect(h1('Poster mode')).toBeDefined();
-    expect(screen.getByRole('banner').textContent).toContain('POSTER · COOSA BACKCOUNTRY LOOP');
+    expect(screen.getByRole('banner').textContent).toContain('POSTER · COOSA BACKCOUNTRY TRAIL');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
-    expect(h1('Coosa Backcountry Loop')).toBeDefined();
+    expect(h1('Coosa Backcountry Trail')).toBeDefined();
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
     expect(h1('Your run, as terrain.')).toBeDefined();
@@ -67,7 +67,7 @@ describe('Page', () => {
       await Promise.resolve();
     });
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' }),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
     ).toBeDefined();
   });
 
@@ -95,7 +95,7 @@ describe('Page', () => {
   it('keeps the units preference: switched in View, shown on the sample chip after New file', async () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' });
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
     fireEvent.click(screen.getByRole('radio', { name: 'mi' }));
     fireEvent.click(screen.getByRole('button', { name: 'New file' }));
     expect(screen.getByText('SAMPLE · 13.3 mi · +3,583 ft')).toBeDefined();
@@ -104,7 +104,7 @@ describe('Page', () => {
   it('has no axe violations in the View', async () => {
     const { container } = render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' });
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
     await expectNoAxeViolations(container);
   });
 });

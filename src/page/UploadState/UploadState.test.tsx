@@ -90,7 +90,7 @@ describe('UploadState', () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' }),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
     ).toBeDefined();
     expect(screen.queryByRole('group', { name: /gpx file/ })).toBeNull();
     expect(screen.getAllByRole('main')).toHaveLength(1);
@@ -105,7 +105,9 @@ describe('UploadState', () => {
     expect(dropzone().getAttribute('aria-busy')).toBe('true');
 
     await clock.flush();
-    expect(screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+    ).toBeDefined();
   });
 
   it('shows busy while a file is read, then View', async () => {
@@ -120,7 +122,9 @@ describe('UploadState', () => {
     ).toBe(true);
 
     await clock.flush();
-    expect(screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Loop' })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+    ).toBeDefined();
   });
 
   it('shows a busy state injected from outside', () => {

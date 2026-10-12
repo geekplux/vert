@@ -52,7 +52,7 @@ describe('viewCopy', () => {
       '6:48 /km',
     ]);
     expect(terrainLabel(SAMPLE_RUN, 'metric')).toBe(
-      '3D terrain of Coosa Backcountry Loop: 21.5 km loop, start and finish marked with a circle, summit 1,267 m marked with a triangle',
+      '3D terrain of Coosa Backcountry Trail: 21.5 km loop, start and finish marked with a circle, summit 1,267 m marked with a triangle',
     );
   });
 });

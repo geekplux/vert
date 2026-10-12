@@ -5,10 +5,11 @@
  * (`useRunChooser`, which also drives the state machine), and every component reads the result with
  * `useRun()` / `useTerrain()`.
  *
- * The loader is injectable (`RunProvider`'s `loadRun`). PHASE 2 PLACEHOLDER: the default yields
- * `SAMPLE_RUN` for any file or the sample after a short simulated delay, so the busy state is
- * visible. Phase 3 replaces the default (parse the GPX in a Web Worker) and the terrain value (fetch
- * tiles, build the mesh); the hooks' signatures and their callers stay as they are.
+ * The loader is injectable (`RunProvider`'s `loadRun`). The default is `realLoadRun`
+ * (`src/gpx/loadRun.ts`: the GPX parsed in a Web Worker). `placeholderLoadRun` yields `SAMPLE_RUN`
+ * for any source after a simulated delay; tests and stories get it by passing `schedule` or
+ * `delayMs` (or `loadRun={placeholderLoadRun(...)}`). The terrain value is still a placeholder until
+ * the terrain task replaces it; the hooks' signatures and their callers stay as they are.
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useRef, useState } from 'react';
@@ -17,6 +18,8 @@ import { SAMPLE_RUN } from './sample';
 import { posterTextFor } from './state';
 import type { PageAction } from './state';
 import type { Run, Terrain } from './types';
+import { GENERIC_LOAD_ERROR, RunLoadError } from './errors';
+import { realLoadRun } from '../gpx/loadRun';
 
 /** What to load: a file the user chose, or the built-in sample run. */
 export type RunSource =
@@ -29,13 +32,7 @@ export type RunSource =
  */
 export type LoadRun = (source: RunSource, signal: AbortSignal) => Promise<Run>;
 
-/** A load failure whose message is fit to show on the Upload screen, e.g. "No track in this file." */
-export class RunLoadError extends Error {
-  override name = 'RunLoadError';
-}
-
-/** Shown when a load fails with anything other than a `RunLoadError`. */
-export const GENERIC_LOAD_ERROR = "Vert couldn't read this file.";
+export { GENERIC_LOAD_ERROR, RunLoadError } from './errors';
 
 /** Runs `callback` after `delayMs`; returns a function that cancels it if it has not run. */
 export type Schedule = (callback: () => void, delayMs: number) => () => void;
@@ -58,8 +55,9 @@ export const immediateSchedule: Schedule = (callback) => {
 export const PLACEHOLDER_DELAY_MS = 300;
 
 /**
- * Phase 2's loader: every source yields the sample run after `delayMs` on `schedule`. Aborting
- * cancels the timer and rejects with the signal's reason. Phase 3 replaces it as the default.
+ * The placeholder loader: every source yields the sample run after `delayMs` on `schedule`.
+ * Aborting cancels the timer and rejects with the signal's reason. For tests and stories; the app
+ * uses `realLoadRun`.
  */
 export function placeholderLoadRun(
   schedule: Schedule = timeoutSchedule,
@@ -108,11 +106,17 @@ export interface RunProviderProps {
   children?: ReactNode;
   /** A run that is already loaded, for stories and tests that start in View or Poster mode. */
   initialRun?: Run | null;
-  /** Turns a file or the sample into a run. Defaults to the phase 2 placeholder. */
+  /**
+   * Turns a file or the sample into a run. Defaults to `realLoadRun` (the GPX parsed in a Web
+   * Worker), or to the placeholder when `schedule` or `delayMs` is given.
+   */
   loadRun?: LoadRun;
-  /** Timer for the placeholder's simulated reading delay. Tests pass `immediateSchedule`. */
+  /**
+   * Timer for the placeholder's simulated reading delay. Passing it (tests pass
+   * `immediateSchedule`) selects `placeholderLoadRun` unless `loadRun` is given.
+   */
   schedule?: Schedule;
-  /** The placeholder's simulated reading delay, ms. */
+  /** The placeholder's simulated reading delay, ms. Passing it also selects the placeholder. */
   delayMs?: number;
 }
 
@@ -120,13 +124,17 @@ export function RunProvider({
   children,
   initialRun = null,
   loadRun,
-  schedule = timeoutSchedule,
-  delayMs = PLACEHOLDER_DELAY_MS,
+  schedule,
+  delayMs,
 }: RunProviderProps) {
   const [run, setRun] = useState<Run | null>(initialRun);
   const pending = useRef<AbortController | null>(null);
-  const placeholder = useMemo(() => placeholderLoadRun(schedule, delayMs), [schedule, delayMs]);
-  const loader = loadRun ?? placeholder;
+  const usePlaceholder = schedule !== undefined || delayMs !== undefined;
+  const placeholder = useMemo(
+    () => placeholderLoadRun(schedule ?? timeoutSchedule, delayMs ?? PLACEHOLDER_DELAY_MS),
+    [schedule, delayMs],
+  );
+  const loader = loadRun ?? (usePlaceholder ? placeholder : realLoadRun);
 
   const cancelPending = useCallback(() => {
     const controller = pending.current;

@@ -17,6 +17,8 @@ import type { Run } from './types';
 import type { LoadRun, RunProviderProps, Schedule } from './hooks';
 import { SAMPLE_RUN } from './sample';
 import { INITIAL_PAGE_STATE, usePageState } from './state';
+import { resetParseWorker } from '../gpx/client';
+import { FakeWorker } from '../test/fakeWorker';
 
 /** A scheduler the test fires by hand. */
 function manualSchedule() {
@@ -125,9 +127,9 @@ describe('useRunChooser', () => {
 
     clock.flush();
     await screen.findByText('screen: view');
-    expect(screen.getByText('run: Coosa Backcountry Loop')).toBeDefined();
+    expect(screen.getByText('run: Coosa Backcountry Trail')).toBeDefined();
     expect(screen.getByText('terrain: ready')).toBeDefined();
-    expect(screen.getByText('poster title: Coosa Backcountry Loop')).toBeDefined();
+    expect(screen.getByText('poster title: Coosa Backcountry Trail')).toBeDefined();
   });
 
   it('a file: shows its name while reading, then the (placeholder) run', async () => {
@@ -149,9 +151,28 @@ describe('useRunChooser', () => {
     expect(await screen.findByText('screen: view')).toBeDefined();
   });
 
+  it('defaults to the real loader: the sample is fetched and parsed in the worker', async () => {
+    const gpx = `<gpx version="1.1" creator="t"><trk><name>Real Loop</name><trkseg>
+      <trkpt lat="45" lon="7"><time>2026-05-01T06:00:00Z</time></trkpt>
+      <trkpt lat="45.001" lon="7"><time>2026-05-01T06:00:20Z</time></trkpt></trkseg></trk></gpx>`;
+    const fetchSpy = vi.fn(() => Promise.resolve(new Response(gpx)));
+    vi.stubGlobal('Worker', FakeWorker);
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      renderProbe();
+      fireEvent.click(screen.getByRole('button', { name: 'Try the sample' }));
+      expect(await screen.findByText('screen: view')).toBeDefined();
+      expect(screen.getByText('run: Real Loop')).toBeDefined();
+      expect(fetchSpy).toHaveBeenCalledWith('/samples/coosa-backcountry.gpx', expect.anything());
+    } finally {
+      resetParseWorker();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('waits the placeholder delay on the real clock', async () => {
     vi.useFakeTimers();
-    renderProbe();
+    renderProbe({ delayMs: PLACEHOLDER_DELAY_MS });
     act(() => {
       screen.getByRole('button', { name: 'Try the sample' }).click();
     });

@@ -28,6 +28,8 @@ const tileProxy: Record<string, ProxyOptions> = {
 
 export default defineConfig({
   plugins: [react()],
+  // The GPX parse worker (`src/gpx/worker.ts`) is a module worker; bundle it as ES too.
+  worker: { format: 'es' },
   server: { proxy: tileProxy },
   preview: { proxy: tileProxy },
   test: {

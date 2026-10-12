@@ -30,8 +30,8 @@ describe('AppHeader', () => {
     rerender(<AppHeader state="view" />);
     expect(screen.getByText('TRAIL RUNS AS TERRAIN')).toBeDefined();
 
-    rerender(<AppHeader state="poster" routeName="Coosa Backcountry Loop" />);
-    expect(screen.getByText('POSTER · COOSA BACKCOUNTRY LOOP')).toBeDefined();
+    rerender(<AppHeader state="poster" routeName="Coosa Backcountry Trail" />);
+    expect(screen.getByText('POSTER · COOSA BACKCOUNTRY TRAIL')).toBeDefined();
   });
 
   it('renders its children on the right', () => {

@@ -8,7 +8,7 @@ import { INITIAL_PREFS } from '../state';
 import type { PageState, Prefs } from '../state';
 import type { Run } from '../types';
 
-const ROUTE = 'Coosa Backcountry Loop';
+const ROUTE = 'Coosa Backcountry Trail';
 
 function viewState(prefs: Partial<Prefs> = {}): PageState {
   return {
@@ -96,9 +96,9 @@ describe('ViewState', () => {
     ).toBe('false');
 
     expect(within(main()).getByRole('heading', { name: 'Elevation · 616–1,267 m' })).toBeDefined();
-    // Default scrub: the steepest climb's midpoint, km 12.2. No pace until phase 3.
-    expect(readout()).toBe('km 12.2 · 898 m · grade 24%');
-    expect(profile().getAttribute('aria-valuetext')).toBe('km 12.2, 898 m, grade 24%');
+    // Default scrub: the steepest climb's midpoint, km 12.2; pace from the track's timestamps.
+    expect(readout()).toBe('km 12.2 · 898 m · grade 24% · 8:36 /km');
+    expect(profile().getAttribute('aria-valuetext')).toBe('km 12.2, 898 m, grade 24%, 8:36 /km');
   });
 
   it('leaves the SAMPLE DATA tag off a run from the user’s own file', () => {
@@ -109,6 +109,47 @@ describe('ViewState', () => {
         .closest('p')?.textContent,
     ).toBe('SAT · 2026-10-03');
     expect(screen.queryByText('SAMPLE DATA')).toBeNull();
+  });
+
+  it('degrades for a file without timestamps: no date, moving time "–", no pace', () => {
+    const timeless: Run = {
+      ...SAMPLE_RUN,
+      isSample: false,
+      hasTime: false,
+      startTime: Number.NaN,
+      movingTime: Number.NaN,
+      elapsedTime: Number.NaN,
+      track: { ...SAMPLE_RUN.track, time: null },
+    };
+    renderView({}, timeless);
+    expect(within(aside()).queryByText(/^SAT · /)).toBeNull();
+    expect(aside().querySelector('p')?.textContent).not.toMatch(/·/);
+    expect(stats()).toContain('Moving time: –');
+    expect(readout()).toBe('km 12.2 · 898 m · grade 24%');
+    expect(profile().getAttribute('aria-valuetext')).toBe('km 12.2, 898 m, grade 24%');
+  });
+
+  it('shows only the SAMPLE DATA tag for a timeless sample', () => {
+    renderView({}, { ...SAMPLE_RUN, hasTime: false, startTime: Number.NaN });
+    expect(within(aside()).getByText('SAMPLE DATA').closest('p')?.textContent).toBe('SAMPLE DATA');
+  });
+
+  it('shows "–" for the elevation figures of a file without elevations', () => {
+    renderView(
+      {},
+      {
+        ...SAMPLE_RUN,
+        hasElevation: false,
+        vert: Number.NaN,
+        descent: Number.NaN,
+        highPoint: Number.NaN,
+        lowPoint: Number.NaN,
+        profile: [],
+        climbs: [],
+      },
+    );
+    expect(stats()).toEqual(expect.arrayContaining(['Vert: –', 'High point: –']));
+    expect(within(main()).getByRole('heading', { name: 'Elevation · –' })).toBeDefined();
   });
 
   it('lists climbs as an ordered list and marks the steepest in words, not only shading', () => {
@@ -160,7 +201,7 @@ describe('ViewState', () => {
     expect(
       within(main()).getByRole('heading', { name: 'Elevation · 2,021–4,157 ft' }),
     ).toBeDefined();
-    expect(readout()).toBe('mi 7.6 · 2,946 ft · grade 24%');
+    expect(readout()).toBe('mi 7.6 · 2,946 ft · grade 24% · 13:51 /mi');
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('radio', { name: 'km' }));
     expect(stats()[0]).toBe('Distance: 21.5 km');
@@ -174,7 +215,7 @@ describe('ViewState', () => {
   it('updates the scrub readout from the profile’s keyboard input', () => {
     renderView();
     fireEvent.keyDown(profile(), { key: 'Home' });
-    expect(readout()).toBe('km 0.0 · 709 m · grade 1%');
+    expect(readout()).toBe('km 0.0 · 709 m · grade 1% · 8:36 /km');
     fireEvent.keyDown(profile(), { key: 'End' });
     expect(readout()).toMatch(/^km 21\.5 · 709 m · grade /);
     fireEvent.keyDown(profile(), { key: 'Home' });

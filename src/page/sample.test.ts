@@ -26,7 +26,7 @@ function eleAt(d: number): number {
 describe('SAMPLE_RUN', () => {
   it('carries the real sample totals', () => {
     expect(SAMPLE_RUN).toMatchObject({
-      name: 'Coosa Backcountry Loop',
+      name: 'Coosa Backcountry Trail',
       isSample: true,
       distance: 21_480,
       vert: 1_092,
@@ -117,6 +117,27 @@ describe('SAMPLE_RUN', () => {
     expect(south).toBeLessThan(north);
     expect(SAMPLE_RUN.lonForOffset).toBeGreaterThanOrEqual(west);
     expect(SAMPLE_RUN.lonForOffset).toBeLessThanOrEqual(east);
+  });
+
+  it('carries a placeholder track inside its bounds, one point per profile point', () => {
+    const { track, bounds } = SAMPLE_RUN;
+    expect(track.lat).toHaveLength(profile.length);
+    for (const series of [track.lon, track.ele, track.cumulative, track.time]) {
+      expect(series).toHaveLength(profile.length);
+    }
+    expect([...track.cumulative]).toEqual(profile.map((p) => p.d));
+    expect([...(track.ele ?? [])]).toEqual(elevations);
+    expect(track.cumulative.at(-1)).toBe(SAMPLE_RUN.distance);
+    track.lat.forEach((lat, i) => {
+      expect(lat).toBeGreaterThan(bounds.south);
+      expect(lat).toBeLessThan(bounds.north);
+      expect(track.lon[i]).toBeGreaterThan(bounds.west);
+      expect(track.lon[i]).toBeLessThan(bounds.east);
+    });
+    // A loop: it ends where it starts.
+    expect(track.lat.at(-1)).toBeCloseTo(track.lat[0] ?? NaN, 9);
+    expect(track.lon.at(-1)).toBeCloseTo(track.lon[0] ?? NaN, 9);
+    expect(track.time?.[0]).toBe(SAMPLE_RUN.startTime);
   });
 
   it('has bounds containing every point of the sample GPX, tight to 0.0001°', () => {

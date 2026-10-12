@@ -90,5 +90,6 @@ export const SAMPLE_RUN: Run = {
   lowPoint: 616,
   profile: makeProfile(),
   climbs: CLIMBS,
-  bounds: { west: -83.9606, south: 34.7471, east: -83.9239, north: 34.7937 },
+  // The GPX track's extremes rounded outward to 4 decimals, so every point is inside.
+  bounds: { west: -83.9607, south: 34.7471, east: -83.9239, north: 34.7938 },
 };

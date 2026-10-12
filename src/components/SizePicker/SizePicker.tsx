@@ -1,28 +1,10 @@
 import { useId, type ChangeEvent } from 'react';
+import type { PosterSize } from '../../poster/sizes';
 import styles from './SizePicker.module.css';
 
-/** One poster output size. `width` and `height` are the export's pixel targets (DESIGN-SPEC §4). */
-export interface PosterSize<Id extends string = string> {
-  id: Id;
-  /** Shown on the first line, e.g. "18 × 24 in". */
-  name: string;
-  use: 'print' | 'social' | 'story';
-  width: number;
-  height: number;
-}
-
-/**
- * The four poster sizes, in display order. Print sizes are 300 dpi.
- * This constant moves to src/poster once the poster module exists.
- */
-export const POSTER_SIZES = [
-  { id: '18x24', name: '18 × 24 in', use: 'print', width: 5400, height: 7200 },
-  { id: 'a3', name: 'A3', use: 'print', width: 3508, height: 4961 },
-  { id: '4x5', name: '4 : 5', use: 'social', width: 1080, height: 1350 },
-  { id: '9x16', name: '9 : 16', use: 'story', width: 1080, height: 1920 },
-] as const satisfies readonly PosterSize[];
-
-export type PosterSizeId = (typeof POSTER_SIZES)[number]['id'];
+// The size list lives in src/poster/sizes.ts; re-exported here for existing imports.
+export { POSTER_SIZES } from '../../poster/sizes';
+export type { PosterSize, PosterSizeId } from '../../poster/sizes';
 
 /** The sub-line: "print · 5400 × 7200". */
 export function sizeDetail(size: PosterSize): string {

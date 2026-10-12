@@ -4,8 +4,14 @@
 import type { PosterSize, PosterSizeId } from '../../poster/sizes';
 import type { PosterStyleOption } from '../../poster/styles';
 
-/** Longest slug the file name carries, in characters. */
+/** Longest slug the file name carries, in code points (cut at a grapheme boundary). */
 const SLUG_MAX = 60;
+
+/**
+ * Longest file name, in UTF-8 bytes: file systems allow 255, and a download that clashes gets a
+ * " (1)" added, so this leaves headroom.
+ */
+export const FILE_NAME_MAX_BYTES = 200;
 
 /**
  * Latin letters that Unicode does not decompose into a base letter and an accent, so NFKD and
@@ -41,31 +47,105 @@ const LATIN_LETTERS: Readonly<Record<string, string>> = {
 const LATIN_LETTER = new RegExp(`[${Object.keys(LATIN_LETTERS).join('')}]`, 'gu');
 
 /**
+ * Format characters: ZWJ and ZWNJ (Chrome writes them as "_" in a downloaded file's name, so the
+ * name shown would not match the file), tags, bidi controls, soft hyphen, BOM…
+ */
+const FORMAT = /\p{Cf}/gu;
+/** A run of marks that does not follow a letter or a mark: after a digit, a symbol, or nothing. */
+const STRAY_MARKS = /(?<![\p{L}\p{M}])\p{M}+/gu;
+/** Everything that becomes a hyphen: anything but letters, marks and digits. */
+const SEPARATOR = /[^\p{L}\p{M}\p{N}]+/gu;
+const MARK = /^\p{M}/u;
+
+const utf8 = new TextEncoder();
+const byteLength = (text: string) => utf8.encode(text).length;
+
+/**
+ * `text` split into graphemes (user-perceived characters): `Intl.Segmenter` where available, else
+ * code points with any mark kept with the one before it.
+ */
+export function graphemes(text: string): string[] {
+  if (typeof Intl.Segmenter === 'function') {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+    return Array.from(segmenter.segment(text), ({ segment }) => segment);
+  }
+  const parts: string[] = [];
+  for (const point of text) {
+    const last = parts.at(-1);
+    if (last !== undefined && MARK.test(point)) parts[parts.length - 1] = last + point;
+    else parts.push(point);
+  }
+  return parts;
+}
+
+/**
+ * The longest run of whole graphemes from the start of `slug` within `maxPoints` code points and
+ * `maxBytes` UTF-8 bytes, without a hyphen at its end. A first grapheme longer than that
+ * on its own (a letter under dozens of marks) is cut by code points, so a letter is kept.
+ */
+function capSlug(slug: string, maxPoints: number, maxBytes: number): string {
+  let kept = '';
+  let points = 0;
+  let bytes = 0;
+  for (const grapheme of graphemes(slug)) {
+    const graphemePoints = Array.from(grapheme).length;
+    const graphemeBytes = byteLength(grapheme);
+    if (points + graphemePoints > maxPoints || bytes + graphemeBytes > maxBytes) {
+      if (kept === '') {
+        for (const point of grapheme) {
+          if (points + 1 > maxPoints || bytes + byteLength(point) > maxBytes) break;
+          kept += point;
+          points += 1;
+          bytes += byteLength(point);
+        }
+      }
+      break;
+    }
+    kept += grapheme;
+    points += graphemePoints;
+    bytes += graphemeBytes;
+  }
+  return kept.replace(/-+$/, '');
+}
+
+/**
  * A file-name slug: lowercase letters and digits of any script joined by single hyphens. Accents
  * are dropped from Latin letters ("Côte d’Azur Loop" → "cote-d-azur-loop") and Latin letters
  * without a decomposition are transliterated (`LATIN_LETTERS`: "ł" → "l", "æ" → "ae", "ß" →
  * "ss"). Other scripts are kept as written, marks included ("高尾山 Trail" → "高尾山-trail",
- * "ぶどう" stays "ぶどう", "हिमालय" keeps its vowel signs), recomposed (NFC). Empty when the text
- * has no letters or digits.
+ * "ぶどう" stays "ぶどう", "हिमालय" keeps its vowel signs), recomposed (NFC).
+ *
+ * Invisible leftovers are dropped: marks that do not follow a letter (an acute accent after a
+ * digit, an emoji's VS16), variation selectors and format characters, ZWJ and ZWNJ included even
+ * between letters, since Chrome would save them as "_" (Persian "می‌خواهم" becomes "میخواهم"; a
+ * Devanagari conjunct keeps its virama and stays whole). The slug stops at 60 code points and
+ * `maxBytes` UTF-8 bytes, at a grapheme boundary, so a conjunct is never split. Empty when the
+ * text has no letters or digits.
  */
-export function slugify(text: string): string {
+export function slugify(text: string, maxBytes = Infinity): string {
   const slug = text
     .normalize('NFKD')
     .replace(/(?<=\p{Script=Latin})\p{M}+/gu, '')
     .replace(LATIN_LETTER, (letter) => LATIN_LETTERS[letter] ?? letter)
     .normalize('NFC')
     .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/\p{Variation_Selector}/gu, '')
+    .replace(FORMAT, '')
+    .replace(STRAY_MARKS, '')
+    .replace(SEPARATOR, '-')
     .replace(/^-+/, '');
-  return Array.from(slug).slice(0, SLUG_MAX).join('').replace(/-+$/, '');
+  return capSlug(slug, SLUG_MAX, maxBytes);
 }
 
 /**
  * The download's file name: "vert-coosa-backcountry-trail-18x24.png" from the poster's title and
- * size ("vert-18x24.png" when the title has no letters or digits).
+ * size ("vert-18x24.png" when the title has no letters or digits), at most
+ * {@link FILE_NAME_MAX_BYTES} UTF-8 bytes.
  */
 export function posterFileName(title: string, sizeId: PosterSizeId, extension: 'png' | 'pdf') {
-  return ['vert', slugify(title), sizeId].filter(Boolean).join('-') + `.${extension}`;
+  const suffix = `-${sizeId}.${extension}`;
+  const slug = slugify(title, FILE_NAME_MAX_BYTES - byteLength(`vert-${suffix}`));
+  return ['vert', slug].filter(Boolean).join('-') + suffix;
 }
 
 /** "Download PNG · 5400 × 7200". */
@@ -121,19 +201,25 @@ export function exportValueText({ done, total, stage }: ExportProgressValue): st
 }
 
 /**
- * What the polite status region says while exporting. It changes only on start and at each
- * quarter, so a screen reader hears a few updates, not one per tile: "Exporting <file>.",
- * "Export 25% done.", "Export 50% done.", "Export 75% done." Learning the total does not change
- * it, so "Preparing…" → tile 1 is not announced. The label carries the exact tile when focused.
- *
- * At done = total it returns "Rendered 12 of 12 tiles.", also while the file is written (the
- * encode stage does not add an announcement; the label says "Saving the file…"). A small poster
- * encodes at once and EXPORT_DONE replaces it with "Saved <file>." (or EXPORT_FAILED with the
- * error) before the screen reader speaks; a print poster's encode takes long enough for it to be
- * heard, followed by the outcome.
+ * How long an export runs before the status region announces its progress milestones. Most exports
+ * finish sooner, and a screen reader then hears only the start and the outcome.
  */
-export function exportAnnouncement({ done, total }: ExportProgressValue, fileName: string): string {
-  if (total === null) return `Exporting ${fileName}.`;
+export const ANNOUNCE_MILESTONES_AFTER_MS = 2000;
+
+/**
+ * What the polite status region says while exporting: "Exporting <file>." from the start, and once
+ * the export has run {@link ANNOUNCE_MILESTONES_AFTER_MS} (`milestones`), the quarter it has
+ * reached: "Export 25% done.", "Export 50% done.", "Export 75% done.", then "Rendered 12 of 12
+ * tiles." It does not change per tile, when the total is learned ("Preparing…" → tile 1), or when
+ * the file is being written (the label says "Saving the file…"); the label carries the exact tile
+ * when focused. The outcome ("Saved <file>." or the error) replaces it when the export ends.
+ */
+export function exportAnnouncement(
+  { done, total }: ExportProgressValue,
+  fileName: string,
+  milestones: boolean,
+): string {
+  if (total === null || !milestones) return `Exporting ${fileName}.`;
   const quarter = Math.min(4, Math.floor((4 * done) / total));
   if (quarter === 0) return `Exporting ${fileName}.`;
   if (quarter === 4) {

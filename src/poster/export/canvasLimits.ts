@@ -13,7 +13,10 @@
  * one failure does not condemn a size: the next Download tries it again. A size that has failed
  * {@link FAILURES_TO_GIVE_UP} times without working in between fails fast for the rest of the
  * session (and so does any size at least as large in both sides), so a browser that really cannot
- * hold it is not made to crash again and again. A size that works clears its failures.
+ * hold it is not made to crash again and again. A size that works clears its failures and those of
+ * every size no larger in both sides (18×24 working shows A3 fits). A failure is the newest
+ * evidence: it drops any larger working size, so what is known never says both "works" and "given
+ * up" about one size.
  */
 
 /** Tiles are never larger than this a side; a 4096² canvas works even on iOS (16.7 Mpx). */
@@ -44,7 +47,7 @@ export const FAILURES_TO_GIVE_UP = 2;
 
 /** Sizes verified to work. */
 const working = new Set<string>();
-/** Failures in a row per size (cleared when the size works). */
+/** Failures in a row per size (cleared when the size, or one at least as large, works). */
 const failures = new Map<string, number>();
 /**
  * Failures of auxiliary canvases (the small settle canvas): kept for diagnostics only, never fed to
@@ -53,6 +56,16 @@ const failures = new Map<string, number>();
  */
 const auxiliaryFailures = new Set<string>();
 const key = (width: number, height: number) => `${String(width)}x${String(height)}`;
+/** The width and height a size key stands for. */
+function sides(size: string): readonly [number, number] {
+  const [w = 0, h = 0] = size.split('x').map(Number);
+  return [w, h];
+}
+/** Whether `size` is no larger than `width × height` in both sides. */
+function fitsIn(size: string, width: number, height: number): boolean {
+  const [w, h] = sides(size);
+  return w <= width && h <= height;
+}
 
 /** Whether `size` has failed often enough to give it up for the session. */
 function givenUp(size: string): boolean {
@@ -60,35 +73,41 @@ function givenUp(size: string): boolean {
 }
 
 /**
- * What is known about a `width × height` canvas: true once it (or a larger size) worked, false
- * once it (or a smaller size) has been given up ({@link FAILURES_TO_GIVE_UP} failures in a row),
- * else undefined: never tried, or failed only once, which is worth one more try.
+ * What is known about a `width × height` canvas: true once it (or a size at least as large in both
+ * sides) worked, false once it (or a size no larger in both sides) has been given up
+ * ({@link FAILURES_TO_GIVE_UP} failures in a row), else undefined: never tried, or failed only once,
+ * which is worth one more try.
  */
 export function knownCanvasResult(width: number, height: number): boolean | undefined {
-  const exact = key(width, height);
-  if (working.has(exact)) return true;
-  if (givenUp(exact)) return false;
-  // A size no larger than one that worked works; one no smaller than one given up fails.
+  // A size no larger than one that worked works (a later failure would have dropped that one).
   for (const size of working) {
-    const [w = 0, h = 0] = size.split('x').map(Number);
+    const [w, h] = sides(size);
     if (width <= w && height <= h) return true;
   }
+  // A size no smaller than one given up fails.
   for (const size of failures.keys()) {
-    if (!givenUp(size)) continue;
-    const [w = 0, h = 0] = size.split('x').map(Number);
-    if (width >= w && height >= h) return false;
+    if (givenUp(size) && fitsIn(size, width, height)) return false;
   }
   return undefined;
 }
 
-/** Records what a `width × height` canvas did (for a failure seen before any probe could run). */
+/**
+ * Records what a `width × height` canvas did (for a failure seen before any probe could run). A
+ * success clears the failures of every size no larger in both sides; a failure drops every working
+ * size at least as large in both sides.
+ */
 export function recordCanvasResult(width: number, height: number, ok: boolean): void {
   const size = key(width, height);
   if (ok) {
     working.add(size);
-    failures.delete(size);
+    for (const failed of [...failures.keys()]) {
+      if (fitsIn(failed, width, height)) failures.delete(failed);
+    }
   } else {
-    working.delete(size);
+    for (const worked of [...working]) {
+      const [w, h] = sides(worked);
+      if (w >= width && h >= height) working.delete(worked);
+    }
     failures.set(size, (failures.get(size) ?? 0) + 1);
   }
 }

@@ -109,7 +109,7 @@ export function PosterState({
   const content = posterContentFromRun(run, prefs);
   const [stageRef, stageHeight] = useStageHeight();
   const exporting = screen.name === 'exporting';
-  const { start, cancel, cancelled } = useExport(exporter, dispatch);
+  const { start, cancel, cancelled, slow } = useExport(exporter, dispatch);
   const { labelRef, pngRef, pdfRef, rememberStarter } = useExportFocus(screen.name);
   const busyNoteId = useId();
   const [previewScale, setPreviewScale] = useState(1);
@@ -240,7 +240,7 @@ export function PosterState({
         </span>
         {/* Polite announcements: on start, at each quarter, and when the export ends. */}
         <p role="status" className={styles.status}>
-          {statusText(screen, cancelled)}
+          {statusText(screen, cancelled, slow)}
         </p>
       </div>
     </>
@@ -281,9 +281,18 @@ export function figurePixelScale(previewScale: number): number {
   return Math.max(0.05, Math.ceil(previewScale * ratio * 20 - 1e-6) / 20);
 }
 
-/** The status region's text: the export's milestones, then how it ended. */
-function statusText(screen: PosterScreen | ExportingScreen, cancelled: boolean): string {
-  if (screen.name === 'exporting') return exportAnnouncement(screen.progress, screen.fileName);
+/**
+ * The status region's text: the export's start (and its milestones once it is `slow`), then how it
+ * ended.
+ */
+function statusText(
+  screen: PosterScreen | ExportingScreen,
+  cancelled: boolean,
+  slow: boolean,
+): string {
+  if (screen.name === 'exporting') {
+    return exportAnnouncement(screen.progress, screen.fileName, slow);
+  }
   if (screen.notice?.kind === 'saved') return `Saved ${screen.notice.fileName}.`;
   if (screen.notice?.kind === 'failed') return screen.notice.message;
   return cancelled ? 'Export cancelled.' : '';

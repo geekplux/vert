@@ -1,0 +1,286 @@
+/**
+ * The poster export: one poster element in, one PNG or PDF Blob out, all in the browser.
+ *
+ * 1. Plan the tiles (≤ 4096 px) and report `{ done: 0, total }`; fail at once on a canvas size
+ *    this browser already refused.
+ * 2. Mount the poster off-screen at its logical size (its own React root, hidden from the
+ *    accessibility tree), with every face it uses loaded first, so it never draws a fallback.
+ * 3. Serialize it to a standalone SVG (`serialize.ts`): styles inlined, fonts and images embedded.
+ * 4. Load the embedded font files in the page (`preloadFonts`), so SVG images never draw a face
+ *    that is still loading; then rasterize at `scale = target / logical`, after a small draw that
+ *    settles the fonts, tile by tile (`rasterize.ts`), one progress report per tile, cancellable
+ *    between tiles. The output canvas is verified as it is made (no up-front canvas probe).
+ * 5. Encode: PNG (marked 300 dpi for print sizes) or a single-image PDF (`pdf.ts`).
+ *
+ * `downloadBlob` is the only place a file is handed to the browser.
+ */
+import { createElement, Fragment } from 'react';
+import type { ReactElement } from 'react';
+import { flushSync } from 'react-dom';
+import { createRoot } from 'react-dom/client';
+// Types only: the engine never imports page code at runtime (no import cycle with exporter.ts).
+import type { ExportFormat, ExportProgressReport } from '../../page/PosterState/exporter';
+import { loadPosterFonts } from '../fonts';
+import { posterLayout } from '../layout';
+import type { PosterSize } from '../sizes';
+import type { PosterStyleId } from '../styles';
+import { MAX_TILE, knownCanvasResult } from './canvasLimits';
+import type { ProbeCanvas } from './canvasLimits';
+import { ExportError, TOO_LARGE_MESSAGE } from './errors';
+import { preloadFonts } from './fontPreload';
+import { PRINT_DPI, pdfPageSize, writeSingleImagePdf } from './pdf';
+import { withPngDensity } from './png';
+import { CanvasLimitError, planTiles, rasterize } from './rasterize';
+import type { FigureLayer, RasterizeOptions, SettleResult } from './rasterize';
+import { posterSvg, serializePoster } from './serialize';
+import type { SerializeOptions, SerializedPoster } from './serialize';
+
+export { TOO_LARGE_MESSAGE };
+
+/** JPEG quality inside the PDF: 1.0, the only quality at which Chromium writes 4:4:4 (pdf.ts). */
+export const PDF_JPEG_QUALITY = 1;
+
+export interface ExportPosterOptions {
+  /** The poster, rendered at its logical size (`posterLayout(size)`), with its data ready. */
+  readonly element: ReactElement;
+  readonly size: PosterSize;
+  /** The poster style: decides which faces are loaded before drawing. */
+  readonly style: PosterStyleId;
+  readonly format: ExportFormat;
+  /** The file's name; the PDF's title defaults to it without the extension. */
+  readonly fileName: string;
+  /** The PDF's title (default: from `fileName`). */
+  readonly title?: string;
+  /** A raster figure composited over the `[data-slot="figure"]` box (the terrain, later). */
+  readonly figure?: FigureLayer;
+  /** Awaited after mounting, before serializing (e.g. until an async figure has drawn). */
+  readonly waitFor?: (root: HTMLElement) => Promise<void>;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: ExportProgressReport) => void;
+  /** Diagnostics: how many small draws it took for the fonts to settle (`settleFonts`). */
+  readonly onSettled?: (result: SettleResult) => void;
+}
+
+/** A poster mounted off-screen. */
+export interface MountedPoster {
+  /** The poster's root element. */
+  readonly root: HTMLElement;
+  unmount(): void;
+}
+
+/** The steps, replaceable in tests. */
+export interface ExportDeps {
+  /** What is known about a canvas size (`knownCanvasResult`): false fails the export at once. */
+  readonly canvasKnown: (width: number, height: number) => boolean | undefined;
+  /** Loads the embedded font files in the page; resolves with their release. */
+  readonly preloadFonts: (urls: readonly string[]) => Promise<() => void>;
+  readonly mount: (element: ReactElement, width: number, height: number) => Promise<MountedPoster>;
+  /** Loads the faces the poster uses and lets it settle. */
+  readonly prepare: (root: HTMLElement, style: PosterStyleId) => Promise<void>;
+  readonly serialize: (root: HTMLElement, options: SerializeOptions) => Promise<SerializedPoster>;
+  readonly rasterize: (options: RasterizeOptions) => Promise<ProbeCanvas>;
+  readonly encode: (canvas: ProbeCanvas, type: string, quality?: number) => Promise<Blob>;
+}
+
+/** Lets React commit and the browser lay out: timers, not frames (frames stop in hidden tabs). */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 16));
+}
+
+/** Mounts `element` in a hidden container of the poster's logical size, far off-screen. */
+export async function mountOffscreen(
+  element: ReactElement,
+  width: number,
+  height: number,
+): Promise<MountedPoster> {
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.inert = true;
+  host.dataset.vertExport = '';
+  // Not `visibility: hidden` or `display: none`: the poster must lay out and its computed styles
+  // must be the visible ones.
+  host.style.cssText =
+    `position:fixed;top:0;left:${String(-Math.ceil(width) - 1000)}px;` +
+    `width:${String(width)}px;height:${String(height)}px;overflow:hidden;pointer-events:none;`;
+  document.body.appendChild(host);
+  const reactRoot = createRoot(host);
+  const unmount = () => {
+    reactRoot.unmount();
+    host.remove();
+  };
+  try {
+    flushSync(() => {
+      reactRoot.render(createElement(Fragment, null, element));
+    });
+    await settle();
+    const root = host.firstElementChild;
+    if (!(root instanceof HTMLElement)) throw new Error('The poster did not render');
+    return { root, unmount };
+  } catch (error) {
+    unmount();
+    throw error;
+  }
+}
+
+/** Loads every face the mounted poster's text needs, then waits for the layout to settle. */
+export async function preparePoster(root: HTMLElement, style: PosterStyleId): Promise<void> {
+  await loadPosterFonts(style, root.textContent || 'Aa0', { subtitle: true });
+  if ('fonts' in document) await document.fonts.ready;
+  // Title measures re-render once their face is in; give them a turn.
+  await settle();
+  await settle();
+}
+
+/** A canvas's pixels as a file of `type`. */
+export async function encodeCanvas(
+  canvas: ProbeCanvas,
+  type: string,
+  quality?: number,
+): Promise<Blob> {
+  if ('convertToBlob' in canvas) return canvas.convertToBlob({ type, quality });
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new CanvasLimitError('The canvas could not be encoded'));
+      },
+      type,
+      quality,
+    );
+  });
+}
+
+export const defaultExportDeps: ExportDeps = {
+  canvasKnown: knownCanvasResult,
+  preloadFonts,
+  mount: mountOffscreen,
+  prepare: preparePoster,
+  serialize: serializePoster,
+  rasterize,
+  encode: encodeCanvas,
+};
+
+const TOO_LARGE_DOM_ERRORS = new Set([
+  'EncodingError',
+  'IndexSizeError',
+  'InvalidStateError',
+  'NotReadableError',
+  'QuotaExceededError',
+  'UnknownError',
+]);
+
+/** Whether `error` means the browser could not hold or encode a canvas this large. */
+export function isCanvasLimitError(error: unknown): boolean {
+  return (
+    error instanceof CanvasLimitError ||
+    error instanceof RangeError ||
+    (error instanceof DOMException && TOO_LARGE_DOM_ERRORS.has(error.name))
+  );
+}
+
+function abortError(signal: AbortSignal | undefined): unknown {
+  const reason: unknown = signal?.reason;
+  return reason instanceof DOMException && reason.name === 'AbortError'
+    ? reason
+    : new DOMException('The export was cancelled.', 'AbortError');
+}
+
+/** The file name without its extension, as the PDF's title. */
+function titleFromFileName(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '');
+}
+
+/** Renders the poster and encodes it; resolves with the file's Blob. */
+export async function exportPoster(
+  options: ExportPosterOptions,
+  deps: ExportDeps = defaultExportDeps,
+): Promise<Blob> {
+  const { element, size, style, format, fileName, figure, waitFor, signal, onProgress } = options;
+  const layout = posterLayout(size);
+  let mounted: MountedPoster | null = null;
+  let canvas: ProbeCanvas | null = null;
+  let releaseFonts: (() => void) | null = null;
+  try {
+    signal?.throwIfAborted();
+    if (deps.canvasKnown(size.width, size.height) === false) {
+      throw new CanvasLimitError('This canvas size failed before');
+    }
+    const total = planTiles(size.width, size.height, MAX_TILE).length;
+    onProgress?.({ done: 0, total });
+
+    // Faces first, so the poster's first render already measures with them.
+    await loadPosterFonts(style);
+    signal?.throwIfAborted();
+    mounted = await deps.mount(element, layout.width, layout.height);
+    await deps.prepare(mounted.root, style);
+    if (waitFor) await waitFor(mounted.root);
+    signal?.throwIfAborted();
+
+    const poster = await deps.serialize(mounted.root, { hideFigure: figure !== undefined, signal });
+    mounted.unmount();
+    mounted = null;
+    signal?.throwIfAborted();
+    releaseFonts = await deps.preloadFonts(poster.fontUrls);
+    signal?.throwIfAborted();
+
+    canvas = await deps.rasterize({
+      svg: (view, width, height) => posterSvg(poster, view, width, height),
+      width: size.width,
+      height: size.height,
+      scale: layout.scale,
+      tileSize: MAX_TILE,
+      onSettled: options.onSettled,
+      figure: figure && poster.figureBox ? { layer: figure, box: poster.figureBox } : undefined,
+      signal,
+      onTile: (done, tiles) => {
+        onProgress?.({ done, total: tiles });
+      },
+    });
+    signal?.throwIfAborted();
+
+    if (format === 'pdf') {
+      const jpeg = await deps.encode(canvas, 'image/jpeg', PDF_JPEG_QUALITY);
+      signal?.throwIfAborted();
+      const page = pdfPageSize(size);
+      return writeSingleImagePdf({
+        jpeg: new Uint8Array(await jpeg.arrayBuffer()),
+        pageWidth: page.width,
+        pageHeight: page.height,
+        title: options.title ?? titleFromFileName(fileName),
+      });
+    }
+    const png = await deps.encode(canvas, 'image/png');
+    signal?.throwIfAborted();
+    return size.use === 'print' ? await withPngDensity(png, PRINT_DPI) : png;
+  } catch (error) {
+    if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+      throw abortError(signal);
+    }
+    if (isCanvasLimitError(error)) throw new ExportError(TOO_LARGE_MESSAGE, { cause: error });
+    throw error;
+  } finally {
+    mounted?.unmount();
+    releaseFonts?.();
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+  }
+}
+
+/** Saves `blob` as `fileName` through a temporary object URL and `<a download>`. */
+export function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.rel = 'noopener';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoke after the browser has started the download.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 30_000);
+}

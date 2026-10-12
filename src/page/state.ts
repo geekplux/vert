@@ -18,8 +18,10 @@
  *   upload (busy) ──LOAD_FAILED──▶ upload (error)
  *   view ──MAKE_POSTER──▶ poster ──BACK_TO_RUN──▶ view
  *   view, poster ──NEW_FILE──▶ upload
- *   poster ──EXPORT_STARTED──▶ exporting ──EXPORT_PROGRESS──▶ exporting
- *   exporting ──EXPORT_DONE──▶ poster (with "Saved <file>") │ ──EXPORT_CANCELLED──▶ poster
+ *   poster ──EXPORT_STARTED──▶ exporting (total unknown: "Preparing…")
+ *   exporting ──EXPORT_PROGRESS { done, total }──▶ exporting (the exporter owns the tile count)
+ *   exporting ──EXPORT_DONE──▶ poster (with "Saved <file>") │ ──EXPORT_FAILED──▶ poster (with
+ *   the error) │ ──EXPORT_CANCELLED──▶ poster
  *
  * `exporting` is an overlay on poster mode: the page keeps showing the poster screen and adds the
  * progress bar (`isPosterMode`). Any other event in a screen is ignored (the state is returned
@@ -55,11 +57,16 @@ export interface ViewScreen {
   readonly runId: string;
 }
 
+/** How the last export ended, shown under the Download button until the next export. */
+export type PosterNotice =
+  | { readonly kind: 'saved'; readonly fileName: string }
+  | { readonly kind: 'failed'; readonly message: string };
+
 export interface PosterScreen {
   readonly name: 'poster';
   readonly runId: string;
-  /** Set after an export completes ("Saved <savedFileName>"); cleared by the next export. */
-  readonly notice: { readonly savedFileName: string } | null;
+  /** Set when an export ends ("Saved <file>" or the error); cleared by the next export. */
+  readonly notice: PosterNotice | null;
 }
 
 /** Poster mode with the export overlay on top. */
@@ -68,8 +75,11 @@ export interface ExportingScreen {
   readonly runId: string;
   /** The file being written, e.g. "coosa-backcountry-loop-18x24.png". */
   readonly fileName: string;
-  /** Tiles rendered so far out of the total ("Rendering tile 4 of 12"); 0 ≤ done ≤ total. */
-  readonly progress: { readonly done: number; readonly total: number };
+  /**
+   * Tiles rendered so far out of the total ("Rendering tile 4 of 12"); 0 ≤ done ≤ total. `total`
+   * is null until the exporter reports it ("Preparing…").
+   */
+  readonly progress: { readonly done: number; readonly total: number | null };
 }
 
 export type Screen = UploadScreen | ViewScreen | PosterScreen | ExportingScreen;
@@ -117,13 +127,13 @@ export interface BackToRun {
 }
 export interface ExportStarted {
   readonly type: 'EXPORT_STARTED';
-  /** Tiles to render, an integer ≥ 1. */
-  readonly total: number;
   readonly fileName: string;
 }
+/** From the exporter: tiles done out of `total` (an integer ≥ 1; it may change between reports). */
 export interface ExportProgress {
   readonly type: 'EXPORT_PROGRESS';
   readonly done: number;
+  readonly total: number;
 }
 export interface ExportCancelled {
   readonly type: 'EXPORT_CANCELLED';
@@ -132,13 +142,18 @@ export interface ExportDone {
   readonly type: 'EXPORT_DONE';
   readonly fileName: string;
 }
+export interface ExportFailed {
+  readonly type: 'EXPORT_FAILED';
+  /** Shown to the user under the Download button. */
+  readonly message: string;
+}
 
 /** The events each screen accepts. Everything else is ignored in that screen. */
 export interface ScreenEvents {
   upload: FileChosen | SampleChosen | RunLoaded | LoadFailed;
   view: NewFile | MakePoster;
   poster: NewFile | BackToRun | ExportStarted;
-  exporting: ExportProgress | ExportCancelled | ExportDone;
+  exporting: ExportProgress | ExportCancelled | ExportDone | ExportFailed;
 }
 
 /** Events valid in screen `N` (`ScreenEvent<'view'>`), or in any screen (`ScreenEvent`). */
@@ -272,12 +287,11 @@ function poster(screen: PosterScreen, event: ScreenEvent): Screen {
     case 'BACK_TO_RUN':
       return { name: 'view', runId: screen.runId };
     case 'EXPORT_STARTED':
-      if (!Number.isInteger(event.total) || event.total < 1) return screen;
       return {
         name: 'exporting',
         runId: screen.runId,
         fileName: event.fileName,
-        progress: { done: 0, total: event.total },
+        progress: { done: 0, total: null },
       };
     default:
       return screen;
@@ -287,15 +301,28 @@ function poster(screen: PosterScreen, event: ScreenEvent): Screen {
 function exporting(screen: ExportingScreen, event: ScreenEvent): Screen {
   switch (event.type) {
     case 'EXPORT_PROGRESS': {
-      if (Number.isNaN(event.done)) return screen;
-      const { total } = screen.progress;
+      const { total } = event;
+      if (Number.isNaN(event.done) || !Number.isInteger(total) || total < 1) return screen;
       const done = Math.min(total, Math.max(0, Math.floor(event.done)));
-      return done === screen.progress.done ? screen : { ...screen, progress: { done, total } };
+      const current = screen.progress;
+      return done === current.done && total === current.total
+        ? screen
+        : { ...screen, progress: { done, total } };
     }
     case 'EXPORT_CANCELLED':
       return { name: 'poster', runId: screen.runId, notice: null };
     case 'EXPORT_DONE':
-      return { name: 'poster', runId: screen.runId, notice: { savedFileName: event.fileName } };
+      return {
+        name: 'poster',
+        runId: screen.runId,
+        notice: { kind: 'saved', fileName: event.fileName },
+      };
+    case 'EXPORT_FAILED':
+      return {
+        name: 'poster',
+        runId: screen.runId,
+        notice: { kind: 'failed', message: event.message },
+      };
     default:
       return screen;
   }

@@ -232,12 +232,14 @@ describe('PosterState', () => {
   it('starts the export with the poster’s file name from Download', () => {
     const dispatch = vi.fn<(action: PosterStateAction) => void>();
     const state = posterState();
+    const exporter = () => new Promise<never>(() => undefined);
     const { rerender } = render(
       <PosterState
         run={SAMPLE_RUN}
         screen={{ name: 'poster', runId: SAMPLE_RUN.id, notice: null }}
         prefs={state.prefs}
         dispatch={dispatch}
+        exporter={exporter}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Download PNG · 5400 × 7200' }));
@@ -252,38 +254,21 @@ describe('PosterState', () => {
           poster: { ...state.prefs.poster, size: 'a3', title: 'Côte Loop' },
         }}
         dispatch={dispatch}
+        exporter={exporter}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Download PNG · 3508 × 4961' }));
     expect(dispatch.mock.calls.map(([action]) => action)).toEqual([
       {
         type: 'EXPORT_STARTED',
-        total: 12,
         fileName: 'vert-coosa-backcountry-trail-18x24.png',
       },
       {
         type: 'EXPORT_STARTED',
-        total: 12,
         fileName: 'vert-coosa-backcountry-trail-18x24.pdf',
       },
-      { type: 'EXPORT_STARTED', total: 12, fileName: 'vert-cote-loop-a3.png' },
+      { type: 'EXPORT_STARTED', fileName: 'vert-cote-loop-a3.png' },
     ]);
-  });
-
-  it('enters exporting from Download and comes back with Cancel (placeholder until task f)', () => {
-    renderPoster();
-    fireEvent.click(screen.getByRole('button', { name: 'Download PNG · 5400 × 7200' }));
-    expect(screen.getByRole('status').textContent).toContain(
-      'Exporting vert-coosa-backcountry-trail-18x24.png.',
-    );
-    // Still poster mode: the same settings and preview under the overlay.
-    expect(screen.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeDefined();
-    expect(poster()).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'New file' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Download PNG · 5400 × 7200' })).toBeDefined();
   });
 
   it('goes back to the run from the header', () => {

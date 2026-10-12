@@ -1,0 +1,124 @@
+/* Dropzone. Source: canvas Upload.html (wins over Tokens.html's DROPZONE) and DECISIONS.md. */
+
+.zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-10) var(--space-6);
+  border: 2px dashed var(--muted);
+  border-radius: var(--radius-panel);
+  background: var(--white);
+  color: var(--ink);
+  text-align: center;
+}
+
+/* Drag-over: dashed → solid carries the state without colour; the title also changes. */
+.zone[data-state='dragover'] {
+  border-style: solid;
+  border-color: var(--ink);
+}
+
+/* Error: solid route border; the message below carries the state in text. */
+.zone[data-state='error'] {
+  border-style: solid;
+  border-color: var(--route);
+}
+
+.icon {
+  display: block;
+  flex: none;
+  width: 36px;
+  height: 36px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.line {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Real buttons drawn as underlined links. */
+.link {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+/* 44px-tall hit area without changing the drawn size (CLAUDE.md: touch targets ≥ 44px). */
+.link::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: calc(-1 * var(--space-1));
+  left: calc(-1 * var(--space-1));
+  height: var(--touch);
+  transform: translateY(-50%);
+}
+
+.link:hover:not(:disabled) {
+  color: var(--route-text);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--route-text);
+}
+
+.warning {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* The file input is opened by "choose a file"; it is never seen or focused. */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Windows high contrast: keep the three border states distinct with system colours. */
+@media (forced-colors: active) {
+  .zone[data-state='dragover'] {
+    border-color: Highlight;
+  }
+
+  .zone[data-state='error'] {
+    border-color: CanvasText;
+  }
+}

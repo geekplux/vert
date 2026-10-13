@@ -25,7 +25,9 @@ export type TileDecoder = (png: ArrayBuffer) => Promise<TileElevations>;
 export type FetchLike = (
   url: string,
   init: RequestInit,
-) => Promise<Pick<Response, 'ok' | 'status' | 'arrayBuffer'>>;
+) => Promise<
+  Pick<Response, 'ok' | 'status' | 'arrayBuffer'> & { readonly headers?: Pick<Headers, 'get'> }
+>;
 
 export interface FetchTileOptions {
   signal?: AbortSignal;
@@ -43,6 +45,26 @@ export class TileHttpError extends Error {
     this.name = 'TileHttpError';
     this.status = status;
   }
+}
+
+/**
+ * A tile request answered with a web page (or other text) instead of an image: the site serves no
+ * tiles at that path. The deployed app before its tile proxy is switched on answers `/tiles/…` with
+ * its own `index.html` (200, `text/html`), which used to be read as a tile and blamed on the
+ * browser ("the elevation data arrived, but this browser couldn't read it"). Not retried.
+ */
+export class TileNotServedError extends Error {
+  readonly contentType: string;
+  constructor(coord: TileCoord, contentType: string) {
+    super(`Tile ${tileKey(coord)} came back as ${contentType}, not an image`);
+    this.name = 'TileNotServedError';
+    this.contentType = contentType;
+  }
+}
+
+/** A `Content-Type` that no tile has: text, HTML, JSON or XML. A missing header is allowed. */
+export function isNotTileType(contentType: string | null): boolean {
+  return contentType !== null && /^text\/|html|json|xml/i.test(contentType);
 }
 
 /**
@@ -289,6 +311,8 @@ export class TileLoader {
       const download = async () => {
         const response = await fetchImpl(url, init);
         if (!response.ok) throw new TileHttpError(coord, response.status);
+        const type = response.headers?.get('content-type') ?? null;
+        if (isNotTileType(type)) throw new TileNotServedError(coord, type ?? '');
         // Reading the body can still fail on the network (a TypeError, retried below).
         return response.arrayBuffer();
       };

@@ -106,23 +106,50 @@ export function TerrainView({
   ref,
 }: TerrainViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<TerrainStage | null>(null);
   const hintId = useId();
 
   // Latest values for callbacks and for the heightfield effect, without re-running effects.
-  const latest = useRef({ exaggeration, view, initialCamera, onReady, onRenderFrame, track });
+  const latest = useRef({
+    exaggeration,
+    view,
+    initialCamera,
+    onReady,
+    onRenderFrame,
+    track,
+    ariaLabel,
+  });
   useEffect(() => {
-    latest.current = { exaggeration, view, initialCamera, onReady, onRenderFrame, track };
+    latest.current = {
+      exaggeration,
+      view,
+      initialCamera,
+      onReady,
+      onRenderFrame,
+      track,
+      ariaLabel,
+    };
   });
 
   // One stage per mount: renderer, camera, controls, resize observer, key handling.
   const paletteRef = useRef(palette);
   const routePaletteRef = useRef(routePalette);
+  //
+  // Each stage gets a canvas of its own, made here and removed with it: `dispose` loses the GL
+  // context for good (browsers cap live contexts), and a lost context's canvas never gives another.
+  // React re-runs this effect on the same DOM (StrictMode in `pnpm dev` mounts, cleans up and mounts
+  // again), and a stage on the old canvas failed: "This browser couldn't draw the 3D terrain".
   useEffect(() => {
     const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return undefined;
+    if (!container) return undefined;
+    const canvas = document.createElement('canvas');
+    canvas.className = styles.canvas ?? '';
+    // A drawing, not a control: the text alternative is the label (and the page's aside).
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', latest.current.ariaLabel);
+    container.prepend(canvas);
+    canvasRef.current = canvas;
     const stage = new TerrainStage(canvas, {
       createRenderer,
       palette: paletteRef.current ?? readPalette(getComputedStyle(document.documentElement)),
@@ -153,8 +180,14 @@ export function TerrainView({
       observer?.disconnect();
       stage.dispose();
       stageRef.current = null;
+      canvas.remove();
+      if (canvasRef.current === canvas) canvasRef.current = null;
     };
   }, [createRenderer]);
+
+  useEffect(() => {
+    canvasRef.current?.setAttribute('aria-label', ariaLabel);
+  }, [ariaLabel, createRenderer]);
 
   // A new heightfield: rebuild the mesh and play the intro (or fade, with reduced motion).
   useEffect(() => {
@@ -236,9 +269,7 @@ export function TerrainView({
       tabIndex={heightfield ? 0 : -1}
       aria-describedby={hintId}
     >
-      {/* A drawing, not a control: the text alternative is the label (and the page's aside). */}
-      {/* eslint-disable-next-line jsx-a11y/no-interactive-element-to-noninteractive-role -- see above */}
-      <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={ariaLabel} />
+      {/* The canvas (`role="img"` with `ariaLabel`) is inserted here by the stage effect. */}
       <p id={hintId} className={styles.hint}>
         Arrow keys rotate the terrain; plus and minus zoom.
       </p>

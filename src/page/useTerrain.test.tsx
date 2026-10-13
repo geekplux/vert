@@ -2,12 +2,13 @@ import { act, render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HeightfieldError, HeightfieldTooLargeError } from '../terrain/heightfield';
-import { TileDecodeError } from '../terrain/tiles';
+import { TileDecodeError, TileNotServedError } from '../terrain/tiles';
 import type { Heightfield } from '../terrain/heightfield';
 import { hills, makeTrack } from '../terrain/testing';
 import {
   RunProvider,
   TERRAIN_DECODE_ERROR,
+  TERRAIN_UNSERVED_ERROR,
   TERRAIN_GENERIC_ERROR,
   TERRAIN_OFFLINE_ERROR,
   TERRAIN_TOO_LARGE_ERROR,
@@ -162,6 +163,20 @@ describe('useTerrain lifecycle', () => {
     await settle();
     expect(result.current.terrain).toEqual({ status: 'error', error: TERRAIN_DECODE_ERROR });
     expect(TERRAIN_DECODE_ERROR).not.toMatch(/connection/);
+  });
+
+  it('says the site serves no elevation data when every tile came back as a page', async () => {
+    const terrain = manualTerrain();
+    const { result } = renderHook(useTerrainProbe, {
+      wrapper: wrapper({ initialRun: SAMPLE_RUN, loadTerrain: terrain.loadTerrain }),
+    });
+    const tile = { z: 13, x: 1, y: 1 };
+    terrain
+      .build(0)
+      .reject(new HeightfieldError([tile], new TileNotServedError(tile, 'text/html'), 'unserved'));
+    await settle();
+    expect(result.current.terrain).toEqual({ status: 'error', error: TERRAIN_UNSERVED_ERROR });
+    expect(TERRAIN_UNSERVED_ERROR).not.toMatch(/connection|browser/);
   });
 
   it('says a route too large for the tiles is too large, not a connection problem', async () => {

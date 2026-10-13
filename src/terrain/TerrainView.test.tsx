@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import type { Heightfield } from './heightfield';
@@ -67,6 +68,44 @@ describe('TerrainView', () => {
       'CANVAS',
     );
     expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives every stage a canvas of its own, so a remount (StrictMode in dev) never reuses a lost context', async () => {
+    const { renderer, factory } = fakeRenderer();
+    const onReady = vi.fn();
+    const { container, rerender } = render(
+      <StrictMode>
+        <TerrainView
+          heightfield={heightfield()}
+          exaggeration={1.6}
+          ariaLabel="Terrain"
+          createRenderer={factory}
+          onReady={onReady}
+        />
+      </StrictMode>,
+    );
+    await flushFrames();
+    // Mounted, cleaned up (its context lost for good) and mounted again: two canvases asked for.
+    expect(factory).toHaveBeenCalledTimes(2);
+    const [first, second] = factory.mock.calls.map((call) => (call as unknown[])[0]);
+    expect(first).not.toBe(second);
+    expect(renderer.forceContextLoss).toHaveBeenCalledTimes(1);
+    // Only the live stage's canvas is in the page, and it drew.
+    expect(container.querySelectorAll('canvas')).toHaveLength(1);
+    expect(screen.getByRole('img', { name: 'Terrain' })).toBe(second);
+    expect(onReady).toHaveBeenCalled();
+    // The label follows the prop.
+    rerender(
+      <StrictMode>
+        <TerrainView
+          heightfield={heightfield()}
+          exaggeration={1.6}
+          ariaLabel="Terrain, renamed"
+          createRenderer={factory}
+        />
+      </StrictMode>,
+    );
+    expect(screen.getByRole('img', { name: 'Terrain, renamed' })).toBe(second);
   });
 
   it('draws a heightfield, reports ready and makes the canvas visible', async () => {

@@ -26,6 +26,7 @@ import {
   TILE_SIZE,
   TileDecodeError,
   TileHttpError,
+  TileNotServedError,
   fetchTile,
   isAbortError,
   tileLoader,
@@ -188,6 +189,28 @@ describe('buildHeightfield', () => {
     // Lowest at the south-west corner, highest at the north-east.
     expect(hf.min).toBeCloseTo(surface(hf.bounds.west, hf.bounds.south), 1);
     expect(hf.max).toBeCloseTo(surface(hf.bounds.east, hf.bounds.north), 1);
+  });
+
+  it("removes Terrarium's coastal seam lines before sampling (a harbour at z14)", async () => {
+    // A 1.4 km × 0.4 km harbourside route (made up): z14. Sea at −2 m south of the coast, land at 4 m.
+    const harbourside: Bounds = { west: 10.03, south: 30.006, east: 10.045, north: 30.01 };
+    const coast = 30.008;
+    const terrain = (_lon: number, lat: number) => (lat < coast ? -2 : 4);
+    // Every tile carries one-pixel lines of −7,004 m down every 64th column, and short runs of
+    // −5,465 m along every 64th row, so the grid's area crosses some whichever tiles it covers.
+    const seamed = async (tile: TileCoord) => {
+      const data = analyticTile(tile, terrain);
+      for (let c = 37; c < TILE_SIZE; c += 64) {
+        for (let py = 0; py < TILE_SIZE; py++) data[py * TILE_SIZE + c] = -7004;
+        for (let px = 0; px < 30; px++) data[c * TILE_SIZE + ((c + 3 + px) % TILE_SIZE)] = -5465;
+      }
+      return Promise.resolve(data);
+    };
+    const hf = await buildHeightfield(harbourside, { fetchTile: seamed });
+    expect(hf.zoom).toBe(14);
+    expect(hf.min).toBeGreaterThanOrEqual(-2);
+    expect(hf.max).toBeLessThanOrEqual(4);
+    expect(elevationAt(hf, 10.04, 30.0095)).toBeCloseTo(4, 3);
   });
 
   it('pads the bounds by 15% on each side by default', async () => {
@@ -384,6 +407,15 @@ describe('buildHeightfield', () => {
     );
     expect(error).toBeInstanceOf(HeightfieldError);
     expect((error as HeightfieldError).kind).toBe('decode');
+  });
+
+  it('says so when every tile came back as a web page, not an image', async () => {
+    const page = (tile: TileCoord) => Promise.reject(new TileNotServedError(tile, 'text/html'));
+    const error: unknown = await buildHeightfield(BOUNDS, { fetchTile: page }).catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(HeightfieldError);
+    expect((error as HeightfieldError).kind).toBe('unserved');
   });
 
   it('calls a mix of decode and network failures a network failure', async () => {

@@ -164,6 +164,13 @@ export const TERRAIN_OFFLINE_ERROR =
 export const TERRAIN_DECODE_ERROR =
   "The terrain couldn't load: the elevation data arrived, but this browser couldn't read it. Reload the page and try again.";
 
+/**
+ * Every tile request was answered with a page instead of an image (`TileNotServedError`):
+ * this site serves no elevation tiles (the deployed app before its tile proxy is switched on).
+ */
+export const TERRAIN_UNSERVED_ERROR =
+  "The terrain couldn't load: this site isn't serving elevation data right now. Try again later.";
+
 /** The route spans more than the tiles the app can fetch (even at the lowest served zoom). */
 export const TERRAIN_TOO_LARGE_ERROR = 'This route covers too much ground to draw its terrain.';
 
@@ -173,6 +180,7 @@ export const TERRAIN_GENERIC_ERROR = "The terrain couldn't be built for this run
 function terrainErrorMessage(error: unknown): string {
   if (error instanceof HeightfieldTooLargeError) return TERRAIN_TOO_LARGE_ERROR;
   if (error instanceof HeightfieldError && error.kind === 'decode') return TERRAIN_DECODE_ERROR;
+  if (error instanceof HeightfieldError && error.kind === 'unserved') return TERRAIN_UNSERVED_ERROR;
   const offline = typeof navigator !== 'undefined' && !navigator.onLine;
   return offline || error instanceof HeightfieldError || error instanceof TypeError
     ? TERRAIN_OFFLINE_ERROR

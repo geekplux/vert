@@ -21,7 +21,10 @@ Files:
 - `stats.ts`: `computeStats(points)` → distance (haversine), moving time (steps over 30 s and
   standing still excluded), ascent/descent (gaps filled, 3-point median, 2 m hysteresis), high and
   low point, climbs (≥ 50 m at ≥ 4%, small dips merged, at most 8, one `steepest`), a 500-point
-  profile; `timeAtDistance` and `paceAt` for the scrub readout. The rules are in its header.
+  profile; `<ele>` that is constant, or within 0.5 m over ≥ 1 km, counts as none; `timeAtDistance` and `paceAt` for the scrub readout. The rules are in its header.
+- `terrainElevation.ts`: elevations for a run without usable `<ele>` (or with long gaps), sampled
+  from the terrain grid along the track and averaged over ±50 m of route (`smoothByDistance`);
+  `withInterpolatedGaps` when the terrain fails.
 - `trim.ts`: `trimEnds(points, cumulative, metres)` and `trimTrack(track, metres)` for "hide start
   and end" (the drawn line only, never the stats).
 - `handler.ts`: the worker's message protocol (`ParseRequest`, `ParseResponse`) and

@@ -7,7 +7,9 @@ import { parseGpx } from './parse';
 import type { TrackPoint } from './types';
 import {
   MIN_RECORDED_SHARE,
+  TERRAIN_SMOOTHING_M,
   recordedShare,
+  smoothByDistance,
   withInterpolatedGaps,
   withTerrainElevation,
 } from './terrainElevation';
@@ -110,13 +112,15 @@ describe('withTerrainElevation on patchy <ele> (the sample, edited)', () => {
     expect(withTerrainElevation(run, sampleTerrain)).toBe(run);
   });
 
+  // The terrain here is the file's own elevations, averaged over ±50 m of route as all terrain
+  // samples are (TERRAIN_SMOOTHING_M): within 3% of the file's +1,102 m.
   it('fills a missing second half from the terrain: mixed, about the full +1,102 m', () => {
     const run = variant((e, i) => (i < n / 2 ? e : null));
     expect(run.hasElevation).toBe(false);
     expect(run.vert).toBeNaN();
     const filled = withTerrainElevation(run, sampleTerrain);
     expect(filled.elevationSource).toBe('mixed');
-    expect(Math.abs(filled.vert - 1_102)).toBeLessThan(5);
+    expect(Math.abs(filled.vert - 1_102)).toBeLessThan(1_102 * 0.03);
     expect(filled.track.partialEle).toBeNull();
   });
 
@@ -125,8 +129,8 @@ describe('withTerrainElevation on patchy <ele> (the sample, edited)', () => {
       expect(run.hasElevation).toBe(false);
       const filled = withTerrainElevation(run, sampleTerrain);
       expect(filled.elevationSource).toBe('terrain');
-      expect(Math.abs(filled.vert - 1_102)).toBeLessThan(5);
-      expect(Math.round(filled.highPoint)).toBe(1_267);
+      expect(Math.abs(filled.vert - 1_102)).toBeLessThan(1_102 * 0.03);
+      expect(Math.abs(filled.highPoint - 1_267)).toBeLessThan(3);
     }
   });
 
@@ -134,10 +138,63 @@ describe('withTerrainElevation on patchy <ele> (the sample, edited)', () => {
     const run = variant((e, i) => (i < n / 2 ? e : null));
     const filled = withTerrainElevation(run, (lon, lat) => sampleTerrain(lon, lat) - 30);
     expect(filled.elevationSource).toBe('mixed');
-    expect(Math.abs(filled.vert - 1_102)).toBeLessThan(5);
+    expect(Math.abs(filled.vert - 1_102)).toBeLessThan(1_102 * 0.03);
     const ele = filled.track.ele;
     const join = Math.ceil(n / 2);
     expect(Math.abs((ele?.[join] ?? 0) - (ele?.[join - 1] ?? 0))).toBeLessThan(3);
+  });
+});
+
+describe('smoothByDistance', () => {
+  const evenly = (n: number, step: number) => Float64Array.from({ length: n }, (_, i) => i * step);
+
+  it('keeps the ends and a steady grade exactly', () => {
+    const cumulative = evenly(201, 10);
+    const ramp = cumulative.map((d) => 100 + 0.12 * d);
+    const out = smoothByDistance(ramp, cumulative, 50);
+    for (let i = 0; i < ramp.length; i++) expect(out[i]).toBeCloseTo(ramp[i] ?? NaN, 9);
+  });
+
+  it('averages a bump over the window, by distance', () => {
+    const cumulative = evenly(101, 10);
+    const bump = cumulative.map((d) => (d === 500 ? 20 : 0));
+    const out = smoothByDistance(bump, cumulative, 50);
+    // The bump's triangle (20 m tall, 20 m wide at its base) over a 100 m window: 2 m.
+    expect(out[50]).toBeCloseTo(2, 9);
+    // Half the triangle (100 m²) inside the window that ends at the peak: 1 m.
+    expect(out[45]).toBeCloseTo(1, 9);
+    expect(out[44]).toBe(0);
+    // Uneven spacing: a burst of points at a stop does not outweigh the rest of the window.
+    const bunched = Float64Array.from([
+      0, 10, 20, 30, 40, 50, 50.1, 50.2, 50.3, 60, 70, 80, 90, 100,
+    ]);
+    const level = bunched.map((d) => (d >= 50 && d <= 50.3 ? 10 : 0));
+    // By distance: (50 + 3 + 48.5) m² over 100 m; an average of the points would give 2.9 m.
+    expect(smoothByDistance(level, bunched, 50)[5]).toBeCloseTo(1.015, 9);
+  });
+
+  it('leaves short series and a zero window alone', () => {
+    const two = Float64Array.from([1, 5]);
+    expect([...smoothByDistance(two, Float64Array.from([0, 10]), 50)]).toEqual([1, 5]);
+    const three = Float64Array.from([1, 9, 1]);
+    expect([...smoothByDistance(three, Float64Array.from([0, 10, 20]), 0)]).toEqual([1, 9, 1]);
+  });
+});
+
+describe('withTerrainElevation on a flat city run (a surface model with roofs and noise)', () => {
+  /** 5 km of flat waterfront at 3 m with the DEM's ±8 m bumps every 60 m along it. */
+  const bumpy = (_lon: number, lat: number) => {
+    const d = (lat - 46) * 111_195;
+    return 3 + 8 * Math.sin((2 * Math.PI * d) / 60);
+  };
+
+  it(`averages the terrain over ±${String(TERRAIN_SMOOTHING_M)} m before counting climb`, () => {
+    const run = withTerrainElevation(noElevationRun(), bumpy);
+    expect(run.elevationSource).toBe('terrain');
+    // Raw, every bump would count: about 6 km / 60 m × 2 × 16 m ≈ 1,500 m of climb.
+    expect(run.vert).toBeLessThan(20);
+    expect(run.highPoint).toBeLessThan(12);
+    expect(run.climbs).toEqual([]);
   });
 });
 

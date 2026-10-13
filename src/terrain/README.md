@@ -9,12 +9,16 @@ scrub marker. No map library, no basemap.
   network error, AbortError propagated. A tile that arrives but will not decode is a
   `TileDecodeError` (not retried); when every tile fails that way, `HeightfieldError.kind` is
   `'decode'` and the View says the data arrived but could not be read, not "check your connection".
+  A response with a text / HTML / JSON / XML `Content-Type` (a site answering `/tiles/…` with its
+  page) is a `TileNotServedError`, never decoded; all tiles so: `kind: 'unserved'`.
 - `heightfield.ts`: `buildHeightfield(bounds)` pads the bbox 15%, picks z12–14 so the area is
   ≤ 512 samples a side at native resolution and ≤ 16 tiles (below z12 only when a long route needs
   it; a long route then samples one zoom finer, ≤ 32 tiles, and downsamples to 512; never below
   z6, the Worker's lowest, and an area that needs more than 16 tiles even at z6 fetches nothing and
-  throws `HeightfieldTooLargeError`), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`) and
-  resamples to a regular Web Mercator grid. `elevationAt` drapes the route; `groundExtent` is the
+  throws `HeightfieldTooLargeError`), stitches the tiles into one mosaic, fills failed tiles from neighbours (`failedTiles`),
+  replaces spikes (Terrarium's coastal seam artefacts: pixels that most of their 5 × 5
+  neighbourhood clears by > max(100 m, 5 px), `removeSpikes` in lib/terrarium) and resamples to a
+  regular Web Mercator grid. `elevationAt` drapes the route; `groundExtent` is the
   grid's longer side in metres. Across the antimeridian the bounds run past ±180 (lib/geo), the
   mosaic's columns stay contiguous and each tile is fetched as `wrapTile(tile)`, so requests keep
   x in [0, 2^z). Latitudes are clamped to ±85 (inside the Mercator square), a minimum span apart.
@@ -101,7 +105,9 @@ scrub marker. No map library, no basemap.
   a `width × height` output px figure, framed in logical px (`width / scale`), line widths and
   markers × `scale`, synchronously into its canvas sized to `tile` (the camera's view offset is
   `figureViewOffset`: the lens shift moved by the tile's corner). Used by `src/poster/terrainFigure.ts`.
-- `TerrainView.tsx`: the React wrapper. Canvas is `role="img"` with the page's `aria-label`; the
+- `TerrainView.tsx`: the React wrapper. Each stage gets a canvas of its own, created in the stage
+  effect and removed with it (a disposed stage loses its context for good; StrictMode remounts on
+  the same DOM). Canvas is `role="img"` with the page's `aria-label`; the
   wrapper is focusable (arrow keys orbit, Shift for larger steps, + / − zoom; a visually hidden hint
   says so). Reduced motion: no camera move, the canvas fades in. Props `track`, `scrub`
   (metres), `overlays`, `insets` and `routePalette` drive the route layer. A ref handle exposes

@@ -201,6 +201,139 @@ describe('extractContours', () => {
   });
 });
 
+describe('the 0 m line (the coast)', () => {
+  const NINE = { x: 9, y: 9 }; // a z14 grid's samples, metres
+  const xs = (line: ContourLine) => Array.from(line.points).filter((_, i) => i % 2 === 0);
+  const coastOf = (lines: ContourLine[]) => lines.filter((line) => line.level === 0);
+  const NONE: ContourLine = { level: 0, index: true, closed: false, points: new Float64Array(0) };
+
+  it("traces the coast, not Terrarium's sea blocks: one index line where the land rises", () => {
+    // A harbour: blocks 20 samples (180 m) across at +0.3 m or −1.5 m west of column 200, one of
+    // them out in the water at +1.5 m; a quay at 4 m rising inland east of it.
+    const harbour = field(
+      300,
+      200,
+      (x, y) => {
+        if (x >= 200) return 4 + (x - 200) * 2;
+        if (x >= 20 && x < 40 && y >= 20 && y < 40) return 1.5;
+        return (Math.floor(x / 20) + Math.floor(y / 20)) % 2 ? 0.3 : -1.5;
+      },
+      NINE,
+    );
+    const coast = coastOf(extractContours(harbour));
+    expect(coast).toHaveLength(1);
+    expect(coast[0]?.index).toBe(true);
+    // Along the quay, within a sample and a half of it (the low blocks beside it pull it out a
+    // little), from the top edge to the bottom edge.
+    for (const x of xs(coast[0] ?? NONE)) expect(Math.abs(x - 199.5)).toBeLessThan(1.5);
+    // The levels above are traced from the elevations as they are.
+    expect(extractContours(harbour).filter((line) => line.level > 0).length).toBeGreaterThan(0);
+  });
+
+  it('draws a shore where the sea is exactly 0 m (Étretat), as one clean line', () => {
+    // Sea at exactly 0 m, deepening to −5 m at the west edge; a cliff rising from 20 m.
+    const cliff = field(60, 40, (x) => (x === 0 ? -5 : x < 30 ? 0 : 20 + (x - 30) * 3), NINE);
+    const coast = coastOf(extractContours(cliff));
+    expect(coast).toHaveLength(1);
+    // Between the last 0 m sample and the cliff, not out at sea.
+    for (const x of xs(coast[0] ?? NONE)) expect(Math.abs(x - 29.5)).toBeLessThan(0.75);
+  });
+
+  it('keeps the 0 m line of land below sea level (the Dead Sea escarpment) where the data puts it', () => {
+    const escarpment = field(60, 20, (x) => -430 + x * 15, { x: 35, y: 35 });
+    const lines = extractContours(escarpment);
+    const coast = coastOf(lines);
+    expect(coast).toHaveLength(1);
+    // −430 + 15x = 0 at x = 28.67: within half a sample.
+    for (const x of xs(coast[0] ?? NONE)) expect(Math.abs(x - 430 / 15)).toBeLessThan(0.5);
+    expect(lines.map((line) => line.level)).toEqual(
+      [...new Set(lines.map((line) => line.level))].sort((p, q) => p - q),
+    );
+  });
+
+  it('prints the coast as a smooth line, not a staircase on the grid', () => {
+    // A cliff at 23° to the grid rising from a sea of exact zeros, and a sea of blocks beside a
+    // gentle quay: segments exactly horizontal, vertical or 45° stay as rare as on any contour.
+    const snapped = (lines: ContourLine[]) => {
+      let count = 0;
+      let all = 0;
+      for (const line of lines) {
+        const p = line.points;
+        for (let k = 2; k + 1 < p.length; k += 2) {
+          const dy = (p[k + 1] ?? 0) - (p[k - 1] ?? 0);
+          const dx = (p[k] ?? 0) - (p[k - 2] ?? 0);
+          const angle = Math.abs((Math.atan2(dy, dx) * 180) / Math.PI) % 45;
+          all++;
+          if (angle < 0.5 || angle > 44.5) count++;
+        }
+      }
+      return count / all;
+    };
+    const cliff = field(
+      160,
+      120,
+      (x, y) => (x - 40 - 0.43 * y < 0 ? (x === 0 ? -5 : 0) : 30),
+      NINE,
+    );
+    expect(snapped(coastOf(extractContours(cliff)))).toBeLessThan(0.1);
+    const quay = field(
+      160,
+      120,
+      (x, y) => {
+        const d = x - 80 - 0.43 * y;
+        if (d >= 0) return 0.6 + d * 0.05;
+        return (Math.floor(x / 20) + Math.floor(y / 20)) % 2 ? 0.3 : -1.5;
+      },
+      NINE,
+    );
+    expect(snapped(coastOf(extractContours(quay)))).toBeLessThan(0.1);
+  });
+
+  it('keeps a small island that rises above 3 m, drops a low patch of the same size', () => {
+    // 15 × 15 samples (1.8 ha) in a sea at −5 m: one peaks at 20 m, one at 1.2 m.
+    const sea = field(
+      300,
+      200,
+      (x, y) => {
+        if (x >= 20 && x < 35 && y >= 30 && y < 45) return 20;
+        if (x >= 80 && x < 95 && y >= 30 && y < 45) return 1.2;
+        return -5;
+      },
+      NINE,
+    );
+    const lefts = coastOf(extractContours(sea)).map((line) => Math.min(...xs(line)));
+    expect(lefts.some((x) => x > 17 && x < 23)).toBe(true);
+    expect(lefts.some((x) => x > 75)).toBe(false);
+  });
+
+  it('drops a small pond or islet, keeps one big enough or cut by the edge, draws none below 0', () => {
+    // Land at 5 m with a 10 × 10 sample (90 m) pond at −2 m inside and a 40 × 40 lake.
+    const land = field(
+      120,
+      80,
+      (x, y) => {
+        if (x >= 10 && x < 20 && y >= 10 && y < 20) return -2;
+        if (x >= 60 && x < 100 && y >= 20 && y < 60) return -2;
+        if (x < 30 && y >= 20 && y < 60) return -2; // a bay cut by the west edge
+        if (x >= 115 && y < 8) return -2; // a sliver of sea in the corner
+        return 5;
+      },
+      NINE,
+    );
+    const coast = coastOf(extractContours(land));
+    const boxes = coast.map((line) => Math.min(...xs(line)));
+    expect(boxes.some((x) => x < 2)).toBe(true); // the bay
+    expect(boxes.some((x) => x > 55 && x < 61)).toBe(true); // the lake
+    expect(boxes.some((x) => x > 8 && x < 12)).toBe(false); // not the pond
+    expect(boxes.some((x) => x > 110)).toBe(false); // nor the sliver
+    // A small grid (no ground size given) keeps its shore: a −50…+50 m plane, 50 × 10 samples.
+    const plane = field(50, 10, (x) => -50 + (100 * x) / 49);
+    expect(coastOf(extractContours({ ...plane, metresPerSample: undefined }))).toHaveLength(1);
+    // A polder entirely below 0: no 0 m line at all.
+    expect(coastOf(extractContours(field(30, 30, (x) => -10 + x * 0.2, NINE)))).toEqual([]);
+  });
+});
+
 describe('simplify and pathData', () => {
   it('drops points within the tolerance and keeps corners', () => {
     const line = [0, 0, 1, 0.01, 2, 0, 3, 0, 3, 1, 3, 2];

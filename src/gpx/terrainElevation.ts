@@ -17,8 +17,9 @@
  *   file mostly recorded ({@link MIN_INTERPOLATED_SHARE} of the distance); any other keeps its
  *   elevation unknown.
  *
- * One bilinear sample per filled point, then the same 3-point median filter and the same rules as
- * the file's own `<ele>` (`elevationStats`). O(n): about 10 ms for the 500,000 points the parser
+ * One bilinear sample per point, averaged over ±{@link TERRAIN_SMOOTHING_M} of route (the DEM's
+ * own bumps are not climbing), then the same 3-point median filter and the same rules as the
+ * file's own `<ele>` (`elevationStats`). O(n): a few tens of ms for the 500,000 points the parser
  * accepts, so it runs on the main thread when the terrain arrives.
  */
 
@@ -92,8 +93,21 @@ export function withTerrainElevation(run: Run, sample: ElevationSampler): Run {
   const recorded = covers(partialEle, cumulative, MIN_RECORDED_SHARE);
   if (recorded) series.set(partialEle);
 
-  const terrainAt = (i: number) => sample(lon[i] ?? 0, lat[i] ?? 0);
+  // The terrain under every point, then smoothed along the route (TERRAIN_SMOOTHING_M).
+  const raw = new Float64Array(n);
   let sampled = 0;
+  for (let i = 0; i < n; i++) {
+    const t = sample(lon[i] ?? 0, lat[i] ?? 0);
+    raw[i] = t;
+    if (Number.isFinite(t) && !Number.isFinite(series[i] ?? NaN)) sampled++;
+  }
+  if (sampled === 0) return run;
+  // A point off the grid (should not happen: the grid covers the track's bounds and more) holds
+  // its neighbour's value.
+  holdFinite(raw);
+  const terrain = smoothByDistance(raw, cumulative, TERRAIN_SMOOTHING_M);
+  const terrainAt = (i: number) => terrain[i] ?? NaN;
+
   for (let s = 0; s < n; s++) {
     if (Number.isFinite(series[s] ?? NaN)) continue;
     let e = s;
@@ -104,23 +118,70 @@ export function withTerrainElevation(run: Run, sample: ElevationSampler): Run {
     const d0 = cumulative[s - 1] ?? 0;
     const d1 = cumulative[e + 1] ?? 0;
     for (let i = s; i <= e; i++) {
-      const t = terrainAt(i);
-      if (!Number.isFinite(t)) continue;
-      sampled++;
       let offset = before ?? after ?? 0;
       if (before !== null && after !== null && d1 > d0) {
         offset = before + ((after - before) * ((cumulative[i] ?? 0) - d0)) / (d1 - d0);
       }
-      series[i] = t + offset;
+      series[i] = terrainAt(i) + offset;
     }
     s = e;
   }
-  if (sampled === 0) return run;
-  // A point off the grid (should not happen: the grid covers the track's bounds and more) holds
-  // its neighbour's value.
-  holdFinite(series);
 
   return withElevation(run, series, recorded ? 'mixed' : 'terrain');
+}
+
+/**
+ * Half the window (metres along the route) that elevations sampled from the terrain are averaged
+ * over before the usual rules count them. Terrarium's grid is finer than the data under it (30 m
+ * SRTM, or coarser, resampled to 8–40 m pixels) and in cities it is a surface model (roofs,
+ * flyovers), so raw samples along a route add metres of bumps that no runner climbed: unsmoothed,
+ * the terrain gave the sample +1,176 m, Lavaredo +1,222, the E51 +3,394 and the CCC +6,838, where
+ * their own recorded elevations give +1,102, +1,062, +2,876 and +6,106 (7–18% high). Averaged over
+ * ±50 m they give +1,094, +1,090, +2,958 and +5,939 (−3% to +3%), with high points within 2 m.
+ */
+export const TERRAIN_SMOOTHING_M = 50;
+
+/**
+ * `series` (per point, along `cumulative`) averaged over ±`half` metres of route: the integral of
+ * its piecewise-linear curve over the window, divided by the window's length. The window shrinks
+ * symmetrically near the ends, so the first and last values are kept and a steady grade stays as
+ * it is; uneven point spacing (a stop, a burst of fixes) weighs by distance, not by points. O(n).
+ */
+export function smoothByDistance(
+  series: Float64Array,
+  cumulative: Float64Array,
+  half: number,
+): Float64Array {
+  const n = series.length;
+  const out = Float64Array.from(series);
+  if (n < 3 || !(half > 0)) return out;
+  const c = (i: number) => cumulative[i] ?? 0;
+  const v = (i: number) => series[i] ?? 0;
+  // Integral of the curve from the first point to each point (trapezoids).
+  const prefix = new Float64Array(n);
+  for (let i = 1; i < n; i++)
+    prefix[i] = (prefix[i - 1] ?? 0) + ((c(i) - c(i - 1)) * (v(i) + v(i - 1))) / 2;
+  /** Integral up to `x`, where c(k) ≤ x ≤ c(k + 1). */
+  const integral = (x: number, k: number) => {
+    const span = c(k + 1) - c(k);
+    const dx = x - c(k);
+    const at = span > 0 ? v(k) + ((v(k + 1) - v(k)) * dx) / span : v(k);
+    return (prefix[k] ?? 0) + (dx * (v(k) + at)) / 2;
+  };
+  const first = c(0);
+  const last = c(n - 1);
+  // Both window edges only move forward along the route as i grows.
+  let lo = 0;
+  let hi = 0;
+  for (let i = 1; i < n - 1; i++) {
+    const d = c(i);
+    const h = Math.min(half, d - first, last - d);
+    if (!(h > 0)) continue;
+    while (lo < n - 2 && c(lo + 1) < d - h) lo++;
+    while (hi < n - 2 && c(hi + 1) < d + h) hi++;
+    out[i] = (integral(d + h, hi) - integral(d - h, lo)) / (2 * h);
+  }
+  return out;
 }
 
 /**

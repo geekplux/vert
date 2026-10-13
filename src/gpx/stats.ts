@@ -29,7 +29,8 @@
  *   three UTMB course files it lands within 1.5% of the published profile D+, where counting
  *   every metre after a 2 m reversal (a pure dead band) runs 2–3.5% high.
  *   **Unusable or patchy `<ele>`** ({@link recordedElevation}): a file whose `<ele>` values are
- *   all the same (all 0, or one value) counts as having none. Gaps without `<ele>` shorter than
+ *   all the same (all 0, or one value), or all within {@link MIN_ELEVATION_RANGE_M} (0.5 m) on a
+ *   route of a kilometre or more, counts as having none. Gaps without `<ele>` shorter than
  *   {@link MAX_INTERPOLATED_GAP_M} (200 m, between the recorded points around them, or from the
  *   route's end) are interpolated as above; longer ones are left for the terrain. Either way the
  *   run then has `hasElevation: false` and `null` elevation figures, and `partialElevation` keeps
@@ -73,6 +74,17 @@ export const PROFILE_POINTS = 500;
  * is within the recorder's own noise. Every-tenth-point files (≈ 40 m gaps) stay interpolated.
  */
 export const MAX_INTERPOLATED_GAP_M = 200;
+/**
+ * `<ele>` values that all lie within this range (metres) on a route at least
+ * {@link FLAT_ELEVATION_MIN_DISTANCE_M} long are not a measurement: no GPS or barometer holds its
+ * altitude within half a metre over a kilometre of running (both wander by metres even standing
+ * still). Some running-app exports write such series (0.00–0.38 m over 5 km, on 40% of the
+ * points); they count as no usable elevation, like a constant. Half a metre, not more, so a
+ * genuinely flat file smoothed by its app (a canal towpath, a track) keeps its own values.
+ */
+export const MIN_ELEVATION_RANGE_M = 0.5;
+/** Shortest route (metres) that {@link MIN_ELEVATION_RANGE_M} applies to. */
+export const FLAT_ELEVATION_MIN_DISTANCE_M = 1_000;
 
 /** Everything {@link computeStats} works out about a track. All SI: metres, seconds, ms epoch. */
 export interface RunStats {
@@ -274,8 +286,10 @@ function fillGaps(
 }
 
 /**
- * The file's usable elevations per point, unfiltered: `null` when no point has an `<ele>` or every
- * `<ele>` is the same value (all 0, or a constant: no information). Otherwise gaps are filled
+ * The file's usable elevations per point, unfiltered: `null` when no point has an `<ele>`, every
+ * `<ele>` is the same value (all 0, or a constant: no information), or, on a route of at least
+ * {@link FLAT_ELEVATION_MIN_DISTANCE_M}, they all lie within {@link MIN_ELEVATION_RANGE_M} (not a
+ * measurement). Otherwise gaps are filled
  * along the route ({@link fillGaps}), except gaps spanning {@link MAX_INTERPOLATED_GAP_M} or more,
  * measured between the recorded points around them (or the route's start or end), which are
  * `NaN` and make `complete` false: the terrain fills those.
@@ -294,6 +308,9 @@ export function recordedElevation(
   if (!Number.isFinite(min)) return null;
   // One value along a whole route (all 0, a fixed altitude, or a single <ele>) says nothing.
   if (points.length > 1 && !(max > min)) return null;
+  // Nor do values within half a metre over a kilometre or more: no recorder is that steady.
+  const distance = cumulative[cumulative.length - 1] ?? 0;
+  if (distance >= FLAT_ELEVATION_MIN_DISTANCE_M && max - min < MIN_ELEVATION_RANGE_M) return null;
   const series = fillGaps(
     points.map((p) => p.ele),
     cumulative,

@@ -210,10 +210,11 @@ everything.
   Removes the whole-metre stairs of watch and course files. Stats, readouts, climbs and ticks keep
   the real values; the scrub dot sits on the drawn line, its readout gives the real elevation.
 - **No usable `<ele>`: elevations from the terrain.** A file has no usable elevation when no point
-  has an `<ele>`, or every `<ele>` is the same value (all 0, a fixed altitude, or a lone `<ele>` on
-  a longer route). When the terrain grid is ready, `RunProvider` samples it along the track
-  (bilinear, the same DEM the View draws), applies the same median filter and rules as a file's own
-  elevations (`elevationStats`) and serves the run with profile, vert, high/low point, climbs and
+  has an `<ele>`, every `<ele>` is the same value (all 0, a fixed altitude, or a lone `<ele>` on
+  a longer route), or, on a route of 1 km or more, they all lie within 0.5 m (see "Running-app
+  files" below). When the terrain grid is ready, `RunProvider` samples it along the track
+  (bilinear, the same DEM the View draws), averages it over ±50 m of route (below), applies the same
+  median filter and rules as a file's own elevations (`elevationStats`) and serves the run with profile, vert, high/low point, climbs and
   `track.ele` filled and `elevationSource: 'terrain'`, in the same render that reports the terrain
   ready. O(n) on the main thread; the run's id is unchanged.
 - **Gaps in `<ele>`.** A gap without `<ele>` spanning under 200 m (measured between the recorded
@@ -225,8 +226,9 @@ everything.
   one side at the route's ends), so a recorder reading 30 m above the DEM adds no step or false
   climb. `elevationSource: 'mixed'`, or `'terrain'` when the file's own values cover under 5% of
   the route's distance (they are then ignored). Measured in the browser on the sample (+1,102 m with all its
-  `<ele>`): second half removed +1,122 m, mixed (was +698); a lone first `<ele>` or all-zero
-  `<ele>` +1,176 m, terrain (was flat / 0 m); every tenth point +1,092 m, GPX.
+  `<ele>`), with the ±50 m terrain average: second half removed +1,092 m, mixed (+1,122 unaveraged;
+  was +698); a lone first `<ele>` or all-zero `<ele>` +1,094 m, terrain (+1,176 unaveraged; was
+  flat / 0 m); every tenth point +1,092 m, GPX.
 - **Copy.** Until the terrain loads, or if it fails, every elevation figure stays "–" and no ▲ is
   drawn (gaps included: half a profile would mislead; a mostly recorded file is interpolated instead
   when the terrain fails, below). The aside says why under the stats, in a
@@ -265,6 +267,121 @@ everything.
 - **Sample chip.** The Upload chip reads `SAMPLE_TOTALS` (21,480 m, +1,102 m, 3:04:58), the loaded
   sample's own figures; a test parses `coosa-backcountry.gpx` with the worker's handler and fails if
   they drift. The placeholder `SAMPLE_RUN` (tests and stories) carries the same totals.
+
+## Running-app files (Sean's GPX, Hong Kong)
+
+Sean's 25 runs (running_page / gpxpy exports, Hong Kong waterfront and Island, 1–18 km) loaded
+without an error message but showed broken terrain and junk elevation. Rulings:
+
+- **Terrain spikes removed.** Terrarium has seam artefacts along the Hong Kong coast: one-pixel
+  lines of −1,000 to −8,600 m at z14 (8–425 samples below −50 m in each z14 grid there) and ringing of
+  −1,256 to +6,431 m at z12. They drew the terrain as a needle-thin wall thousands of metres deep in
+  the View and on all three posters (a Night Ridge route plunging off the page, Survey Quad index
+  contours around each line) and put −3,976 m and −1,696 m on two routes' sampled elevations.
+  `buildHeightfield` now replaces, before sampling, every mosaic pixel that more than half of its
+  5 × 5 neighbourhood clears by more than max(100 m, 5 pixel widths) (z14: 100 m, z10 in the Alps:
+  525 m) with the neighbourhood's median (`removeSpikes`, `src/lib/terrarium.ts`). On a slope the
+  median is the pixel itself, so ordinary relief is left alone, but not every pixel of real terrain
+  is: on near-vertical walls it moves single rim and foot pixels (the verifier's 18 cliff and gorge
+  sites, z10–14: Mt Thor at z11 25 pixels, by up to 527 m; El Capitan, Half Dome, Zion a few each,
+  by 114–200 m; Lavaredo's Tre Cime at z11 one pixel, 401 m). On the four reference grids it
+  replaces 0 pixels (at a 50 m threshold the CCC would already lose 527 real pixels, so the margin
+  there is about 3×); their View screenshots are byte-identical and their A / B / E 18 × 24 exports
+  differ from before only by the ±1 noise two runs of the same build show. Cost up to 36 ms per
+  grid (only pixels near a steep step are tested). A second pass was tried for the z12 harbour's
+  leftover −150 to −168 m: it replaced nothing there (the residue is wider than a spike) and moved
+  more cliff pixels (Mt Thor, Zion, El Capitan), so there is one pass.
+- **Near-constant `<ele>` is not a measurement.** The 11 older files carry `<ele>` on about 40% of
+  the points, all 0.00–0.38 m over 2–5 km. They showed "Vert 0 m, high point 0 m" as if measured
+  (three of them, with long gaps, were blended with the terrain at that level: +5 to +18 m). No
+  GPS or barometer holds its altitude within half a metre over a kilometre, so a route of ≥ 1 km
+  whose `<ele>` all lie within 0.5 m counts as having no usable elevation (`MIN_ELEVATION_RANGE_M`,
+  `FLAT_ELEVATION_MIN_DISTANCE_M` in `stats.ts`): filled from the terrain, with the existing copy
+  "Elevation from terrain data. This file has no usable elevation." Under 1 km, or with ≥ 0.5 m of
+  range (a flat file its app smoothed), a file keeps its own values. Negative values are fine.
+- **Barometric series kept.** The 14 newer files have `<ele>` from −12.8 to 97 m, which looked
+  relative. Against the DEM along the track they are absolute: the mean offset (file − DEM) is
+  +3.3 to +11.0 m on the flat waterfront files and −4.5 and −6.5 m on the two hilly ones (within
+  both sources' noise), and where there is real relief both see it (the 17.8 km run: a
+  96 m hill at km 1.3–2.3 in the file, 94–101 m in the DEM, r = 0.7; the Chai Wan run starts at
+  49–56 m in both). On the flat waterfront both are noise around a 2–5 m truth (the file wanders
+  ±10 m, the DEM has ±8 m bumps from roofs and flyovers), so neither is better and the file's own
+  record wins, as for any file. No rule change, no new copy.
+- **Terrain elevations averaged over ±50 m of route** (`TERRAIN_SMOOTHING_M`, `smoothByDistance` in
+  `terrainElevation.ts`: the integral of the sampled curve over the window, which shrinks at the
+  ends). Terrarium's grid is finer than its data and in cities is a surface model, so raw samples
+  add climb nobody ran: the terrain gave the sample +1,176 m, Lavaredo +1,222, the E51 +3,394 and
+  the CCC +6,838 where their own recordings give +1,102, +1,062, +2,876 and +6,106 (+7 to +18%).
+  Averaged over ±50 m: +1,094, +1,090, +2,958, +5,939 (−3 to +3%; ±35 m was +1 to +7%, ±75 m −7
+  to +2%), high points within 2 m. Sean's flat waterfront runs filled from the terrain read +22 to
+  +78 m instead of +39 to +196 m: still DEM noise on a flat run, said plainly ("Elevation from
+  terrain data"). Files with their own elevations are not touched.
+- **Known limitation: flat-run vert from a noisy recorder.** The barometric waterfront files show
+  +55 to +171 m on flat 5 km runs (Night Ridge puts it in the headline). A noise-adaptive
+  hysteresis, max(2 m, k × the recording's noise), was tried and not shipped: no k separates them
+  from the reference courses. Short-scale noise (robust sd of the residual after ±50 m, after the
+  median filter) is 0.6–1.2 m on Sean's files and 0.4–1.2 m on the courses (CCC 1.21): at k = 3
+  the CCC loses 2.8% (6,106 → 5,937) while Sean's files lose 0–21%. Over ±150 m the "noise" is
+  1.1–3.0 m on Sean's files and 1.7–3.3 m on the courses: k = 1 already takes the CCC down 2.8%
+  and the E51 0.4%, for 0–8% off Sean's. MAD of second differences: 0.30–0.44 m on Sean's, 0.06–0.61
+  on the courses. The wander is a ±10 m swell over hundreds of metres, which a recording alone
+  cannot tell from real 10 m hills; only the DEM could (and on these runs it is noisy too, see
+  above). The file's vert stands, as Sean's watch recorded it.
+- **Survey Quad's 0 m line, the coast, from a cleaned land / sea mask** (`seaLevelField` in
+  `src/poster/contours.ts`; every other level is traced from the elevations as before). Terrarium's
+  sea is coarse bathymetry in blocks ~200 m across straddling 0 (Hong Kong harbour: −2 to +2 m,
+  most positive values under 0.5 m), so the raw 0 m index line drew a lattice of rectangles across
+  the water; where the sea is exactly 0 (Étretat) it could not follow the shore and drew beads at
+  the cliff foot. (Round 1 dropped the 0 m line; that emptied Scheveningen's map, left Sean's routes
+  apparently running over water with the 20 m line 100–300 m inland, and took the 0 m line off the
+  Masada escarpment.)
+  - The mask: land above 0.5 m; opened, then closed, by 50 m (at least a sample); low land patches
+    (never reaching 3 m) and sea patches under 250 × 250 m (and under 2% of the grid) flipped, at
+    the map's edge too (a block cut by the frame stayed as a stray line out in the harbour); then
+    any ground of 3 m or more is land again.
+  - **Small islands stay.** A land patch is flipped only when it is low: the harbour's noise blocks
+    peak at 0–1.6 m, real islets rise far above (round 2 removed Château d'If, 2.5–4.4 ha). Land
+    kept within 400 m of the islet (mask / data above 0.5 m, z14): Château d'If 385 / 507 samples,
+    Alcatraz 1,563 / 1,587, Bass Rock 1,603 / 1,627, St Michael's Mount 2,767 / 2,850, Green
+    Island (HK) 3,382 / 3,332; Fort Boyard has no land in Terrarium at all. The harbour stays clean:
+    Hong Kong waterfront 2 lines (main 31), the 17.8 km run 13 (main 142), Chai Wan 2 (main 14).
+  - **Traced smooth.** Round 2 set the samples on the wrong side of the mask ±1 cm across 0, which
+    snapped the line to the grid: 67–75% of its segments exactly horizontal, vertical or 45°, a
+    1–3 mm staircase at 18 × 24 in the heaviest line of the map. Now, where cleaning left a sample as
+    the threshold put it, the field is the elevation itself, its crossing moved from 0 to 0.5 m near
+    any disagreement with the mask (a sea block, a beach under half a metre, a sea of exact zeros)
+    and fading back to 0 over a few samples, so the line lies between samples where the data puts
+    it, and Masada's (and Salton's, Galilee's) 0 m line is the data's own; where cleaning changed a
+    sample, the cleaned mask blurred by 3 samples. Both have the mask's sign, so the line runs from
+    one to the other without a break. Last the field is clipped to ±0.5 m and blurred by 2 samples:
+    that rounds what the data leaves on the grid (a constant sea against a cliff) without letting a
+    cliff's tall side pull the line out to sea; it stays within about a sample of the crossing.
+    Snapped segments (H / V / 45° ± 0.5°, on the poster's smoothed grid), now vs main's raw 0 m line
+    vs the intermediate contours: Scheveningen 2% / 5% / –, Chai Wan 4% / 15% / 2%, Hong Kong
+    waterfront 2% / 23% / 2%, the 17.8 km run 3% / 12% / 2%, Étretat 3% / 13% / 3%, Masada 3% /
+    2% / 2%. What is left are straight runs (sea walls, the grid's edge), not steps; at 1:1 on the
+    18 × 24 exports the coast reads as one smooth stroke (`docs/verify/sean-gpx/coast-r3ui/crop-*`).
+  - **Scheveningen's coast sits inland of the water.** The beach there stays at 0–1.6 m for about
+    300 m, and the line runs where it passes 0.5 m: measured against the data's sustained 0 m
+    crossing (8 samples above 0), a median 82 m inland, p90 176 m, max 259 m (row by row, 370
+    rows). Sean's Hong Kong waterfront has no such beach: there the line is the quay.
+  - The four reference courses never reach 0 m, so they are unchanged. O(n): chamfer distances,
+    one flood fill per side and three box blurs.
+- **The View gets a fresh canvas per stage.** `pnpm dev` runs React StrictMode, which mounts,
+  cleans up and mounts the terrain again on the same DOM; the cleanup's `forceContextLoss` left
+  that canvas without a usable context, so every run in dev said "This browser couldn't draw the
+  3D terrain" (with `THREE.WebGLRenderer: Cannot read properties of null (reading 'precision')` in
+  the console). `TerrainView` now creates its `<canvas role="img">` in the stage effect and removes
+  it with the stage; the label is kept in sync by an effect.
+- **A tile answered with a web page is "not served", not a decode failure.** The deployed site,
+  before the tile proxy is switched on, answers `/tiles/…` with its SPA shell (200, `text/html`);
+  the View blamed the browser ("the elevation data arrived, but this browser couldn't read it.
+  Reload the page"). A tile response whose `Content-Type` is text, HTML, JSON or XML is now a
+  `TileNotServedError` (not retried, not decoded); when every tile fails that way the View says
+  "The terrain couldn't load: this site isn't serving elevation data right now. Try again later."
+  (Try again kept). Stats, profile and posters B / E behave as for any terrain failure.
+- **Titles.** These files have no `<name>`, so the title is the file name, a 13-digit timestamp
+  ("1612088536516"). Vert does not invent a title; the poster's title field is where to type one.
 
 ## Export
 

@@ -4,10 +4,12 @@ import {
   TileDecodeError,
   TileHttpError,
   TileLoader,
+  TileNotServedError,
   TILE_TIMEOUT_MS,
   TileTimeoutError,
   fetchTile,
   isAbortError,
+  isNotTileType,
   tileLoader,
   tileUrl,
   type FetchLike,
@@ -249,6 +251,31 @@ describe('TileLoader', () => {
     expect(error).toBeInstanceOf(TileHttpError);
     expect((error as TileHttpError).status).toBe(404);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells a web page from a tile: the deployed app's index.html is not elevation data", async () => {
+    // Before its tile proxy is switched on, the deployed site answers /tiles/… with its own page.
+    const page = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/html' }),
+        arrayBuffer: () => Promise.resolve(new TextEncoder().encode('<!doctype html>').buffer),
+      }),
+    );
+    const decode = vi.fn<TileDecoder>(flat);
+    const error: unknown = await new TileLoader({ fetchImpl: page, decode })
+      .load(COORD)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TileNotServedError);
+    expect(decode).not.toHaveBeenCalled();
+    expect(page).toHaveBeenCalledTimes(1); // not retried
+    // A PNG, an octet stream or no header at all is read as a tile.
+    for (const type of ['image/png', 'application/octet-stream', null])
+      expect(isNotTileType(type)).toBe(false);
+    for (const type of ['text/html; charset=utf-8', 'application/json', 'application/xml']) {
+      expect(isNotTileType(type)).toBe(true);
+    }
   });
 
   it('rejects a decoded tile of the wrong size as a decode error', async () => {

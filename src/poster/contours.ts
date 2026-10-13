@@ -107,15 +107,247 @@ const SADDLE_10_CENTRE_BELOW = [TOP, LEFT, BOTTOM, RIGHT];
 
 /**
  * Contour lines of `heightfield` every `interval` metres (20 by default), each level's segments
- * joined into polylines: open lines run border to border, closed lines are rings.
+ * joined into polylines: open lines run border to border, closed lines are rings. The 0 m line,
+ * the coast, is traced from {@link seaLevelField} (the land / sea mask cleaned of Terrarium's sea
+ * blocks); every other level from the elevations as they are.
  */
 export function extractContours(
-  heightfield: Pick<Heightfield, 'width' | 'height' | 'elevations' | 'min' | 'max'>,
+  heightfield: Pick<Heightfield, 'width' | 'height' | 'elevations' | 'min' | 'max'> &
+    Partial<Pick<Heightfield, 'metresPerSample'>>,
   { interval = CONTOUR_INTERVAL_M, indexEvery = INDEX_EVERY }: ContourOptions = {},
 ): ContourLine[] {
   const { width: w, height: h, elevations: z } = heightfield;
   const levels = contourLevels(heightfield.min, heightfield.max, interval);
   if (w < 2 || h < 2 || levels.length === 0) return [];
+  const lines = traceContours(w, h, z, levels, interval, indexEvery, true);
+  if (!levels.includes(0)) return lines;
+  const coast = traceContours(w, h, seaLevelField(heightfield), [0], interval, indexEvery, false);
+  // In level order, as the other levels are.
+  const below = lines.filter((line) => line.level < 0);
+  const above = lines.filter((line) => line.level > 0);
+  return [...below, ...coast, ...above];
+}
+
+/**
+ * Land, for the 0 m line, starts above this (metres): Terrarium's sea blocks sit within half a
+ * metre of 0, a few up to 2 m ({@link seaLevelField}).
+ */
+export const COAST_LAND_MIN_M = 0.5;
+/**
+ * Ground at least this high (metres) is always land for the 0 m line, and a small land patch
+ * reaching it is an island, never noise: Hong Kong's sea blocks peak at 0–1.6 m, while Château
+ * d'If, Alcatraz, Bass Rock or St Michael's Mount rise far above it.
+ */
+export const COAST_ISLAND_MIN_M = 3;
+/** Metres of coast the 0 m line's land / sea mask is opened and closed by ({@link seaLevelField}). */
+export const COAST_CLEAN_M = 50;
+/** Low land or sea patches under this area (m²) are dropped from the 0 m line: 250 × 250 m. */
+export const COAST_MIN_AREA_M2 = 62_500;
+/**
+ * Box radius (samples, two passes: a Gaussian of σ ≈ 2.4 samples) the cleaned mask is blurred by
+ * before the coast is traced through it, so its one-sample steps print as a smooth line.
+ */
+export const COAST_SMOOTH_SAMPLES = 3;
+/** The field is clipped to ±this (metres) before that blur ({@link seaLevelField}). */
+export const COAST_CLIP_M = 0.5;
+/** Box radius (samples, two passes) of the light blur over the whole field before tracing. */
+export const COAST_FINAL_SMOOTH_SAMPLES = 2;
+/** Elevations this close to 0 (metres) give the coast no crossing of its own to follow. */
+const COAST_FLAT_M = 0.05;
+/** Ground size of a sample when the heightfield does not say (a z13 grid at mid latitudes). */
+const DEFAULT_METRES_PER_SAMPLE = 12;
+
+/**
+ * The elevations to trace the 0 m line (the coast) from. Terrarium's sea is coarse bathymetry in
+ * blocks whose values straddle 0 (Hong Kong harbour: −2 to +2 m in blocks ~200 m across, most
+ * positive ones under 0.5 m), and traced as it is, the 0 m index line drew a lattice of rectangles
+ * across the water; where the sea is exactly 0 (Étretat) the line could not follow the shore at
+ * all and drew beads at the cliff foot. So a land / sea mask is made and cleaned first:
+ *
+ * 1. land is above {@link COAST_LAND_MIN_M} (0.5 m);
+ * 2. opened, then closed, by {@link COAST_CLEAN_M} (at least one sample): land necks and spits,
+ *    sea inlets and channels narrower than about 100 m go;
+ * 3. land patches that never reach {@link COAST_ISLAND_MIN_M} (3 m), then sea patches, smaller than
+ *    {@link COAST_MIN_AREA_M2} (and than 2% of the grid) are flipped to the other side (the sea's
+ *    leftover blocks, a lone pond; at the map's edge too, where a block cut by the frame would
+ *    otherwise stay);
+ * 4. ground of 3 m or more is land whatever the steps above did, so islands and sea stacks stay.
+ *
+ * The field traced, so the line is as smooth as any contour:
+ *
+ * - where cleaning left a sample as the 0.5 m threshold put it, the elevation itself: away from any
+ *   disagreement with the mask (its sign is the mask's and it is not within 5 cm of 0) the line
+ *   runs where the data crosses 0 (the Dead Sea's 0 m line on the Masada escarpment, Salton,
+ *   Galilee); near one (a sea block, a beach under half a metre, a sea of exact zeros) where it
+ *   crosses 0.5 m, the offset fading in over a few samples. Either way the value has the mask's
+ *   sign, and its crossing lies between samples as the data puts it, not on the grid;
+ * - where cleaning changed a sample (a removed block, a filled inlet), the cleaned mask blurred by
+ *   {@link COAST_SMOOTH_SAMPLES}, as 2 × (blurred − 0.5): smooth, its 0 on the mask's edge with the
+ *   one-sample steps rounded off.
+ *
+ * Both kinds keep the mask's sign, except at corners the blur rounds, so the line passes from one
+ * to the other without a break. Last, the field is clipped to ±{@link COAST_CLIP_M} and blurred by
+ * {@link COAST_FINAL_SMOOTH_SAMPLES}, which rounds what the data leaves on the grid (a constant sea
+ * against a cliff, a steep shore crossed in under a sample) without letting the tall side of a
+ * cliff pull the line out to sea; the line stays within about a sample of the crossing. Snapped
+ * segments (exactly horizontal, vertical or 45°) are then
+ * 1–3% of the coast, as of an intermediate contour (2–3%), where the ±1 cm nudge of the mask gave
+ * 67–75%. On a beach the line runs where the sand rises past half a metre.
+ * Distances are chamfer (3–4) distances in samples. O(n).
+ */
+export function seaLevelField(
+  heightfield: Pick<Heightfield, 'width' | 'height' | 'elevations'> &
+    Partial<Pick<Heightfield, 'metresPerSample'>>,
+): Float32Array {
+  const { width: w, height: h, elevations: z } = heightfield;
+  const n = w * h;
+  const mps = heightfield.metresPerSample
+    ? (heightfield.metresPerSample.x + heightfield.metresPerSample.y) / 2
+    : DEFAULT_METRES_PER_SAMPLE;
+  const radius = Math.max(1, Math.round(COAST_CLEAN_M / mps));
+  let land = new Uint8Array(n);
+  for (let i = 0; i < n; i++) land[i] = (z[i] ?? 0) > COAST_LAND_MIN_M ? 1 : 0;
+  const erode = (mask: Uint8Array) => {
+    const toSea = chamferDistance(mask, w, h, 0);
+    return mask.map((v, i) => (v === 1 && (toSea[i] ?? Infinity) > radius ? 1 : 0));
+  };
+  const dilate = (mask: Uint8Array) => {
+    const toLand = chamferDistance(mask, w, h, 1);
+    return mask.map((v, i) => (v === 1 || (toLand[i] ?? Infinity) <= radius ? 1 : 0));
+  };
+  land = dilate(erode(land)); // open
+  land = erode(dilate(land)); // close
+  // Never more than 2% of the grid: on a small grid a whole shore would count as a patch.
+  const minSamples = Math.min(COAST_MIN_AREA_M2 / (mps * mps), n / 50);
+  const low = (patch: readonly number[]) => patch.every((i) => (z[i] ?? 0) < COAST_ISLAND_MIN_M);
+  dropSmallPatches(land, w, h, 1, minSamples, low);
+  dropSmallPatches(land, w, h, 0, minSamples);
+  for (let i = 0; i < n; i++) if ((z[i] ?? 0) >= COAST_ISLAND_MIN_M) land[i] = 1;
+
+  // Where the data's sign disagrees with the mask, and everything within reach of it.
+  const disagree = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const e = z[i] ?? 0;
+    // A sea that is exactly 0 (Étretat) has no crossing of its own to follow either.
+    disagree[i] = (e > 0 ? 1 : 0) !== land[i] || Math.abs(e) < COAST_FLAT_M ? 1 : 0;
+  }
+  const toDisagreement = chamferDistance(disagree, w, h, 1);
+  const reach = 2 * COAST_SMOOTH_SAMPLES + 1;
+  const blurred = smoothHeightfield(
+    { width: w, height: h, elevations: Float32Array.from(land) },
+    COAST_SMOOTH_SAMPLES,
+  ).elevations;
+
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const e = z[i] ?? 0;
+    if ((land[i] === 1) !== e > COAST_LAND_MIN_M) {
+      // Cleaning changed this sample: the blurred mask (smooth, its 0 on the mask's edge).
+      out[i] = 2 * ((blurred[i] ?? 0) - 0.5);
+    } else {
+      // The data itself, its 0 m crossing moving to 0.5 m near a disagreement (fully within
+      // `reach`, fading out over as much again): the mask's sign either way.
+      const d = toDisagreement[i] ?? Infinity;
+      const t = Math.min(1, Math.max(0, 2 - d / reach));
+      out[i] = e - COAST_LAND_MIN_M * t;
+    }
+  }
+  // A last light blur rounds what is left on the grid: a sea of constant value against a cliff
+  // (Étretat) gives the data no crossing between samples.
+  // Clipped first, so a cliff's tall side cannot drag the crossing out to sea.
+  for (let i = 0; i < n; i++) {
+    out[i] = Math.max(-COAST_CLIP_M, Math.min(COAST_CLIP_M, out[i] ?? 0));
+  }
+  return smoothHeightfield({ width: w, height: h, elevations: out }, COAST_FINAL_SMOOTH_SAMPLES)
+    .elevations;
+}
+
+/**
+ * Distance (chamfer 3–4, in samples) from every pixel to the nearest pixel whose `mask` value is
+ * `target`; `Infinity` when there is none. Outside the grid counts as nothing.
+ */
+function chamferDistance(mask: Uint8Array, w: number, h: number, target: 0 | 1): Float32Array {
+  const d = new Float32Array(w * h);
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] === target ? 0 : Infinity;
+  const at = (x: number, y: number) =>
+    x < 0 || y < 0 || x >= w || y >= h ? Infinity : (d[y * w + x] ?? Infinity);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      d[i] = Math.min(
+        d[i] ?? Infinity,
+        at(x - 1, y) + 3,
+        at(x, y - 1) + 3,
+        at(x - 1, y - 1) + 4,
+        at(x + 1, y - 1) + 4,
+      );
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      const i = y * w + x;
+      d[i] = Math.min(
+        d[i] ?? Infinity,
+        at(x + 1, y) + 3,
+        at(x, y + 1) + 3,
+        at(x + 1, y + 1) + 4,
+        at(x - 1, y + 1) + 4,
+      );
+    }
+  }
+  for (let i = 0; i < d.length; i++) d[i] = (d[i] ?? Infinity) / 3;
+  return d;
+}
+
+/**
+ * Flips every 4-connected patch of `value` in `mask` smaller than `minSamples` samples (and, when
+ * `flippable` is given, for which it says yes).
+ */
+function dropSmallPatches(
+  mask: Uint8Array,
+  w: number,
+  h: number,
+  value: 0 | 1,
+  minSamples: number,
+  flippable: (patch: readonly number[]) => boolean = () => true,
+): void {
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const patch: number[] = [];
+  for (let start = 0; start < mask.length; start++) {
+    if (seen[start] || mask[start] !== value) continue;
+    patch.length = 0;
+    stack.push(start);
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const i = stack.pop() ?? 0;
+      patch.push(i);
+      const x = i % w;
+      const neighbours = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w];
+      for (const j of neighbours) {
+        if (j < 0 || j >= mask.length || seen[j] || mask[j] !== value) continue;
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+    if (patch.length < minSamples && flippable(patch)) for (const i of patch) mask[i] = 1 - value;
+  }
+}
+
+/**
+ * Marching squares over `z` for `levels` (consecutive multiples of `interval`, ascending), leaving
+ * out the 0 m level when `skipZero`.
+ */
+function traceContours(
+  w: number,
+  h: number,
+  z: ArrayLike<number>,
+  levels: readonly number[],
+  interval: number,
+  indexEvery: number,
+  skipZero: boolean,
+): ContourLine[] {
+  if (levels.length === 0) return [];
   const first = levels[0] ?? 0;
 
   // Edge ids: horizontal edges (i, j)–(i + 1, j) first, then vertical edges (i, j)–(i, j + 1).
@@ -142,6 +374,7 @@ export function extractContours(
       const edges = [hEdge(i, j), vEdge(i + 1, j), hEdge(i, j + 1), vEdge(i, j)];
       for (let k = kFrom; k <= kTo; k++) {
         const level = levels[k] ?? 0;
+        if (skipZero && level === 0) continue;
         const index =
           (tl >= level ? 8 : 0) |
           (tr >= level ? 4 : 0) |

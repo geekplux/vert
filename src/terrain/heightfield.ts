@@ -7,6 +7,7 @@ import {
   MIN_SERVED_ZOOM,
   chooseZoom,
   lonLatToWorld,
+  metresPerPixel,
   tileCount,
   tilesForBounds,
   worldToLonLat,
@@ -14,10 +15,11 @@ import {
   type Bounds,
   type TileCoord,
 } from '../lib/geo';
-import { sampleBilinear } from '../lib/terrarium';
+import { removeSpikes, sampleBilinear, spikeThreshold } from '../lib/terrarium';
 import {
   TILE_SIZE,
   TileDecodeError,
+  TileNotServedError,
   fetchTile as defaultFetchTile,
   isAbortError,
   type TileElevations,
@@ -76,18 +78,23 @@ export interface BuildHeightfieldOptions {
   fetchTile?: (coord: TileCoord, options: { signal?: AbortSignal }) => Promise<TileElevations>;
 }
 
+/** Why no tile loaded: see {@link HeightfieldError}. */
+export type HeightfieldErrorKind = 'network' | 'decode' | 'unserved';
+
 /**
  * Every tile failed: there is nothing to build a grid from. `kind` is `'decode'` when every tile
  * arrived but none could be decoded ({@link TileDecodeError}: a browser problem, so "check your
- * connection" would mislead), else `'network'` (offline, HTTP errors, the tile server down).
+ * connection" would mislead), `'unserved'` when every tile came back as a web page, not an image
+ * ({@link TileNotServedError}: the site serves no tiles), else `'network'` (offline, HTTP errors,
+ * the tile server down).
  */
 export class HeightfieldError extends Error {
   readonly failedTiles: readonly TileCoord[];
-  readonly kind: 'network' | 'decode';
+  readonly kind: HeightfieldErrorKind;
   constructor(
     failedTiles: readonly TileCoord[],
     cause: unknown,
-    kind: 'network' | 'decode' = 'network',
+    kind: HeightfieldErrorKind = 'network',
   ) {
     super(`No elevation tiles could be loaded (${String(failedTiles.length)} failed)`, { cause });
     this.name = 'HeightfieldError';
@@ -283,7 +290,10 @@ function fillMissingTiles(
  * ground aspect ratio. Tiles are treated as one mosaic, so bilinear sampling is continuous across
  * tile seams.
  *
- * Failed tiles (404, network) are filled from their neighbours and listed in `failedTiles`.
+ * Failed tiles (404, network) are filled from their neighbours and listed in `failedTiles`. Spikes
+ * in the mosaic (single pixels or thin lines far above or below most of their neighbourhood,
+ * Terrarium's coastal seam artefacts) are replaced by their neighbourhood's median before
+ * sampling (`removeSpikes`).
  *
  * @throws AbortError when `signal` aborts; {@link HeightfieldError} when no tile loads;
  *   {@link HeightfieldTooLargeError} (before any request) when the area is too large to fetch.
@@ -317,6 +327,7 @@ export async function buildHeightfield(
   const failedTiles: TileCoord[] = [];
   let firstError: unknown;
   let decodeFailures = 0;
+  let unserved = 0;
   let loadedMin = Infinity;
 
   await forEachLimited(tiles, concurrency, async (tile) => {
@@ -330,6 +341,7 @@ export async function buildHeightfield(
       failedTiles.push(tile);
       firstError ??= error;
       if (error instanceof TileDecodeError) decodeFailures++;
+      if (error instanceof TileNotServedError) unserved++;
       return;
     }
     const c = tile.x - first.x;
@@ -343,10 +355,19 @@ export async function buildHeightfield(
   });
   signal?.throwIfAborted();
   if (failedTiles.length === tiles.length) {
-    const kind = decodeFailures === tiles.length ? 'decode' : 'network';
+    const kind =
+      decodeFailures === tiles.length
+        ? 'decode'
+        : unserved === tiles.length
+          ? 'unserved'
+          : 'network';
     throw new HeightfieldError(failedTiles, firstError, kind);
   }
   if (failedTiles.length > 0) fillMissingTiles(mosaic, cols, rows, loaded, loadedMin);
+  // Terrarium's coastal seam artefacts (Hong Kong harbour: lines of −7,000 m at z14, +6,400 m at
+  // z12) would stand as needles in the mesh and in the elevations sampled along a route.
+  const mosaicLat = (area.north + area.south) / 2;
+  removeSpikes(mosaic, stride, rows * TILE_SIZE, spikeThreshold(metresPerPixel(mosaicLat, zoom)));
 
   // Grid extent in world coordinates and its shape: longest side = gridSize, square-ish samples.
   // Web Mercator is conformal, so equal world spans are equal ground spans at one latitude.

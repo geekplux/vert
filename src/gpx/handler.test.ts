@@ -195,6 +195,61 @@ describe('handleMessage', () => {
     // The date line rule still reads the start's longitude as recorded.
     expect(run.lonForOffset).toBe(179.96);
   });
+
+  /**
+   * The shape of a running-app export (gpxpy, as running_page writes it): no name, one segment,
+   * microsecond times, heart rate in extensions, no `<ele>` on the first point and near-zero
+   * `<ele>` on 40% of the rest. A synthetic 3 km out-and-back at the equator, not a real track.
+   */
+  function runningAppExport(ele: (i: number) => string | null): string {
+    const points: string[] = [];
+    for (let i = 0; i < 600; i++) {
+      const lon = (i < 300 ? i : 599 - i) * 0.0001;
+      const seconds = 5 * i;
+      const time = new Date(Date.UTC(2020, 11, 15, 10, 0, seconds, 1)).toISOString();
+      const e = ele(i);
+      points.push(`<trkpt lat="0.5" lon="${String(lon)}">${e === null ? '' : `<ele>${e}</ele>`}
+        <time>${time.replace('Z', '000Z')}</time>
+        <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>140</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>
+      </trkpt>`);
+    }
+    return gpx(
+      `<trk><trkseg>${points.join('\n')}</trkseg></trk>`,
+      'xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"',
+    );
+  }
+
+  it('reads a running-app export: microsecond times, near-zero <ele> as no usable elevation', () => {
+    const text = runningAppExport((i) =>
+      i > 0 && i % 5 < 2 ? String(0.01 + ((i * 37) % 38) / 100) : null,
+    );
+    const { run, points } = ok(
+      handleMessage({ id: 11, kind: 'text', text, fileName: '1608028728001.gpx' }).response,
+    );
+    expect(run.name).toBe('1608028728001');
+    expect(run.startTime).toBe(Date.UTC(2020, 11, 15, 10, 0, 0, 1));
+    expect(run.hasTime).toBe(true);
+    expect(run.elapsedTime).toBeCloseTo(599 * 5, 6);
+    expect(run.distance).toBeGreaterThan(3_000);
+    // The elevations are left to the terrain, every point of them.
+    expect(run.hasElevation).toBe(false);
+    expect(run.elevationSource).toBeNull();
+    expect(run.vert).toBeNaN();
+    expect(run.highPoint).toBeNaN();
+    expect(points.ele).toBeNull();
+    expect(points.partialEle).toBeNull();
+  });
+
+  it('keeps a running-app export whose <ele> wander like a barometer, below zero included', () => {
+    const text = runningAppExport((i) =>
+      i === 599 ? null : String(-12.8 + 30 * Math.sin(i / 60)),
+    );
+    const { run } = ok(handleMessage({ id: 12, kind: 'text', text, fileName: 'r.gpx' }).response);
+    expect(run.elevationSource).toBe('gpx');
+    expect(run.lowPoint).toBeLessThan(-40);
+    expect(run.highPoint).toBeGreaterThan(15);
+    expect(run.vert).toBeGreaterThan(50);
+  });
 });
 
 describe('decodeGpxBytes', () => {

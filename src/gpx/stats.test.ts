@@ -7,8 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { EARTH_RADIUS_M } from '../lib/geo';
 import { parseGpx } from './parse';
 import {
+  FLAT_ELEVATION_MIN_DISTANCE_M,
   MAX_CLIMBS,
   MAX_INTERPOLATED_GAP_M,
+  MIN_ELEVATION_RANGE_M,
   PROFILE_POINTS,
   computeStats,
   elevationChange,
@@ -158,6 +160,39 @@ describe('elevation', () => {
       }
       // A single <ele> on a long route is a constant too.
       expect(computeStats(route(2_000, (i) => (i === 0 ? 700 : null))).partialElevation).toBeNull();
+    });
+
+    // The shape of some running-app exports: no <ele> on the first point, then <ele> on about 40%
+    // of the points, scattered, all between 0.01 and 0.38 m, over 5 km. Not a measurement.
+    const nearZero = (i: number) =>
+      i > 0 && (i * 7) % 5 < 2 ? 0.01 + ((i * 37) % 38) / 100 : null;
+
+    it(`treats <ele> within ${String(MIN_ELEVATION_RANGE_M)} m over a kilometre or more as none`, () => {
+      const stats = computeStats(route(5_000, nearZero));
+      expect(stats.hasElevation).toBe(false);
+      expect(stats.partialElevation).toBeNull();
+      expect(stats.ascent).toBeNull();
+      expect(stats.highPoint).toBeNull();
+      // Even with long gaps among them (they would otherwise be blended with the terrain).
+      const gappy = computeStats(route(5_000, (i) => (i > 100 && i < 130 ? null : nearZero(i))));
+      expect(gappy.partialElevation).toBeNull();
+      // 0.49 m of range over exactly 1 km: none too.
+      expect(
+        computeStats(route(FLAT_ELEVATION_MIN_DISTANCE_M, (i) => (i % 2) * 0.49)).hasElevation,
+      ).toBe(false);
+    });
+
+    it('keeps a real flat run: half a metre or more of range, or a route under a kilometre', () => {
+      // A flat towpath, smoothed by its app: 0.6 m of wander is already a measurement.
+      const flat = computeStats(route(5_000, (i) => 3 + Math.sin(i / 50) * 0.3));
+      expect(flat.hasElevation).toBe(true);
+      expect(flat.highPoint).toBeCloseTo(3.3, 1);
+      // Too short to judge: a 600 m stretch can be that level.
+      expect(computeStats(route(600, nearZero)).hasElevation).toBe(true);
+      // Negative values (below the datum, or a relative series) are fine.
+      const relative = computeStats(route(5_000, (i) => -12 + 40 * Math.sin(i / 80)));
+      expect(relative.hasElevation).toBe(true);
+      expect(relative.lowPoint).toBeCloseTo(-52, 0);
     });
 
     it(`interpolates gaps under ${String(MAX_INTERPOLATED_GAP_M)} m (every tenth point recorded)`, () => {

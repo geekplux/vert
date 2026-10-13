@@ -1,7 +1,6 @@
 // Vert as ONE Worker: the app's static assets from dist/, and /tiles/* to the tile proxy in
-// worker/src, with tiles cached in R2. Not active yet: Workers Builds only auto-detects
-// wrangler.jsonc / wrangler.json / wrangler.toml, and this file binds an R2 bucket that does not
-// exist yet. Activation steps: worker/README.md.
+// worker/src, with tiles cached in R2 (bucket vert-tiles). Workers Builds deploys it on every push to
+// main. Details: worker/README.md.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "vert",

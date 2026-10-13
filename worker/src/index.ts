@@ -1,7 +1,7 @@
 /**
  * Vert's Worker entry point.
  *
- * Deployed as one Worker with the app (wrangler.deploy.jsonc): the platform serves the static
+ * Deployed as one Worker with the app (wrangler.jsonc): the platform serves the static
  * assets from dist/, and only `/tiles/*` runs this code (`run_worker_first`). See proxy.ts for the
  * tile proxy itself.
  */

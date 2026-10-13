@@ -1,5 +1,5 @@
 # Local development config for the tile proxy alone (`pnpm worker:dev`, `pnpm worker:types`).
-# Production ships the app and the proxy as one Worker from ../wrangler.deploy.jsonc; keep the
+# Production ships the app and the proxy as one Worker from ../wrangler.jsonc; keep the
 # bindings and observability settings here in step with it. See README.md.
 name = "vert-tiles"
 main = "src/index.ts"

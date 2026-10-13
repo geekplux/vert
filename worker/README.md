@@ -45,7 +45,7 @@ immutable, the writes are identical, and a lock would cost more than the rare du
 - `src/index.ts`: the entry point. Exports only the default handler: workerd treats every named
   export of the main module as an entrypoint.
 - `src/proxy.ts`: the proxy. `src/tiles.ts`: path parsing, R2 key, upstream URL.
-- `wrangler.toml`: local development of the proxy alone. `../wrangler.deploy.jsonc`: production,
+- `wrangler.toml`: local development of the proxy alone. `../wrangler.jsonc`: production,
   the app and the proxy as one Worker. Both bind `TILES` to `vert-tiles`, so they produce the same
   `Env`; `pnpm worker:types` regenerates `worker-configuration.d.ts` from `wrangler.toml`. Keep the
   bindings and observability settings of the two files in step.
@@ -55,29 +55,16 @@ immutable, the writes are identical, and a lock would cost more than the rare du
 ```sh
 pnpm worker:dev                     # proxy alone on :8787, R2 simulated in .wrangler/state
 pnpm test                           # unit tests with a fake R2, a fake cache and a fake fetch
-pnpm build && pnpm exec wrangler dev --config wrangler.deploy.jsonc --local   # app + proxy
-pnpm build && pnpm exec wrangler deploy --dry-run --config wrangler.deploy.jsonc --outdir /tmp/vert-dry
+pnpm build && pnpm exec wrangler dev --local                                 # app + proxy
+pnpm build && pnpm exec wrangler deploy --dry-run --outdir /tmp/vert-dry
 ```
 
-## Activating production (main agent)
+## Production
 
-Cloudflare Workers Builds deploys this repo on every push to `main`. It auto-detects only
-`wrangler.jsonc`, `wrangler.json` or `wrangler.toml` at the root, so `wrangler.deploy.jsonc` stays
-inert until these steps are done, in this order:
-
-1. Create the bucket in the account that owns the `vert` Worker:
-   `pnpm exec wrangler r2 bucket create vert-tiles`.
-2. Check the config locally: `pnpm build && pnpm exec wrangler deploy --dry-run --config
-wrangler.deploy.jsonc --outdir <scratch>`.
-3. In the dashboard, Workers & Pages → `vert` → Settings → Build:
-   - Build command: `pnpm build`
-   - Deploy command: `npx wrangler deploy --config wrangler.deploy.jsonc`
-
-   (Alternatively rename `wrangler.deploy.jsonc` to `wrangler.jsonc` in the same commit and keep the
-   default deploy command `npx wrangler deploy`.) The config's `name` is `vert`, matching the
-   connected Worker; Workers Builds fails if they differ.
-
-4. Push to `main` and watch the build. Then check:
-   `curl -sI https://vert.fum.workers.dev/tiles/12/655/1582.png` twice (`X-Tile-Source: upstream`,
-   then `r2` or `edge`), `curl -sI 'https://vert.fum.workers.dev/tiles/12/655/1582.png?a=1'` (400),
-   and that `/` still serves the app.
+Cloudflare Workers Builds deploys this repo on every push to `main`, from the root `wrangler.jsonc`
+(the app's `dist/` plus `/tiles/*` through this proxy, one Worker named `vert`). The R2 bucket
+`vert-tiles` was created on 2026-10-13. The config's `name` must stay `vert`, matching the connected
+Worker; Workers Builds fails if they differ. After a deploy, check:
+`curl -sI https://vert.fum.workers.dev/tiles/12/655/1582.png` twice (`X-Tile-Source: upstream`,
+then `r2` or `edge`), `curl -sI 'https://vert.fum.workers.dev/tiles/12/655/1582.png?a=1'` (400),
+and that `/` still serves the app.

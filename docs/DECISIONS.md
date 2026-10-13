@@ -345,6 +345,10 @@ without an error message but showed broken terrain and junk elevation. Rulings:
     Alcatraz 1,563 / 1,587, Bass Rock 1,603 / 1,627, St Michael's Mount 2,767 / 2,850, Green
     Island (HK) 3,382 / 3,332; Fort Boyard has no land in Terrarium at all. The harbour stays clean:
     Hong Kong waterfront 2 lines (main 31), the 17.8 km run 13 (main 142), Chai Wan 2 (main 14).
+    Accepted limit: a real islet that is both low (peak under 3 m in the data) and small (under
+    ~6 ha) is dropped with the noise, e.g. most of San Michele in Venice (peak 2.8 m, ~4.5 ha).
+  - **Cost:** 50–76 ms on a 512 × 512 grid (24–38 ms before the smooth tracing), once per Survey
+    Quad layout; acceptable for a poster.
   - **Traced smooth.** Round 2 set the samples on the wrong side of the mask ±1 cm across 0, which
     snapped the line to the grid: 67–75% of its segments exactly horizontal, vertical or 45°, a
     1–3 mm staircase at 18 × 24 in the heaviest line of the map. Now, where cleaning left a sample as

@@ -64,7 +64,7 @@ Started early where a module has no UI dependency (sample data, `src/lib`, parse
 | [x]  | 5. Poster layout + style A                                       | 3      | Trail Sign (print) and share card (social) layouts with fitted titles; live three.js figure from the View camera; route core 4 px / halo 9 px scale with export pixelScale (constant within AA across 1–7.5×, tiled = whole); hidden route stretches drawn thin and faded.                                                                                                                                                                                                         |
 | [x]  | 6. Tiled export (PNG, PDF)                                       | 3      | Engine: foreignObject SVG with embedded fonts (incl. local() fallbacks for scripts outside the subsets), ≤ 4096 px tiles, PNG 300 dpi pHYs, hand-written PDF (JPEG q1.0, 4:4:4). Download exports the live poster (all styles, settings, camera, trimmed route); style A terrain rendered per tile at export scale (route 30/68 px at 18×24, seamless). 18×24 in 0.6–0.8 s on an M4 (CCC included); exports fetch no tiles; cancel at every stage; one WebGL context after cycles. |
 | [x]  | 7. Styles B and E                                                | 3      | Night Ridge + Survey Quad wired into Poster mode; all styles frame from the trimmed track when ends are hidden (start unrecoverable: verified with a spur test); camera kept on Back to the run.                                                                                                                                                                                                                                                                                   |
-| [ ]  | 8. Worker tile proxy + R2, deploy                                | 1      | Proxy implemented and verified locally (edge → R2 → upstream, byte-identical, header-clean). One-Worker deploy config ready in `wrangler.deploy.jsonc`; activation pending.                                                                                                                                                                                                                                                                                                        |
+| [x]  | 8. Worker tile proxy + R2, deploy                                | 2      | Live since 2026-10-13: one Worker (`wrangler.jsonc`) serves the app and `/tiles/*` from R2 bucket `vert-tiles`. Verified live: demo run first frame 0.56–0.79 s, Sean's files draw and export A/B/E at 18×24, 200 requests all same-origin GETs with no query or body, 0 coordinate hits; bad tile paths 400, POST 405, SPA fallback; axe 0, console 0.                                                                                                                            |
 
 ### Polish after the features
 
@@ -96,14 +96,6 @@ Each batch: implementation sub-agent → independent verification sub-agent → 
 
 ## Needs Sean
 
-- **Activate the tile proxy in production** (blocked for the agent: production deploys need your
-  approval). Until then the deployed site's terrain shows its error state; local dev works via the
-  Vite proxy. Steps (also in `worker/README.md`):
-  1. `pnpm exec wrangler r2 bucket create vert-tiles`
-  2. `git mv wrangler.deploy.jsonc wrangler.jsonc` and push (Workers Builds then deploys the app and
-     the `/tiles/*` proxy as one Worker named `vert`), or run `pnpm build && pnpm exec wrangler deploy`.
-  3. Check: `curl -sI https://vert.fum.workers.dev/tiles/12/655/1582.png` → `200 image/png`.
-
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one
   poster from each, and judge whether at least 8 are worth printing. The agent pass is above.
 - **Keep the repo private** until BlackRock's outside-activity and IP policy check is done (CLAUDE.md).
@@ -111,3 +103,7 @@ Each batch: implementation sub-agent → independent verification sub-agent → 
   the posters' footer) at the Worker when you want it public.
 - **Disk**: the system volume was down to ~100 MB free during this phase (agents moved their temp
   files to /Volumes/Extra); about 4 GB is free now.
+- **Cloudflare's network-error reports (optional)**: every response carries Cloudflare's
+  `report-to` / `nel` headers, so a browser may report failed requests (URL only, i.e. tile z/x/y,
+  never GPX data) to `a.nel.cloudflare.com`. Strictly that is a third-party request; Cloudflare's
+  NEL setting can switch it off.

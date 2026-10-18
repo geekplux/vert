@@ -1,6 +1,6 @@
 // Vert as ONE Worker: the app's static assets from dist/, and /tiles/* to the tile proxy in
 // worker/src, with tiles cached in R2 (bucket vert-tiles). Workers Builds deploys it on every push to
-// main. Details: worker/README.md.
+// main, and builds a Preview (`wrangler preview`) for every other branch. Details: worker/README.md.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "vert",
@@ -13,6 +13,10 @@
     "run_worker_first": ["/tiles/*"],
   },
   "r2_buckets": [{ "binding": "TILES", "bucket_name": "vert-tiles" }],
+  // Branch Previews get their own tile cache, so a preview never writes into production's.
+  "previews": {
+    "r2_buckets": [{ "binding": "TILES", "bucket_name": "vert-tiles-preview" }],
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

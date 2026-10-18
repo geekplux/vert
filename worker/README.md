@@ -64,7 +64,15 @@ pnpm build && pnpm exec wrangler deploy --dry-run --outdir /tmp/vert-dry
 Cloudflare Workers Builds deploys this repo on every push to `main`, from the root `wrangler.jsonc`
 (the app's `dist/` plus `/tiles/*` through this proxy, one Worker named `vert`). The R2 bucket
 `vert-tiles` was created on 2026-10-13. The config's `name` must stay `vert`, matching the connected
-Worker; Workers Builds fails if they differ. After a deploy, check:
+Worker; Workers Builds fails if they differ.
+
+Every other branch (a pull request) gets a Preview instead: Workers Builds runs `pnpm build`, then
+`npx wrangler preview`, and comments the preview URL on the PR. Previews take their bindings from
+the `previews` block in `wrangler.jsonc`, which points `TILES` at the bucket `vert-tiles-preview`
+(created on 2026-10-18), so a preview fills its own tile cache and never writes into production's.
+Without that block the preview build fails before it deploys anything.
+
+After a deploy, check:
 `curl -sI https://vert.fum.workers.dev/tiles/12/655/1582.png` twice (`X-Tile-Source: upstream`,
 then `r2` or `edge`), `curl -sI 'https://vert.fum.workers.dev/tiles/12/655/1582.png?a=1'` (400),
 and that `/` still serves the app.

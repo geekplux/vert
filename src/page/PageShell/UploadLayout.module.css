@@ -27,3 +27,11 @@
     padding: var(--space-8) var(--space-4);
   }
 }
+
+/* The Upload screen fades in when it mounts, like View and Poster mode (PageShell.module.css). */
+@media (prefers-reduced-motion: no-preference) {
+  .layout {
+    animation: 160ms ease-out;
+    animation-name: global(screen-in); /* src/styles/base.css */
+  }
+}

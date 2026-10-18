@@ -10,7 +10,7 @@ import { EXAGGERATION } from '../state';
 import type { Run, Terrain } from '../types';
 import { TerrainBox } from './TerrainBox';
 import type { TerrainCameraSource } from './TerrainBox';
-import { PHONE_QUERY, useMediaQuery } from './useMediaQuery';
+import { PHONE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
 import { TITLE_PX, useTitleFit } from './useTitleFit';
 import {
   defaultScrub,

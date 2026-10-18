@@ -1,14 +1,25 @@
-import { useId, useRef, useState } from 'react';
-import type { ChangeEvent, DragEvent } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { ChangeEvent, DragEvent, Ref } from 'react';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { DEFAULT_ACCEPT, DEFAULT_MAX_BYTES, pickGpxFile } from './pickGpxFile';
 import styles from './Dropzone.module.css';
 
-/** The drawn state of the zone, for previews and tests (see `state`). */
-export type DropzoneVisualState = 'rest' | 'dragover';
+/** Devices that tap rather than point: no "drop" or "click" in the copy there. */
+export const COARSE_POINTER_QUERY = '(hover: none) and (pointer: coarse)';
+
+/**
+ * What a page can ask of the Dropzone through `ref`: `takeFiles` hands it files dropped elsewhere
+ * on the page (`useWindowFileDrop`). They are checked like a drop on the zone, and a rejected file
+ * shows its error in the zone's alert. Ignored while `busy`.
+ */
+export interface DropzoneHandle {
+  takeFiles: (files: readonly File[]) => void;
+}
 
 export interface DropzoneProps {
   /** Called with a file that passed the extension and size checks. The page reads it. */
   onFile: (file: File) => void;
-  /** Called when "try a sample run" is pressed. */
+  /** Called when "Try the sample run" is pressed. */
   onSample: () => void;
   /** File extensions to take, comma-separated, as in `<input accept>`. Default ".gpx". */
   accept?: string;
@@ -18,109 +29,111 @@ export interface DropzoneProps {
   error?: string;
   /** The page is reading a file: the title says so, controls are disabled, drops are ignored. */
   busy?: boolean;
-  /** Name shown while busy ("Reading <fileName>…"). Defaults to the last file accepted here. */
+  /**
+   * What the page is loading while busy: `'file'` (default) titles "Reading <fileName>…" (or
+   * "Reading…" without a name), `'sample'` titles "Loading the sample run…".
+   */
+  busyKind?: 'file' | 'sample';
+  /** Name shown while busy reading a file ("Reading <fileName>…"). */
   fileName?: string;
-  /** Forces the drawn state. For stories and visual tests only; the app never sets it. */
-  state?: DropzoneVisualState;
+  /**
+   * A file is being dragged somewhere over the page (`useWindowFileDrop`): draw the drag-over
+   * state even when the pointer is not over the zone. A drag over the zone itself draws it anyway.
+   */
+  dragOver?: boolean;
+  /** Id of the element describing the accepted files (the page's note line), for the card. */
+  describedBy?: string;
+  /** See `DropzoneHandle`. */
+  ref?: Ref<DropzoneHandle>;
   className?: string;
 }
 
-const MB = 1024 * 1024;
-const DEFAULT_MAX_BYTES = 20 * MB;
-
-/** "24.3", "20": megabytes rounded up to one decimal, so 20 MB + 1 byte reads 20.1, not 20. */
-function formatMegabytes(bytes: number): string {
-  const rounded = Math.ceil((bytes / MB) * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-}
-
-function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.');
-  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
-}
-
-/** ".gpx, .GPX" → ["gpx"]. MIME entries are ignored: GPX often arrives with an empty or odd type. */
-function acceptedExtensions(accept: string): string[] {
-  return accept
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry) => entry.startsWith('.') && entry.length > 1)
-    .map((entry) => entry.slice(1));
-}
-
-/** Picks the first accepted file and checks it. Returns the file or an error message. */
-function validate(
-  files: readonly File[],
-  extensions: readonly string[],
-  maxBytes: number,
-): { file: File } | { error: string } | null {
-  const first = files[0];
-  if (!first) return null;
-
-  const file = files.find((candidate) => extensions.includes(extensionOf(candidate.name)));
-  if (!file) {
-    const wanted = extensions.map((extension) => `.${extension}`).join(' or ');
-    const extension = extensionOf(first.name);
-    const what = extension ? `That's a .${extension} file.` : 'That file has no extension.';
-    return { error: `${what} Vert reads ${wanted} files in v1.` };
-  }
-  if (file.size > maxBytes) {
-    return {
-      error: `That file is ${formatMegabytes(file.size)} MB. The limit is ${formatMegabytes(maxBytes)} MB.`,
-    };
-  }
-  return { file };
-}
-
+/** Whether the drag carries files, not text or a link. A drag without `types` carries none. */
 function isFileDrag(event: DragEvent): boolean {
   const types = event.dataTransfer.types as readonly string[] | undefined;
-  return !types || Array.from(types).includes('Files');
+  return Array.from(types ?? []).includes('Files');
 }
 
 /**
- * Upload target for one GPX file. Drops work anywhere on the zone; the controls are the two
- * buttons ("choose a file" opens a hidden file input). Nothing is read or sent from here: a valid
- * file goes to `onFile` and the page parses it.
+ * Upload target for one GPX file. The card is one button that opens the file picker; a file can
+ * also be dropped anywhere on the zone (and, with `dragOver` and `ref`, anywhere on the page).
+ * Under it are the error, if any, and "Try the sample run". Nothing is read or sent from here: a
+ * valid file goes to `onFile` and the page parses it.
  */
 export function Dropzone({
   onFile,
   onSample,
-  accept = '.gpx',
+  accept = DEFAULT_ACCEPT,
   maxBytes = DEFAULT_MAX_BYTES,
   error,
   busy = false,
+  busyKind = 'file',
   fileName,
-  state,
+  dragOver: pageDragOver = false,
+  describedBy,
+  ref,
   className,
 }: DropzoneProps) {
-  const titleId = useId();
+  const cardRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const touch = useMediaQuery(COARSE_POINTER_QUERY);
   // dragenter/dragleave fire for every child crossed; count them so the state doesn't flicker.
   const dragDepth = useRef(0);
   const [dragging, setDragging] = useState(false);
+  // A drag that leaves the window can skip its last dragleave; start over when the window blurs.
+  useEffect(() => {
+    const reset = () => {
+      dragDepth.current = 0;
+      setDragging(false);
+    };
+    window.addEventListener('blur', reset);
+    return () => {
+      window.removeEventListener('blur', reset);
+    };
+  }, []);
   const [localError, setLocalError] = useState<{ message: string; id: number } | null>(null);
-  const [source, setSource] = useState<{ kind: 'file'; name: string } | { kind: 'sample' } | null>(
-    null,
-  );
 
-  const extensions = acceptedExtensions(accept);
-  const dragOver = !busy && (state === 'dragover' || (state === undefined && dragging));
+  // A new load starts with no error of its own: after it, only the page's `error` (if any) shows.
+  const [wasBusy, setWasBusy] = useState(busy);
+  if (busy !== wasBusy) {
+    setWasBusy(busy);
+    if (busy) setLocalError(null);
+  }
+
+  const dragOver = !busy && (pageDragOver || dragging);
   const message = busy ? undefined : (localError?.message ?? error);
-  const visual = dragOver ? 'dragover' : message ? 'error' : 'rest';
+  const visual = busy ? 'busy' : dragOver ? 'dragover' : message ? 'error' : 'rest';
 
-  const busyName = fileName ?? (source?.kind === 'file' ? source.name : undefined);
-  const title = busy
-    ? busyName
-      ? `Reading ${busyName}…`
-      : source?.kind === 'sample'
-        ? 'Loading the sample run…'
-        : 'Reading…'
+  // While busy the card is disabled, so focus falls to <body>. When the load fails, put it back on
+  // the card (the alert under it says what went wrong), unless the user has moved on to something
+  // else in the meantime.
+  const busyBefore = useRef(busy);
+  useEffect(() => {
+    const failed = busyBefore.current && !busy && message !== undefined;
+    busyBefore.current = busy;
+    if (!failed) return;
+    const active = document.activeElement;
+    if (!active || active === document.body) cardRef.current?.focus();
+  }, [busy, message]);
+
+  const [title, sub] = busy
+    ? [
+        busyKind === 'sample'
+          ? 'Loading the sample run…'
+          : fileName
+            ? `Reading ${fileName}…`
+            : 'Reading…',
+        'Parsed in your browser, nothing is uploaded',
+      ]
     : dragOver
-      ? 'Release to open the file'
-      : 'Drop a .gpx file here';
+      ? ['Release to open the file', 'Anywhere on this page works']
+      : touch
+        ? ['Choose a .gpx file', 'Tap to open your files']
+        : ['Drop a .gpx file here', 'or click to choose one'];
 
   function take(files: readonly File[]) {
-    const result = validate(files, extensions, maxBytes);
+    if (busy) return;
+    const result = pickGpxFile(files, accept, maxBytes);
     if (!result) return;
     if ('error' in result) {
       // A new id remounts the alert, so the same error is announced again on a second try.
@@ -128,9 +141,10 @@ export function Dropzone({
       return;
     }
     setLocalError(null);
-    setSource({ kind: 'file', name: result.file.name });
     onFile(result.file);
   }
+
+  useImperativeHandle(ref, () => ({ takeFiles: take }));
 
   function handleDragEnter(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -152,10 +166,10 @@ export function Dropzone({
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
+    // preventDefault also tells a page-wide listener (useWindowFileDrop) this drop is handled.
     event.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    if (busy) return;
     take(Array.from(event.dataTransfer.files));
   }
 
@@ -167,59 +181,55 @@ export function Dropzone({
     take(files);
   }
 
-  function handleSample() {
-    setLocalError(null);
-    setSource({ kind: 'sample' });
-    onSample();
-  }
-
   return (
     // Only drag-and-drop listeners here, no click or key handlers: dropping is a pointer shortcut,
-    // and "choose a file" is its keyboard and assistive-tech equivalent (DECISIONS.md: not a
-    // clickable div).
+    // and the card button (which opens the file picker) is its keyboard and assistive-tech
+    // equivalent.
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       className={[styles.zone, className].filter(Boolean).join(' ')}
       role="group"
-      aria-labelledby={titleId}
-      data-state={visual}
+      aria-label="Upload a GPX file"
       aria-busy={busy || undefined}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <svg
-        className={styles.icon}
-        width="36"
-        height="36"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        aria-hidden="true"
+      {/* Phrasing content only inside a button: spans drawn as blocks, no divs or headings. */}
+      <button
+        ref={cardRef}
+        type="button"
+        className={styles.card}
+        data-state={visual}
+        disabled={busy}
+        // The visible title and sub-line as one sentence pair, so the name does not run on
+        // ("Choose a .gpx file. Tap to open your files"); it starts with the visible title.
+        aria-label={title.endsWith('…') ? `${title} ${sub}` : `${title}. ${sub}`}
+        aria-describedby={describedBy}
+        onClick={() => inputRef.current?.click()}
       >
-        <path d="M12 16V4M6 10l6-6 6 6" />
-        <path d="M4 20h16" />
-      </svg>
-      <div id={titleId} className={styles.title}>
-        {title}
-      </div>
-      <div className={styles.line}>
-        or{' '}
-        <button
-          type="button"
-          className={styles.link}
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
+        <svg
+          className={styles.icon}
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
         >
-          choose a file
-        </button>{' '}
-        · or{' '}
-        <button type="button" className={styles.link} disabled={busy} onClick={handleSample}>
-          try a sample run
-        </button>
-      </div>
+          <path d="M12 16V4M6 10l6-6 6 6" />
+          <path d="M4 20h16" />
+        </svg>
+        <span className={styles.title}>{title}</span> <span className={styles.sub}>{sub}</span>
+        {busy ? (
+          // Decorative: the title and the page's status region say that a file is being read.
+          <span className={styles.progress} aria-hidden="true" />
+        ) : null}
+      </button>
       {message ? (
         <div key={localError?.id ?? 'external'} role="alert" className={styles.message}>
           <svg
@@ -240,7 +250,13 @@ export function Dropzone({
           <span>{message}</span>
         </div>
       ) : null}
-      {/* Opened by "choose a file"; hidden from the tab order and assistive tech (the button is the control). */}
+      <p className={styles.line}>
+        No file handy?{' '}
+        <button type="button" className={styles.link} disabled={busy} onClick={onSample}>
+          Try the sample run
+        </button>
+      </p>
+      {/* Opened by the card; hidden from the tab order and assistive tech (the card is the control). */}
       <input
         ref={inputRef}
         className={styles.input}

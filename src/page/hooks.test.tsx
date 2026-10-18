@@ -294,9 +294,11 @@ describe('useRunChooser', () => {
     );
     expect(result.current.run).toBe(SAMPLE_RUN);
 
+    let acted = false;
     act(() => {
-      result.current.chooser.newFile();
+      acted = result.current.chooser.newFile();
     });
+    expect(acted).toBe(true);
     expect(result.current.state.screen.name).toBe('upload');
     expect(result.current.run).toBeNull();
     expect(result.current.terrain.status).toBe('idle');

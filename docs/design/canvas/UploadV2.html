@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert upload state, v2</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1B2A3A}a:hover{color:#D9480F}
+a:focus-visible,button:focus-visible{outline:2px solid #D9480F;outline-offset:2px}
+.drop{transition:border-color 120ms ease-out}
+.drop:hover:not(:disabled){border-color:#1B2A3A}
+.drop[data-state="dragover"]{border-style:solid;border-color:#1B2A3A}
+.drop[data-state="error"]{border-style:solid;border-color:#D9480F}
+.drop:disabled{border-style:solid;border-color:#C9D1D9;color:#5B6B7A;cursor:progress}
+.link{margin:0;padding:0;border:0;background:none;font:inherit;color:#1B2A3A;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.link:hover:not(:disabled){color:#BB3E0D}
+.link:disabled{color:#5B6B7A;cursor:not-allowed}
+.sample{cursor:pointer}
+.sample:disabled{cursor:not-allowed}
+.sample .chip{transition:background-color 120ms ease-out,color 120ms ease-out}
+.sample:hover:not(:disabled) .chip{background:#1B2A3A;color:#FFFFFF}
+@media (prefers-reduced-motion: reduce){.drop,.sample .chip{transition:none}}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; box-sizing: border-box; background: #F4F6F8; color: #1B2A3A; font-family: 'Archivo', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column">
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid #C9D1D9">
+<div style="display: flex; align-items: baseline; gap: 14px">
+<div style="font-size: 30px; font-weight: 800; font-stretch: 62%; letter-spacing: 0.04em">VERT</div>
+<div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; color: #5B6B7A; letter-spacing: 0.06em">DROP A GPX. GET A POSTER.</div>
+</div>
+<nav style="display: flex; gap: 24px; font-size: 15px"><a href="#about" style="text-decoration: none">About</a><a href="https://github.com/geekplux" style="text-decoration: none">GitHub</a></nav>
+</header>
+<main style="flex: 1 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; padding: 48px 40px; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 24px; max-width: 560px">
+<h1 style="margin: 0; font-size: 72px; line-height: 0.95; font-weight: 800; font-stretch: 75%; letter-spacing: -0.01em">Your run,<br>as terrain.</h1>
+<p style="margin: 0; font-size: 18px; line-height: 1.5; color: #5B6B7A; max-width: 44ch">Drop a GPX file. See the route on real elevation, turn it around, then make a poster. Nothing you upload leaves your browser.</p>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<button type="button" class="drop" data-state="{{state}}" disabled="{{disabled}}" aria-describedby="upload-note" style="position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 48px 24px; border: 2px dashed #5B6B7A; border-radius: 6px; background: #FFFFFF; color: #1B2A3A; font-family: inherit; text-align: center; cursor: pointer">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<span style="display: block; font-size: 18px; font-weight: 600">{{title}}</span>
+<span style="display: block; font-size: 14px; color: #5B6B7A">{{sub}}</span>
+<sc-if value="{{isBusy}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="position: absolute; left: 0; bottom: 0; width: 38%; height: 3px; background: #1B2A3A"></span></sc-if>
+</button>
+<sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #BB3E0D">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 22 20H2Z"/><path d="M12 10v4M12 17h.01"/></svg>
+<span>That's a .fit file. Vert reads .gpx files in v1.</span>
+</div>
+</sc-if>
+<p style="margin: 0; font-size: 14px; color: #5B6B7A">No file handy? <button type="button" class="link" disabled="{{disabled}}">Try the sample run</button></p>
+</div>
+<p id="upload-note" style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #5B6B7A; letter-spacing: 0.04em">GPX only · up to 20 MB · from Strava, Garmin, Coros, Suunto</p>
+</div>
+<button type="button" class="sample" disabled="{{disabled}}" style="position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; margin: 0; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: #E6EAEE; color: #1B2A3A; font-family: inherit; text-align: left">
+<img src="assets/b5be3a7237400030e92202bb0369ee89.svg" alt="" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.9">
+<span class="chip" style="position: absolute; left: 16px; bottom: 16px; display: inline-flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.04em; background: #F4F6F8; color: #1B2A3A; padding: 8px 12px; border-radius: 4px">TRY THE SAMPLE RUN · 21.5 km · +1,102 m <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+</button>
+</main>
+<sc-if value="{{isDragover}}" hint-placeholder-val="{{false}}"><div aria-hidden="true" style="position: absolute; inset: 8px; border: 2px solid #1B2A3A; border-radius: 8px; pointer-events: none"></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"state":{"editor":"enum","options":["rest","dragover","busy","error"],"default":"rest","section":"Upload card"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+var state = this.props.state || 'rest';
+var busy = state === 'busy';
+var dragover = state === 'dragover';
+var error = state === 'error';
+return {
+state: state,
+isBusy: busy,
+isDragover: dragover,
+isError: error,
+disabled: busy,
+title: busy ? 'Reading coosa-backcountry-trail.gpx…' : dragover ? 'Release to open the file' : 'Drop a .gpx file here',
+sub: busy ? 'Parsed in your browser, nothing is uploaded' : dragover ? 'Anywhere on this page works' : 'or click to choose one'
+};
+}
+}
+</script>
+</body>
+</html>

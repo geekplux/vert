@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import type { Page, Request } from '@playwright/test';
@@ -79,7 +80,7 @@ test('Upload does not load the terrain code; the sample reaches live terrain wit
     /\/assets\/TerrainView-[\w-]+\.js$/.test(request.url());
   expect(requests.filter(terrainChunk)).toEqual([]);
 
-  await page.getByRole('button', { name: 'try a sample run' }).click();
+  await page.getByRole('button', { name: 'Try the sample run', exact: true }).click();
   await waitForFirstFrame(page);
   expect(await chooseToFrame(page)).toBeLessThan(5_000);
   expect(requests.filter(terrainChunk)).toHaveLength(1);
@@ -102,6 +103,43 @@ test('a file the user drops never leaves the browser: only assets and tile z/x/y
   expect(await chooseToFrame(page)).toBeLessThan(5_000);
   expectPrivate(requests, baseURL);
   // The file itself was read locally, not fetched.
+  expect(requests.some((request) => request.url().includes('/samples/'))).toBe(false);
+});
+
+test('a file dropped anywhere on the Upload page is read locally and the drop is cancelled', async ({
+  page,
+  baseURL,
+}) => {
+  const requests = recordRequests(page);
+  await page.goto('/');
+  const heading = page.getByRole('heading', { level: 1, name: 'Your run, as terrain.' });
+  await expect(heading).toBeVisible();
+  // A real drag from the desktop can't be scripted; these are the events it fires, with a real
+  // file in a real DataTransfer. Dropped on the headline, well outside the Dropzone.
+  const dataTransfer = await page.evaluateHandle(
+    (text) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([text], 'coosa.gpx', { type: 'application/gpx+xml' }));
+      return transfer;
+    },
+    readFileSync(SAMPLE_GPX, 'utf8'),
+  );
+  await heading.dispatchEvent('dragenter', { dataTransfer });
+  await expect(page.getByText('Anywhere on this page works')).toBeVisible();
+  const notCancelled = await heading.evaluate(
+    (node, transfer) =>
+      node.dispatchEvent(
+        new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }),
+      ),
+    dataTransfer,
+  );
+  // Cancelled: the browser would otherwise navigate the tab to the file.
+  expect(notCancelled).toBe(false);
+  await waitForFirstFrame(page);
+  await expect(
+    page.getByRole('img', { name: /^3D terrain of Coosa Backcountry Trail/ }),
+  ).toBeVisible();
+  expectPrivate(requests, baseURL);
   expect(requests.some((request) => request.url().includes('/samples/'))).toBe(false);
 });
 
@@ -153,11 +191,43 @@ test('a run across the antimeridian gets its own few tiles, on both sides of 180
   expectPrivate(requests, baseURL);
 });
 
+test('a file dropped on the View replaces the run, through the Upload screen', async ({
+  page,
+  baseURL,
+}) => {
+  const requests = recordRequests(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Try the sample run', exact: true }).click();
+  const terrain = page.getByRole('img', { name: /^3D terrain of Coosa Backcountry Trail/ });
+  await expect(terrain).toBeVisible();
+
+  const dataTransfer = await page.evaluateHandle((text) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([text], 'taveuni.gpx', { type: 'application/gpx+xml' }));
+    return transfer;
+  }, antimeridianGpx().toString('utf8'));
+  await terrain.dispatchEvent('dragenter', { dataTransfer });
+  await expect(page.getByRole('status').filter({ hasText: 'Drop to open a new run' })).toHaveText(
+    /Replaces Coosa Backcountry Trail/i,
+  );
+  const notCancelled = await terrain.evaluate(
+    (node, transfer) =>
+      node.dispatchEvent(
+        new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }),
+      ),
+    dataTransfer,
+  );
+  expect(notCancelled).toBe(false);
+  await expect(page.getByRole('heading', { level: 1, name: 'Taveuni Dateline' })).toBeVisible();
+  await expect(page.getByText('Drop to open a new run')).toHaveCount(0);
+  expectPrivate(requests, baseURL);
+});
+
 test('legend and buttons overlay the terrain on wide screens and sit under it on phones', async ({
   page,
 }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'try a sample run' }).click();
+  await page.getByRole('button', { name: 'Try the sample run', exact: true }).click();
   await waitForFirstFrame(page);
   const canvas = await page.getByRole('img', { name: /^3D terrain of / }).boundingBox();
   const rotate = await page.getByRole('button', { name: 'Rotate view' }).boundingBox();
@@ -194,7 +264,7 @@ test('Try again keeps focus with the terrain: the loading text, then the drawn t
     await route.fallback();
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'try a sample run' }).click();
+  await page.getByRole('button', { name: 'Try the sample run', exact: true }).click();
   const retry = page.getByRole('button', { name: 'Try again' });
   await expect(retry).toBeVisible({ timeout: 15_000 });
   // Until the terrain is drawn, Rotate view and Flat map are inert and say why.

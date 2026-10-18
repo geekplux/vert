@@ -96,3 +96,14 @@
     padding: var(--space-4);
   }
 }
+
+/*
+ * A screen fades in when it mounts (View, Poster mode; Upload in UploadLayout). Exporting keeps the
+ * Poster mode screen mounted, so it does not fade again. No motion when the user asks for less.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .shell {
+    animation: 160ms ease-out;
+    animation-name: global(screen-in); /* src/styles/base.css */
+  }
+}

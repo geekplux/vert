@@ -22,15 +22,19 @@ const logFile = (file: File) => {
   action('onFile')({ name: file.name, size: file.size, type: file.type });
 };
 
+/** Rest. Hover draws the dashed border in ink; Tab shows the focus ring. Touch screens read
+ * "Choose a .gpx file · Tap to open your files" (try your browser's device emulation). */
 export const Default: Story = () => (
   <Column>
     <Dropzone onFile={logFile} onSample={action('onSample')} />
   </Column>
 );
+Default.storyName = 'Rest';
 
+/** What the page draws while a file is dragged anywhere over it (`dragOver`). */
 export const DragOver: Story = () => (
   <Column>
-    <Dropzone onFile={noop} onSample={noop} state="dragover" />
+    <Dropzone onFile={noop} onSample={noop} dragOver />
   </Column>
 );
 DragOver.storyName = 'Drag over';
@@ -53,6 +57,7 @@ export const ErrorTooLarge: Story = () => (
 );
 ErrorTooLarge.storyName = 'Error · too large';
 
+/** Disabled, with the progress line along the bottom (still under reduced motion). */
 export const Busy: Story = () => (
   <Column>
     <Dropzone onFile={noop} onSample={noop} busy fileName="coosa-backcountry.gpx" />

@@ -26,7 +26,7 @@ import {
   TerrainBox,
 } from './TerrainBox';
 import type { TerrainBoxProps } from './TerrainBox';
-import { PHONE_QUERY } from './useMediaQuery';
+import { PHONE_QUERY } from '../../hooks/useMediaQuery';
 
 // jsdom has no WebGL: the lazy TerrainView module is a fake that records its props.
 vi.mock('../../terrain/TerrainView', () => import('../../test/fakeTerrainView'));

@@ -33,15 +33,17 @@ This is the only place that owns application state and composes `components`, `t
   every screen and always cancels the browser's own `dragover`/`drop` (a stray drop never opens
   the file in the tab). It ignores the files, and draws nothing, while a load or an export runs
   or a modal dialog (About) is open. On Upload, dropped files go to the Dropzone through its ref
-  (`DropzoneHandle.takeFiles`). On View and Poster mode the page keeps them in a `pendingFiles`
-  ref and calls `newFile()` (if that is a no-op, during a load, the files are dropped at once);
-  when the screen becomes Upload, an effect in `Page` hands them, once, to the freshly mounted
-  Dropzone. Either way the Dropzone checks them (`pickGpxFile`), shows its alert
-  or calls `chooseFile`, so a drop anywhere takes the same path as a drop on the Dropzone. Files
-  left pending when the screen changes elsewhere are dropped. While a file is over the page,
-  `DropFrame/` draws the viewport frame (Upload) or `DropOverlay` the wash, frame and "Drop to
-  open a new run" pill (View, Poster mode), all `aria-hidden`; the page's always-present status
-  region says the pill's words (`dropOverlayAnnouncement`).
+  (`DropzoneHandle.takeFiles`), which checks them (`pickGpxFile`) and shows its alert or calls
+  `chooseFile`. On View and Poster mode the page checks them itself first: a wrong file (extension,
+  size) keeps the run on screen and `DropFrame/DropAlert` says why in a bar under the header
+  (Dismiss, the next drop or a screen change removes it). A GPX is kept in a `pendingFiles` ref
+  while the page calls `newFile()` (if that is a no-op, during a load, the file is dropped at
+  once); when the screen becomes Upload, an effect in `Page` hands it, once, to the freshly mounted
+  Dropzone, so it is read the same way as a drop on the Dropzone, and a GPX that fails to read
+  shows the error there. Files left pending when the screen changes elsewhere are dropped. While a
+  file is over the page, `DropFrame/` draws the viewport frame (Upload) or `DropOverlay` the wash,
+  frame and "Drop to open a new run" pill (View, Poster mode), all `aria-hidden`; the page's
+  always-present status region says the pill's words (`dropOverlayAnnouncement`).
 - `ViewState/`: the View state (aside: date line, route name, stats, climbs, exaggeration, help;
   main: `TerrainBox` with the live `TerrainView` (lazy, its own chunk), legend and Rotate / Flat map,
   then the elevation section with its scrub readout; the scrub is shared, so the profile moves the

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import { pickGpxFile } from '../components';
 import type { DropzoneHandle } from '../components';
 import { AboutDialog } from './AboutDialog/AboutDialog';
 import { AppHeader } from './AppHeader/AppHeader';
 import { PosterNav } from './AppHeader/PosterNav';
 import { UploadNav } from './AppHeader/UploadNav';
 import { ViewNav } from './AppHeader/ViewNav';
+import { DropAlert } from './DropFrame/DropAlert';
 import { DropFrame } from './DropFrame/DropFrame';
 import { DropOverlay, dropOverlayAnnouncement } from './DropFrame/DropOverlay';
 import {
@@ -75,13 +77,22 @@ function PageContent({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const cameraRef = useRef<TerrainCameraSource>(null);
   // Exporting is an overlay on poster mode, not a new screen: PosterState moves focus for it.
-  useFocusOnScreenChange(isPosterMode(screen) ? 'poster' : screen.name, headingRef);
+  const screenKey = isPosterMode(screen) ? 'poster' : screen.name;
+  useFocusOnScreenChange(screenKey, headingRef);
 
   // A file dropped anywhere, on any screen (README "Dropping a file"). On Upload it goes straight
-  // to the Dropzone; on View and Poster mode the page leaves the run (New file) and Upload's
-  // Dropzone takes it once mounted, so every drop is checked, reported and loaded the same way.
+  // to the Dropzone. On View and Poster mode the page checks it first: a wrong file keeps the run
+  // on screen and says why under the header; a GPX leaves the run (New file) and Upload's Dropzone
+  // takes it once mounted, so every file is loaded (and a broken one reported) the same way.
   const dropzoneRef = useRef<DropzoneHandle>(null);
   const pendingFiles = useRef<File[] | null>(null);
+  // Why the last drop on a run was not opened, for the screen it was dropped on (`screenKey`):
+  // the alert goes when the screen changes. A new `id` per message remounts (re-announces) it.
+  const [dropError, setDropError] = useState<{
+    message: string;
+    id: number;
+    screenKey: string;
+  } | null>(null);
   const { dragOver } = useWindowFileDrop({
     disabled:
       screen.name === 'exporting' || (screen.name === 'upload' && screen.busy.kind !== 'idle'),
@@ -90,9 +101,20 @@ function PageContent({
         dropzoneRef.current?.takeFiles(files);
         return;
       }
+      const picked = pickGpxFile(files);
+      if (!picked) return;
+      if ('error' in picked) {
+        setDropError((previous) => ({
+          message: picked.error,
+          id: (previous?.id ?? 0) + 1,
+          screenKey,
+        }));
+        return;
+      }
+      setDropError(null);
       // Kept only if New file really leaves the screen (it is a no-op while a load is in
       // flight), so files never wait for some later, unrelated screen change.
-      pendingFiles.current = files;
+      pendingFiles.current = [picked.file];
       if (!newFile()) pendingFiles.current = null;
     },
   });
@@ -142,6 +164,16 @@ function PageContent({
           />
         </AppHeader>
       )}
+
+      {dropError?.screenKey === screenKey ? (
+        <DropAlert
+          key={dropError.id}
+          message={dropError.message}
+          onDismiss={() => {
+            setDropError(null);
+          }}
+        />
+      ) : null}
 
       {screen.name === 'upload' ? (
         <UploadState

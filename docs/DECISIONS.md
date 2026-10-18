@@ -7,8 +7,10 @@ everything.
 
 ## Design sources in the repo
 
-- `docs/design/canvas/*.html`: the canvas frames' source (copied 2026-10-12). Every inline style is
-  an exact value; read them for px, colors and copy.
+- `docs/design/canvas/*.html`: the canvas frames' source (copied 2026-10-12; the v2 frames
+  `UploadV2`, `UploadStatesV2`, `UploadPhoneV2`, `ViewDropV2` and `PosterModeV2` on 2026-10-18,
+  without PNG renders). Every inline style is an exact value; read them for px, colors and copy.
+  Where a v2 frame and a v1 frame differ, v2 wins.
 - `docs/design/frames/*.png`: those frames rendered at their canvas size (`Main-390.png` is the
   fluid View frame at 390 wide). Compare screenshots against these.
 - Bracketed text in the frames (`[Route name]`, `[DATE]`, `[Place]`) is a slot filled from data.
@@ -47,16 +49,62 @@ everything.
   `--route` (34px bold is large text: 3.97:1 ≥ 3:1) and the 16px unit `--route-text` (small text
   needs 4.5:1). The value never wraps (`white-space: nowrap`); line-height `normal`, as in the
   Main frame.
-- **Dropzone** (Upload frame wins over the Tokens frame):
-  - Rest: background `--white`, 2px dashed `--muted`, radius 6, padding 40×24, gap 10, upload icon
-    36px stroke 1.8, title 18/600 "Drop a .gpx file here", line 14 `--muted` "or choose a file · or
-    try a sample run" where both are real `<button>`s styled as underlined links.
-  - Drag-over: border becomes **solid** 2px `--ink` (the dashed→solid change carries the state
-    without color) and the title reads "Release to open the file".
-  - Error: solid 2px `--route` border and a message below with a warning glyph and text, announced
-    with `role="alert"`. Errors: wrong type, larger than `maxBytes`.
-  - The whole zone is not a clickable div: the buttons are the controls; dropping works anywhere
-    on the zone.
+- **Dropzone** (v2 upload entry, canvas frames `UploadV2`, `UploadStatesV2`, `UploadPhoneV2`):
+  - Structure: a `role="group"` with a fixed name, "Upload a GPX file" (not the card's title, which
+    the button already says and which changes with the state), that carries only the drag
+    listeners, so a drop on the card, the error line or the sample line works. Inside it: the card, the error
+    (if any), then "No file handy? Try the sample run".
+  - The card is one `<button type="button">` (phrasing content only: spans drawn as blocks) that
+    opens the hidden file input; `aria-describedby` points at the page's note line, so the format
+    and size limits are read with it. Its accessible name is the title and sub-line as two
+    sentences ("Choose a .gpx file. Tap to open your files"), set with `aria-label` because a
+    visually hidden full stop between the spans gave Chromium "here . or"; the name still starts
+    with the visible title (label in name). Upload icon 40px stroke 1.8 (round caps and joins), title
+    18/600, sub-line 14 `--muted`; background `--white`, radius 6, padding 48×24 (32×16 and a 36px
+    icon below 600px), gap 10.
+  - Copy: pointer devices "Drop a .gpx file here" / "or click to choose one"; touch screens
+    (`(hover: none) and (pointer: coarse)`) "Choose a .gpx file" / "Tap to open your files";
+    drag-over "Release to open the file" / "Anywhere on this page works"; busy "Reading
+    <fileName>…" (the page says what it loads: `busyKind="sample"` gives "Loading the sample
+    run…"; no file name gives "Reading…") / "Parsed in your browser, nothing is uploaded".
+  - States, each carried by shape or words as well as colour: rest 2px **dashed** `--muted`; hover
+    dashed `--ink` and a pointer cursor (120ms border transition, none under reduced motion), on
+    the rest state only and only on devices that hover (`@media (hover: hover)`, so a tap leaves
+    nothing stuck). Deliberate deviation from the UploadV2 artboard, whose hover rule also turns an
+    error border ink: here an error border stays `--route` under the pointer, so the error cue
+    never disappears;
+    focus the 2px `--route` ring, offset 2; drag-over **solid** `--ink` and the drag-over copy;
+    error **solid** `--route` and the alert under the card (the card stays clickable); busy the
+    card is `disabled`, **solid** `--rule`, text `--muted`, with a 3px `--ink` line along its bottom
+    edge (38% wide, sliding left to right in 1.2s; still under reduced motion) and the busy copy.
+    The group keeps `aria-busy` and the page's status region announces the busy copy. When a load
+    fails (busy ends with an error), focus goes back to the card, which the disabled state had
+    dropped to `<body>`, unless the user has focused something else meanwhile. A new load clears
+    the Dropzone's own error, so after it only the page's error shows.
+  - Error: warning glyph and text in `--route-text`, 14px, `role="alert"`, directly under the card,
+    outside the button. Errors: wrong type, larger than `maxBytes` (`pickGpxFile.ts`; every way a
+    file reaches the Dropzone goes through it, including drops elsewhere on the page).
+  - "Try the sample run": a real `<button>` drawn as an underlined link (hover `--route-text`,
+    disabled while busy), with an invisible 44px-tall hit area.
+  - Page-wide drop on Upload: see "Dropping a file anywhere" under Page. While a file is over the
+    page the Dropzone draws its drag-over state and `DropFrame` draws a decorative 2px `--ink`
+    frame 8px inside the viewport (radius 8, no pointer events). Files dropped outside the
+    Dropzone go through its `ref` (`takeFiles`), so they are checked and their errors shown in the
+    same place.
+  - Overruled on 2026-10-18 by the maintainer: this entry used to say "The whole zone is not a clickable div:
+    the buttons are the controls" (the card held "or choose a file · or try a sample run" as two
+    link buttons, and drops worked on the zone only). the maintainer asked for the whole card to be the
+    button and for drops anywhere on the page. The card is a real `<button>`, not a clickable div,
+    so keyboard and assistive tech get the same control.
+- **Upload sample preview** (v2): the right column's 4 : 3 preview is a `<button>` that loads the
+  sample, named by its chip "TRY THE SAMPLE RUN · 21.5 km · +1,102 m" (units follow the
+  preference) with a trailing 14px arrow; the terrain image is decorative (`alt=""`; the lede says
+  what Vert draws). Chip: mono 12, `letter-spacing: 0.04em`, `--bg`, padding 8×12, radius 4, 16px
+  from the corner (12px below 600px); it wraps only between its parts, and the arrow follows the
+  last word (inline, 10px after it) rather than sitting at the chip's far edge. Hover (devices
+  that hover only) fills the chip `--ink` with white text (120ms, none under reduced motion);
+  focus rings the whole box; disabled while busy. The note line under the Dropzone is 12 mono at
+  line-height 1.5 at every width (its two phone lines were cramped at `normal`).
 - **StylePicker** and **SizePicker**: native radio inputs, visually hidden, labels styled as the
   canvas draws them (the canvas uses links; that is a mockup shortcut). Selected state is carried
   by border width + weight (StylePicker) or fill (SizePicker) **and** by the radio's checked state.
@@ -120,12 +168,47 @@ everything.
   screen-reader users start at the top of the new content. Opening/closing the export overlay moves
   focus to its progress label / back to the Download button.
 
+- **Dropping a file anywhere** (canvas UploadV2, ViewDropV2). `useWindowFileDrop`, mounted once
+  in `Page`, listens on `window` on every screen. It always cancels `dragover` and `drop`, so a
+  stray drop never navigates the tab to the file; it counts only drags that carry files, tracks
+  enter/leave depth so the state never flickers, and resets on drop and on window blur. Files are
+  ignored, and nothing is drawn, while a load or an export runs or a modal dialog (About) is open.
+  On Upload the files go to the Dropzone (`takeFiles`). On View and Poster mode the page leaves
+  the run (`newFile`; the files are kept only if it really leaves, not when it is a no-op during
+  a load) and hands them, once, to Upload's Dropzone when it mounts, so a dropped file
+  is checked, reported and loaded by exactly the code a drop on the Dropzone uses (a wrong file
+  lands on Upload with the Dropzone's error).
+- **Drop overlay on View and Poster mode** (ViewDropV2): while a file is dragged over them, a fixed
+  wash of `--bg` at 72% (`color-mix`), the viewport frame, and a centred `--ink` pill: 20px upload
+  icon + "Drop to open a new run" 16/600 white, under it "REPLACES <ROUTE NAME>" in 11px mono,
+  `letter-spacing: 0.08em`, 80% opacity (uppercase by CSS), padding 16×22, radius 6, the canvas's
+  preview shadow. Nothing takes pointer events, and all of it is `aria-hidden`. A status inserted
+  with the overlay is often not announced, so the page keeps one polite status region always
+  rendered (like Upload's) and fills it with "Drop to open a new run. Replaces <route name>." while
+  the overlay is up.
+- **Screen fade.** Upload, View and Poster mode fade in over 160ms ease-out when they mount (a CSS
+  animation on UploadLayout's `main` and PageShell's shell, only under
+  `prefers-reduced-motion: no-preference`). Exporting keeps Poster mode mounted, so it does not
+  fade again. One global `@keyframes screen-in` in `src/styles/base.css`, named with `global()` from
+  both modules. The e2e axe check waits for finite animations to end before measuring contrast.
+
 - Terrain overlays: below 600px the View moves the legend chip and the Rotate / Flat map buttons
   out of the terrain box into a row under it, so nothing covers the model on phones. TerrainView
   takes `insets` so the page reserves room for any overlay that stays on top.
 
 ## Posters (phase 3)
 
+- **Sticky Download block shadow** (PosterModeV2): side by side (≥ 900px), the block shows a top
+  shadow `0 -12px 24px -12px` of `--ink` at 22% only while aside content is scrolled under it. A
+  1px sentinel at the very end of the aside's content, after the block, is watched by an
+  `IntersectionObserver` rooted at the aside (`useScrolledUnder`): the block is stuck over content
+  exactly when that sentinel is out of view. (A sentinel just above the block would stay
+  "intersecting" while hidden under it, since observers ignore occlusion.) No shadow when
+  everything fits, at the end of the scroll, or below 900px where the block is static. Its notes
+  read "Rendered in your browser, in tiles. Large sizes take a few seconds." and the PDF note, both
+  at line-height 1.5. Side by side the block spans the aside edge to edge as PosterModeV2 draws it
+  (margins −40 / −32, padding 12 32 24 40), so its 1px rule and the shadow run full width and the
+  aside clips the shadow's sides; below 900px its static layout is unchanged.
 - Fonts per the canvas, all self-hosted and loaded only in poster mode: B = Big Shoulders Display
   800 + JetBrains Mono 400; E = Libre Caslon Text 400 (italic only when there is a subtitle) +
   Archivo Narrow 400/600/700. Night Ridge prints its effective relief (setting × 1.5).
@@ -264,9 +347,9 @@ everything.
 - **Summit threshold.** A ▲ summit (terrain marker, legend entry, terrain label) only when the high
   point stands ≥ 10 m above the route's lowest point (`hasSummit`, `src/lib/summit.ts`), the same
   rule in the View, poster A's figure and the legend. Unknown elevation: no summit.
-- **Sample chip.** The Upload chip reads `SAMPLE_TOTALS` (21,480 m, +1,102 m, 3:04:58), the loaded
-  sample's own figures; a test parses `coosa-backcountry.gpx` with the worker's handler and fails if
-  they drift. The placeholder `SAMPLE_RUN` (tests and stories) carries the same totals.
+- **Sample chip.** The Upload chip ("TRY THE SAMPLE RUN · …") reads `SAMPLE_TOTALS` (21,480 m,
+  +1,102 m, 3:04:58), the loaded sample's own figures; a test parses `coosa-backcountry.gpx` with
+  the worker's handler and fails if they drift. The placeholder `SAMPLE_RUN` (tests and stories) carries the same totals.
 
 ## Running-app files (the maintainer's GPX, Hong Kong)
 

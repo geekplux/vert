@@ -1,49 +1,145 @@
-/* Dropzone. Source: canvas Upload.html (wins over Tokens.html's DROPZONE) and DECISIONS.md. */
+/* Dropzone. Source: canvas UploadV2.html and UploadStatesV2.html (docs/design/canvas), DECISIONS.md. */
 
+/* The group: the card, the error under it, the sample line. Drops land anywhere in it. */
 .zone {
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: var(--space-3);
+}
+
+/*
+ * The card is one button. Every state differs in shape or words, not only in colour:
+ * rest dashed, drag-over solid + new copy, error solid + the alert below, busy solid + new copy +
+ * the progress line.
+ */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-10) var(--space-6);
+  gap: 10px; /* canvas, no token */
+  width: 100%;
+  margin: 0;
+  padding: 48px var(--space-6); /* canvas, no token for 48 */
+  overflow: hidden;
   border: 2px dashed var(--muted);
   border-radius: var(--radius-panel);
   background: var(--white);
   color: var(--ink);
+  font: inherit;
   text-align: center;
+  cursor: pointer;
 }
 
-/* Drag-over: dashed → solid carries the state without colour; the title also changes. */
-.zone[data-state='dragover'] {
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    transition: border-color 120ms ease-out;
+  }
+}
+
+/* Hover only on devices that hover, so a tap never leaves it stuck. Rest only: an error border
+   stays --route under the pointer (DECISIONS.md). */
+@media (hover: hover) {
+  .card[data-state='rest']:hover {
+    border-color: var(--ink);
+  }
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+.card[data-state='dragover'] {
   border-style: solid;
   border-color: var(--ink);
 }
 
-/* Error: solid route border; the message below carries the state in text. */
-.zone[data-state='error'] {
+.card[data-state='error'] {
   border-style: solid;
   border-color: var(--route);
+}
+
+.card:disabled {
+  border-style: solid;
+  border-color: var(--rule);
+  color: var(--muted);
+  cursor: progress;
 }
 
 .icon {
   display: block;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 }
 
 .title {
+  display: block;
   font-size: 18px;
   font-weight: 600;
 }
 
-.line {
+.sub {
+  display: block;
   font-size: 14px;
   color: var(--muted);
 }
 
-/* Real buttons drawn as underlined links. */
+/*
+ * Busy: a 3px line along the card's bottom edge, 38% wide (canvas). It slides left to right when
+ * motion is welcome and stands still otherwise.
+ */
+.progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  height: 3px; /* canvas, no token */
+  background: var(--ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .progress {
+    animation: slide 1.2s ease-in-out infinite;
+  }
+}
+
+/* Translate is relative to the bar's own width: −100% starts it just off the left edge, and
+   100 / 38 ≈ 263% ends it just off the right edge. */
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(263%);
+  }
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* canvas, no token */
+  font-size: 14px;
+  color: var(--route-text);
+}
+
+.warning {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* A real button drawn as an underlined link. */
 .link {
   position: relative;
   margin: 0;
@@ -68,8 +164,10 @@
   transform: translateY(-50%);
 }
 
-.link:hover:not(:disabled) {
-  color: var(--route-text);
+@media (hover: hover) {
+  .link:hover:not(:disabled) {
+    color: var(--route-text);
+  }
 }
 
 .link:focus-visible {
@@ -79,27 +177,11 @@
 }
 
 .link:disabled {
-  opacity: 0.45;
+  color: var(--muted);
   cursor: not-allowed;
 }
 
-.message {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 14px;
-  color: var(--route-text);
-}
-
-.warning {
-  display: block;
-  flex: none;
-  width: 16px;
-  height: 16px;
-}
-
-/* The file input is opened by "choose a file"; it is never seen or focused. */
+/* The file input is opened by the card; it is never seen or focused. */
 .input {
   position: absolute;
   width: 1px;
@@ -112,13 +194,33 @@
   white-space: nowrap;
 }
 
-/* Windows high contrast: keep the three border states distinct with system colours. */
+/* Phone frame (UploadPhoneV2.html): a shorter card, a 36px icon. */
+@media (max-width: 599.98px) {
+  .card {
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .icon {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Windows high contrast: keep the border states distinct with system colours. */
 @media (forced-colors: active) {
-  .zone[data-state='dragover'] {
+  .card[data-state='dragover'] {
     border-color: Highlight;
   }
 
-  .zone[data-state='error'] {
+  .card[data-state='error'] {
     border-color: CanvasText;
+  }
+
+  .card:disabled {
+    border-color: GrayText;
+  }
+
+  .progress {
+    background: CanvasText;
   }
 }

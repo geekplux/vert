@@ -97,7 +97,7 @@ const poster = (page: Page) => page.getByRole('img', { name: /^Poster: / });
 /** The sample, by keyboard, then Make a poster. */
 async function openPoster(page: Page) {
   await page.goto('/');
-  await tabUntil(page, page.getByRole('button', { name: 'try a sample run' }), 5);
+  await tabUntil(page, page.getByRole('button', { name: 'Try the sample run', exact: true }), 5);
   await page.keyboard.press('Enter');
   await page.waitForFunction(
     () => performance.getEntriesByName('vert:first-frame').length > 0,
@@ -441,7 +441,7 @@ test('with the tiles refused, Night Ridge exports without its terrain and Trail 
   // Registered after the synthetic tiles, so it wins: every tile request fails.
   await page.route('**/tiles/**', (route) => route.abort());
   await page.goto('/');
-  await tabUntil(page, page.getByRole('button', { name: 'try a sample run' }), 5);
+  await tabUntil(page, page.getByRole('button', { name: 'Try the sample run', exact: true }), 5);
   await page.keyboard.press('Enter');
   await tabUntil(page, page.getByRole('button', { name: 'Make a poster' }));
   await page.keyboard.press('Enter');
@@ -482,7 +482,7 @@ async function posterWithTilesRefused(page: Page, style: string) {
   const refuse = (route: Route) => route.abort();
   await page.route('**/tiles/**', refuse);
   await page.goto('/');
-  await tabUntil(page, page.getByRole('button', { name: 'try a sample run' }), 5);
+  await tabUntil(page, page.getByRole('button', { name: 'Try the sample run', exact: true }), 5);
   await page.keyboard.press('Enter');
   await tabUntil(page, page.getByRole('button', { name: 'Make a poster' }));
   await page.keyboard.press('Enter');

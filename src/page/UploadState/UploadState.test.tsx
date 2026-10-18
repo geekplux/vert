@@ -33,14 +33,30 @@ function uploadState(screen: Partial<UploadScreen>, prefs = INITIAL_PREFS): Page
   return { screen: { ...INITIAL_SCREEN, ...screen }, prefs };
 }
 
-const dropzone = () => screen.getByRole('group', { name: /gpx file|Reading|Loading/ });
+/** Upload's own region, in main (the page has another, for the drop overlay). */
+const uploadStatus = () => within(screen.getByRole('main')).getByRole('status');
+const dropzone = () => screen.getByRole('group', { name: 'Upload a GPX file' });
+const CARD_NAME = 'Drop a .gpx file here. or click to choose one';
+const NOTE = 'GPX only · up to 20 MB · from Strava, Garmin, Coros, Suunto';
+const SAMPLE_LINK = { name: 'Try the sample run' };
+const PREVIEW_NAME = 'TRY THE SAMPLE RUN · 21.5 km · +1,102 m';
 
 function dropFile(file: File) {
   fireEvent.drop(dropzone(), { dataTransfer: { files: [file], types: ['Files'] } });
 }
 
+/** A drop outside the Dropzone, e.g. on the headline. */
+function dropOnPage(...files: File[]) {
+  const target = screen.getByRole('heading', { level: 1 });
+  fireEvent.dragEnter(target, { dataTransfer: { types: ['Files'] } });
+  fireEvent.drop(target, { dataTransfer: { files, types: ['Files'] } });
+}
+
+/** The decorative frame round the viewport: aria-hidden, so not reachable by role. */
+const dropFrame = () => screen.queryByTestId('drop-frame');
+
 describe('UploadState', () => {
-  it('renders the headline, intro, Dropzone, note and sample preview', () => {
+  it('renders the headline, intro, Dropzone, note and sample preview button', () => {
     render(<Page schedule={immediateSchedule} />);
     const main = screen.getByRole('main');
 
@@ -53,25 +69,23 @@ describe('UploadState', () => {
         'Drop a GPX file. See the route on real elevation, turn it around, then make a poster. Nothing you upload leaves your browser.',
       ),
     ).toBeDefined();
-    expect(within(main).getByRole('group', { name: 'Drop a .gpx file here' })).toBeDefined();
-    expect(within(main).getByRole('button', { name: 'choose a file' })).toBeDefined();
-    expect(within(main).getByRole('button', { name: 'try a sample run' })).toBeDefined();
-    expect(
-      within(main).getByText(
-        'GPX only in v1 · up to 20 MB · exported from Strava, Garmin, Coros, Suunto',
-      ),
-    ).toBeDefined();
+    expect(within(main).getByRole('group', { name: 'Upload a GPX file' })).toBeDefined();
+    // The card is described by the note, so the limits are read with it.
+    expect(within(main).getByRole('button', { name: CARD_NAME, description: NOTE })).toBeDefined();
+    expect(within(main).getByRole('button', SAMPLE_LINK)).toBeDefined();
+    expect(within(main).getByText(NOTE)).toBeDefined();
 
-    const image = within(main).getByRole('img', {
-      name: 'Example: the sample trail run drawn as terrain, an orange loop over ridge lines',
-    });
-    expect(image.tagName).toBe('IMG');
-    expect(image.getAttribute('src')).toMatch(/sample-terrain/);
+    // The preview is a button named by its chip; its image is decorative.
+    const preview = within(main).getByRole('button', { name: PREVIEW_NAME });
+    const image = preview.querySelector('img');
+    expect(image?.getAttribute('alt')).toBe('');
+    expect(image?.getAttribute('src')).toMatch(/sample-terrain/);
+    expect(within(main).queryByRole('img')).toBeNull();
   });
 
   it('shows the sample chip from the sample run’s data, in the chosen units', () => {
     const { unmount } = render(<Page schedule={immediateSchedule} />);
-    expect(screen.getByText('SAMPLE · 21.5 km · +1,102 m')).toBeDefined();
+    expect(screen.getByRole('button', { name: PREVIEW_NAME })).toBeDefined();
     unmount();
 
     render(
@@ -80,22 +94,106 @@ describe('UploadState', () => {
         initialState={uploadState({}, { ...INITIAL_PREFS, units: 'imperial' })}
       />,
     );
-    expect(screen.getByText('SAMPLE · 13.3 mi · +3,615 ft')).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: 'TRY THE SAMPLE RUN · 13.3 mi · +3,615 ft' }),
+    ).toBeDefined();
+  });
+
+  it('opens the file picker from the card', () => {
+    const { container } = render(<Page schedule={immediateSchedule} />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error('no file input');
+    const click = vi.spyOn(input, 'click').mockImplementation(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: CARD_NAME }));
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes to View when the sample preview is chosen', async () => {
+    render(<Page schedule={immediateSchedule} />);
+    fireEvent.click(screen.getByRole('button', { name: PREVIEW_NAME }));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+    ).toBeDefined();
+  });
+
+  it('says "Loading the sample run…" when the preview is chosen', () => {
+    const clock = manualSchedule();
+    render(<Page schedule={clock.schedule} />);
+    fireEvent.click(screen.getByRole('button', { name: PREVIEW_NAME }));
+    expect(within(dropzone()).getByText('Loading the sample run…')).toBeDefined();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: PREVIEW_NAME }).disabled).toBe(
+      true,
+    );
+  });
+
+  it('takes a file dropped anywhere on the page, framing the page while it is dragged', async () => {
+    const clock = manualSchedule();
+    render(<Page schedule={clock.schedule} />);
+    expect(dropFrame()).toBeNull();
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    fireEvent.dragEnter(heading, { dataTransfer: { types: ['Files'] } });
+    expect(
+      screen.getByRole('button', { name: 'Release to open the file. Anywhere on this page works' }),
+    ).toBeDefined();
+    expect(dropFrame()).not.toBeNull();
+
+    fireEvent.drop(heading, {
+      dataTransfer: {
+        files: [new File(['<gpx/>'], 'harbour.gpx', { type: 'application/gpx+xml' })],
+        types: ['Files'],
+      },
+    });
+    expect(dropFrame()).toBeNull();
+    expect(uploadStatus().textContent).toBe('Reading harbour.gpx…');
+
+    await clock.flush();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+    ).toBeDefined();
+  });
+
+  it('shows the error for a wrong file dropped on the page in the Dropzone alert', () => {
+    render(<Page schedule={immediateSchedule} />);
+    dropOnPage(new File(['x'], 'run.fit'));
+    expect(within(dropzone()).getByRole('alert').textContent).toBe(
+      "That's a .fit file. Vert reads .gpx files in v1.",
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Your run, as terrain.' })).toBeDefined();
+  });
+
+  it('reads a file dropped on the Dropzone once, not again at the page level', () => {
+    const loadRun = vi.fn(() => new Promise<never>(() => undefined));
+    render(<Page loadRun={loadRun} />);
+    dropFile(new File(['<gpx/>'], 'loop.gpx', { type: 'application/gpx+xml' }));
+    expect(loadRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores drops on the page while busy', () => {
+    const loadRun = vi.fn(() => new Promise<never>(() => undefined));
+    render(<Page loadRun={loadRun} />);
+    fireEvent.click(screen.getByRole('button', SAMPLE_LINK));
+    expect(loadRun).toHaveBeenCalledTimes(1);
+
+    dropOnPage(new File(['<gpx/>'], 'other.gpx'));
+    expect(loadRun).toHaveBeenCalledTimes(1);
+    expect(dropFrame()).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('has one main and an empty status region when idle', () => {
     render(<Page schedule={immediateSchedule} />);
     expect(screen.getAllByRole('main')).toHaveLength(1);
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(uploadStatus().textContent).toBe('');
   });
 
   it('goes to View when the sample is chosen', async () => {
     render(<Page schedule={immediateSchedule} />);
-    fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
+    fireEvent.click(screen.getByRole('button', SAMPLE_LINK));
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
     ).toBeDefined();
-    expect(screen.queryByRole('group', { name: /gpx file/ })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Upload a GPX file' })).toBeNull();
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
@@ -103,14 +201,14 @@ describe('UploadState', () => {
     const clock = manualSchedule();
     render(<Page schedule={clock.schedule} />);
     // The live region is there, empty, before its text changes (or nothing would be read out).
-    const region = screen.getByRole('status');
+    const region = uploadStatus();
     expect(region.textContent).toBe('');
-    fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
+    fireEvent.click(screen.getByRole('button', SAMPLE_LINK));
 
-    expect(screen.getByRole('status')).toBe(region);
+    expect(uploadStatus()).toBe(region);
     expect(region.textContent).toBe('Loading the sample run…');
     // The Dropzone's title and the page's announcement use the same words.
-    expect(screen.getByRole('group', { name: 'Loading the sample run…' })).toBe(dropzone());
+    expect(within(dropzone()).getByText('Loading the sample run…')).toBeDefined();
     expect(dropzone().getAttribute('aria-busy')).toBe('true');
     // aria-busy holds back announcements inside the Dropzone only: the region is outside it, and
     // no ancestor of it is busy, so "Loading the sample run…" is read out.
@@ -129,11 +227,17 @@ describe('UploadState', () => {
     render(<Page schedule={clock.schedule} />);
     dropFile(new File(['<gpx/>'], 'morning-loop.gpx', { type: 'application/gpx+xml' }));
 
-    expect(screen.getByRole('status').textContent).toBe('Reading morning-loop.gpx…');
-    expect(screen.getByRole('group', { name: 'Reading morning-loop.gpx…' })).toBeDefined();
+    expect(uploadStatus().textContent).toBe('Reading morning-loop.gpx…');
+    expect(within(dropzone()).getByText('Reading morning-loop.gpx…')).toBeDefined();
     expect(
-      screen.getByRole<HTMLButtonElement>('button', { name: 'try a sample run' }).disabled,
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Reading morning-loop.gpx… Parsed in your browser, nothing is uploaded',
+      }).disabled,
     ).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>('button', SAMPLE_LINK).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: PREVIEW_NAME }).disabled).toBe(
+      true,
+    );
 
     await clock.flush();
     expect(
@@ -148,11 +252,11 @@ describe('UploadState', () => {
         initialState={uploadState({ busy: { kind: 'reading', fileName: 'coosa.gpx' } })}
       />,
     );
-    expect(screen.getByRole('status').textContent).toBe('Reading coosa.gpx…');
-    expect(screen.getByRole('group', { name: 'Reading coosa.gpx…' })).toBeDefined();
+    expect(uploadStatus().textContent).toBe('Reading coosa.gpx…');
+    expect(within(dropzone()).getByText('Reading coosa.gpx…')).toBeDefined();
   });
 
-  it('shows the screen’s error in the Dropzone alert', () => {
+  it('shows the screen’s error in the Dropzone alert, under the card', () => {
     render(
       <Page
         schedule={immediateSchedule}
@@ -161,12 +265,27 @@ describe('UploadState', () => {
     );
     const alert = within(dropzone()).getByRole('alert');
     expect(alert.textContent).toBe('This file has no track points.');
+    expect(screen.getByRole('button', { name: CARD_NAME }).contains(alert)).toBe(false);
   });
 
-  it('has no axe violations, idle and with an error', async () => {
+  it('has no axe violations, idle, dragging, busy and with an error', async () => {
     const idle = render(<Page schedule={immediateSchedule} />);
     await expectNoAxeViolations(idle.container);
+    fireEvent.dragEnter(screen.getByRole('heading', { level: 1 }), {
+      dataTransfer: { types: ['Files'] },
+    });
+    expect(dropFrame()).not.toBeNull();
+    await expectNoAxeViolations(idle.container);
     idle.unmount();
+
+    const busy = render(
+      <Page
+        schedule={immediateSchedule}
+        initialState={uploadState({ busy: { kind: 'reading', fileName: 'coosa.gpx' } })}
+      />,
+    );
+    await expectNoAxeViolations(busy.container);
+    busy.unmount();
 
     const failed = render(
       <Page

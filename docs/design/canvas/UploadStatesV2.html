@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert upload card, six states</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1B2A3A}a:hover{color:#D9480F}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 40px 48px; background: #F4F6F8; color: #1B2A3A; font-family: 'Archivo', 'Helvetica Neue', sans-serif; display: flex; flex-direction: column; gap: 28px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 800; font-stretch: 75%">01 · Upload card, six states</h1>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px 32px">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">REST · dashed --muted, white</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 24px; border: 2px dashed #5B6B7A; border-radius: 6px; background: #FFFFFF; text-align: center">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 18px; font-weight: 600">Drop a .gpx file here</div>
+<div style="font-size: 14px; color: #5B6B7A">or click to choose one</div>
+</div>
+<div style="font-size: 14px; color: #5B6B7A">No file handy? <span style="color: #1B2A3A; text-decoration: underline; text-underline-offset: 2px">Try the sample run</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">HOVER · dashed --ink, cursor pointer</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 24px; border: 2px dashed #1B2A3A; border-radius: 6px; background: #FFFFFF; text-align: center">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 18px; font-weight: 600">Drop a .gpx file here</div>
+<div style="font-size: 14px; color: #5B6B7A">or click to choose one</div>
+</div>
+<div style="font-size: 14px; color: #5B6B7A">No file handy? <span style="color: #BB3E0D; text-decoration: underline; text-underline-offset: 2px">Try the sample run</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">FOCUS · 2px --route ring, offset 2</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 24px; border: 2px dashed #5B6B7A; border-radius: 6px; background: #FFFFFF; text-align: center; box-shadow: 0 0 0 2px #F4F6F8, 0 0 0 4px #D9480F">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 18px; font-weight: 600">Drop a .gpx file here</div>
+<div style="font-size: 14px; color: #5B6B7A">or click to choose one</div>
+</div>
+<div style="font-size: 14px; color: #5B6B7A">No file handy? <span style="color: #1B2A3A; text-decoration: underline; text-underline-offset: 2px">Try the sample run</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">DRAG-OVER · solid --ink, page-wide, viewport framed</div>
+<div style="position: relative; padding: 10px; border: 2px solid #1B2A3A; border-radius: 10px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 24px; border: 2px solid #1B2A3A; border-radius: 6px; background: #FFFFFF; text-align: center">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 18px; font-weight: 600">Release to open the file</div>
+<div style="font-size: 14px; color: #5B6B7A">Anywhere on this page works</div>
+</div>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">OUTER FRAME = 2px --ink inset 8px around the whole page</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">BUSY · disabled, solid --rule, 3px progress line</div>
+<div style="position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 24px; border: 2px solid #C9D1D9; border-radius: 6px; background: #FFFFFF; color: #5B6B7A; text-align: center">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 18px; font-weight: 600">Reading coosa-backcountry-trail.gpx…</div>
+<div style="font-size: 14px; color: #5B6B7A">Parsed in your browser, nothing is uploaded</div>
+<div aria-hidden="true" style="position: absolute; left: 0; bottom: 0; width: 38%; height: 3px; background: #1B2A3A"></div>
+</div>
+<div style="font-size: 14px; color: #5B6B7A">No file handy? <span style="color: #5B6B7A; text-decoration: underline; text-underline-offset: 2px">Try the sample run</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">ERROR · solid --route, message below, still clickable</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 24px; border: 2px solid #D9480F; border-radius: 6px; background: #FFFFFF; text-align: center">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+<div style="font-size: 18px; font-weight: 600">Drop a .gpx file here</div>
+<div style="font-size: 14px; color: #5B6B7A">or click to choose one</div>
+</div>
+<div style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #BB3E0D">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3 22 20H2Z"/><path d="M12 10v4M12 17h.01"/></svg>
+<span>That's a .fit file. Vert reads .gpx files in v1.</span>
+</div>
+</div>
+
+</div>
+<div style="margin-top: auto; display: flex; gap: 32px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">
+<span>THE WHOLE CARD IS ONE &lt;BUTTON&gt;: CLICK OPENS THE FILE PICKER</span>
+<span>DROPS LAND ANYWHERE ON THE PAGE</span>
+<span>TOUCH: "CHOOSE A .GPX FILE · TAP TO OPEN YOUR FILES"</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -65,7 +65,9 @@ function renderPoster(exporter: Exporter, initialState: PageState = POSTER) {
 }
 
 const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', { name });
-const status = () => screen.getByRole('status');
+// The export's own region in the aside (the page has another, for the drop overlay).
+const status = () =>
+  within(screen.getByRole('complementary', { name: 'Poster settings' })).getByRole('status');
 const progressBar = () => screen.getByRole<HTMLProgressElement>('progressbar');
 const label = () => screen.getByText(/^(Rendering tile \d+ of \d+|Preparing…|Saving the file…)$/);
 
@@ -172,7 +174,7 @@ describe('Exporting overlay', () => {
     const order = Array.from(block.children);
     expect(order.indexOf(bar.parentElement as Element)).toBeGreaterThan(order.indexOf(button(PDF)));
     expect(order.indexOf(bar.parentElement as Element)).toBeLessThan(
-      order.indexOf(within(block).getByText(/^Rendered in your browser in tiles/)),
+      order.indexOf(within(block).getByText(/^Rendered in your browser, in tiles/)),
     );
     // Still Poster mode under the overlay.
     expect(screen.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeDefined();

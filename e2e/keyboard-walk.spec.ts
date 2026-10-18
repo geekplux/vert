@@ -219,12 +219,17 @@ async function expectRingPixels(page: Page, ring: FocusRing, name: string) {
 async function expectAccessibleAndNoSideScroll(page: Page, state: string) {
   if (!(await page.evaluate(() => 'axe' in window))) await page.addScriptTag({ path: AXE_PATH });
   const violations = await page.evaluate(async () => {
-    // Let colour transitions finish first (a button fading from disabled to enabled reads as
-    // low contrast mid-way).
+    // Let colour transitions and the screen's fade-in finish first (text mid-fade reads as low
+    // contrast). Endless animations (a busy progress line) are left running.
     await Promise.all(
       document
         .getAnimations()
-        .filter((animation) => animation instanceof CSSTransition)
+        .filter(
+          (animation) =>
+            animation instanceof CSSTransition ||
+            (animation instanceof CSSAnimation &&
+              animation.effect?.getTiming().iterations !== Infinity),
+        )
         .map((animation) => animation.finished.catch(() => undefined)),
     );
     const axe = (window as unknown as { axe: typeof import('axe-core') }).axe;
@@ -260,15 +265,27 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
   await test.step('Upload: Tab order, About dialog, sample run', async () => {
     await expectAccessibleAndNoSideScroll(page, 'Upload');
 
-    for (const name of ['About', 'GitHub', 'choose a file', 'try a sample run']) {
+    // The card's copy depends on the pointer: the 390 project emulates a touch screen.
+    const touch = await page.evaluate(
+      () => window.matchMedia('(hover: none) and (pointer: coarse)').matches,
+    );
+    const card = touch
+      ? 'Choose a .gpx file. Tap to open your files'
+      : 'Drop a .gpx file here. or click to choose one';
+    const preview = 'TRY THE SAMPLE RUN · 21.5 km · +1,102 m';
+    for (const name of ['About', 'GitHub', card, 'Try the sample run', preview]) {
       await page.keyboard.press('Tab');
       await expect(focused(page)).toHaveAccessibleName(name);
       await expectVisibleFocus(page);
     }
+    // The card is described by the note line, so the limits are read with it.
+    await expect(page.getByRole('button', { name: card, exact: true })).toHaveAccessibleDescription(
+      'GPX only · up to 20 MB · from Strava, Garmin, Coros, Suunto',
+    );
 
     // Back to About, open it: focus moves inside the modal; Escape closes it and returns focus.
     const about = page.getByRole('button', { name: 'About' });
-    await shiftTabUntil(page, isFocused(about), 4);
+    await shiftTabUntil(page, isFocused(about), 5);
     await page.keyboard.press('Enter');
     const dialog = page.getByRole('dialog', { name: 'About Vert' });
     await expect(dialog).toBeVisible();
@@ -282,7 +299,11 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     await expect(dialog).toBeHidden();
     await expect(about).toBeFocused();
 
-    await tabUntil(page, isFocused(page.getByRole('button', { name: 'try a sample run' })), 3);
+    await tabUntil(
+      page,
+      isFocused(page.getByRole('button', { name: 'Try the sample run', exact: true })),
+      3,
+    );
     await page.keyboard.press('Enter');
   });
 

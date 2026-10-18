@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vert run view while a new file is dragged over it</title>
+
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1B2A3A}a:hover{color:#D9480F}
+</style>
+</helmet>
+<div style="position: relative; font-family: 'Archivo', 'Helvetica Neue', sans-serif; color: #1B2A3A; background: #F4F6F8; min-height: 980px; box-sizing: border-box">
+<header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 40px; border-bottom: 1px solid #C9D1D9">
+<div style="display: flex; align-items: baseline; gap: 14px">
+<div style="font-size: 30px; font-weight: 800; font-stretch: 62%; letter-spacing: 0.04em">VERT</div>
+<div style="font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; color: #5B6B7A; letter-spacing: 0.06em">TRAIL RUNS AS TERRAIN</div>
+</div>
+<nav style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; font-size: 15px">
+<div style="display: inline-flex; border: 1px solid #1B2A3A; border-radius: 4px; overflow: hidden">
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #FFFFFF; background: #1B2A3A; border: 0; padding: 0 14px; min-height: 40px; cursor: pointer">km</button>
+<button type="button" style="font: 600 14px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 0; padding: 0 14px; min-height: 40px; cursor: pointer">mi</button>
+</div>
+<button type="button" style="font: 600 15px 'Archivo', sans-serif; color: #1B2A3A; background: transparent; border: 1px solid #1B2A3A; border-radius: 4px; padding: 12px 18px; min-height: 44px; cursor: pointer">New file</button>
+<a href="PosterModeV2.dc.html" style="font: 600 15px 'Archivo', sans-serif; color: #FFFFFF; background: #1B2A3A; border-radius: 4px; padding: 12px 18px; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; text-decoration: none">Make a poster</a>
+</nav>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 0">
+<aside style="flex: 1 1 300px; max-width: 360px; box-sizing: border-box; padding: 32px 32px 32px 40px; display: flex; flex-direction: column; gap: 28px; border-right: 1px solid #C9D1D9">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em; color: #5B6B7A">SAT · 2026-10-03 · <span style="color: #BB3E0D">SAMPLE DATA</span></div>
+<h1 style="margin: 0; font-size: 44px; line-height: 1; font-weight: 800; font-stretch: 75%">Coosa Backcountry Trail</h1>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px">
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">DISTANCE</div><div style="font-size: 34px; font-weight: 700; font-stretch: 75%; font-variant-numeric: tabular-nums">21.5<span style="font-size: 16px; font-weight: 500"> km</span></div></div>
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">VERT</div><div style="font-size: 34px; font-weight: 700; font-stretch: 75%; color: #D9480F; font-variant-numeric: tabular-nums">+1,102<span style="font-size: 16px; font-weight: 500"> m</span></div></div>
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">MOVING TIME</div><div style="font-size: 34px; font-weight: 700; font-stretch: 75%; font-variant-numeric: tabular-nums">3:04:58</div></div>
+<div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">HIGH POINT</div><div style="font-size: 34px; font-weight: 700; font-stretch: 75%; font-variant-numeric: tabular-nums">1,267<span style="font-size: 16px; font-weight: 500"> m</span></div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 0">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A; padding-bottom: 8px; border-bottom: 2px solid #1B2A3A">CLIMBS</div>
+<div style="display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 12px 0; border-bottom: 1px solid #C9D1D9; font-variant-numeric: tabular-nums"><div style="font-weight: 700">1</div><div>km 0.0 → 1.7</div><div style="font-family: 'IBM Plex Mono', monospace">+149 m</div></div>
+<div style="display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 12px 0; border-bottom: 1px solid #C9D1D9; font-variant-numeric: tabular-nums"><div style="font-weight: 700">2</div><div>km 5.4 → 11.3</div><div style="font-family: 'IBM Plex Mono', monospace">+652 m</div></div>
+<div style="display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 12px 0; border-bottom: 1px solid #C9D1D9; font-variant-numeric: tabular-nums; background: #E6EAEE"><div style="font-weight: 700; padding-left: 6px">3</div><div>km 14.1 → 15.5 <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">STEEPEST</span></div><div style="font-family: 'IBM Plex Mono', monospace; padding-right: 6px">+248 m</div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="vx2" style="display: flex; justify-content: space-between; font-size: 14px"><span>Vertical exaggeration</span><span style="font-family: 'IBM Plex Mono', monospace">1.6×</span></label>
+<input id="vx2" type="range" min="1" max="3" step="0.1" value="1.6" style="width: 100%; accent-color: #1B2A3A">
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #5B6B7A">Drag the terrain to orbit. Scrub the profile to move the runner along the route. Your file stays in this browser.</p>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 24px 40px 32px; display: flex; flex-direction: column; gap: 16px">
+<div style="position: relative; background: #E6EAEE; border-radius: 6px; overflow: hidden">
+<img src="assets/b5be3a7237400030e92202bb0369ee89.svg" alt="Oblique 3D terrain with the route drawn as an orange loop; a circle marks the start and a triangle marks the summit" style="display: block; width: 100%; height: auto">
+<div style="position: absolute; top: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #F4F6F8; padding: 8px 12px; border-radius: 4px">
+<span>○ Start / finish</span><span>▲ Summit 1,267 m</span><span>Vertical ×1.6</span>
+</div>
+<div style="position: absolute; right: 16px; bottom: 16px; display: flex; gap: 8px">
+<button type="button" aria-label="Rotate view" style="width: 44px; height: 44px; border: 1px solid #C9D1D9; border-radius: 4px; background: #F4F6F8; color: #1B2A3A; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></button>
+<button type="button" aria-label="Flat map" style="width: 44px; height: 44px; border: 1px solid #C9D1D9; border-radius: 4px; background: #F4F6F8; color: #1B2A3A; cursor: pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
+</div>
+</div>
+
+<section aria-label="Elevation profile" style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px">
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #5B6B7A">ELEVATION · 616–1,267 m</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px">km 14.8 · 1,142 m · grade 17% · 13:31 /km</div>
+</div>
+<div style="position: relative">
+<svg viewBox="0 0 1000 120" preserveAspectRatio="none" role="img" aria-label="Elevation profile over 21.5 km with three climbs" style="display: block; width: 100%; height: 140px">
+<rect x="0" y="0" width="79" height="120" fill="#E6EAEE"/>
+<rect x="251" y="0" width="275" height="120" fill="#E6EAEE"/>
+<rect x="656" y="0" width="65" height="120" fill="#DCE2E8"/>
+<path d="M0,120 L0,100 L14,96 L29,92 L43,86 L57,80 L71,76 L86,82 L100,90 L114,96 L129,101 L143,105 L157,108 L171,109 L186,108 L200,106 L214,104 L229,102 L243,100 L257,96 L271,91 L286,86 L300,81 L314,76 L329,71 L343,66 L357,61 L371,56 L386,51 L400,46 L414,42 L429,38 L443,35 L457,33 L471,30 L486,26 L500,22 L514,18 L529,15 L543,14 L557,18 L571,24 L586,30 L600,38 L614,46 L629,52 L643,56 L657,52 L671,40 L686,24 L700,14 L714,12 L729,16 L743,22 L757,30 L771,38 L786,46 L800,54 L814,60 L829,66 L843,70 L857,76 L871,82 L886,88 L900,92 L914,96 L929,99 L943,100 L957,101 L971,102 L986,103 L1000,104 L1000,120 Z" fill="#1B2A3A" fill-opacity="0.12"/>
+<path d="M0,100 L14,96 L29,92 L43,86 L57,80 L71,76 L86,82 L100,90 L114,96 L129,101 L143,105 L157,108 L171,109 L186,108 L200,106 L214,104 L229,102 L243,100 L257,96 L271,91 L286,86 L300,81 L314,76 L329,71 L343,66 L357,61 L371,56 L386,51 L400,46 L414,42 L429,38 L443,35 L457,33 L471,30 L486,26 L500,22 L514,18 L529,15 L543,14 L557,18 L571,24 L586,30 L600,38 L614,46 L629,52 L643,56 L657,52 L671,40 L686,24 L700,14 L714,12 L729,16 L743,22 L757,30 L771,38 L786,46 L800,54 L814,60 L829,66 L843,70 L857,76 L871,82 L886,88 L900,92 L914,96 L929,99 L943,100 L957,101 L971,102 L986,103 L1000,104" fill="none" stroke="#1B2A3A" stroke-width="2" vector-effect="non-scaling-stroke"/>
+<line x1="688" y1="0" x2="688" y2="120" stroke="#D9480F" stroke-width="2" vector-effect="non-scaling-stroke"/>
+</svg>
+<div style="position: absolute; left: 68.8%; top: 20px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #D9480F; border: 3px solid #FFFFFF; box-sizing: border-box"></div>
+</div>
+<div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #5B6B7A; font-variant-numeric: tabular-nums">
+<span>0 km</span><span>5</span><span>10</span><span>15</span><span>21.5</span>
+</div>
+</section>
+</main>
+</div>
+
+<div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(244, 246, 248, 0.72)"></div>
+<div aria-hidden="true" style="position: absolute; inset: 8px; border: 2px solid #1B2A3A; border-radius: 8px; pointer-events: none"></div>
+<div role="status" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 22px; border-radius: 6px; background: #1B2A3A; color: #FFFFFF; box-shadow: 0 1px 2px rgba(27,42,58,.18), 0 12px 32px rgba(27,42,58,.18)">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>Drop to open a new run</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; opacity: 0.8">REPLACES COOSA BACKCOUNTRY TRAIL</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":980}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

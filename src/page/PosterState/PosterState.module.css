@@ -81,7 +81,8 @@
 /*
  * Canvas: pushed to the bottom (margin-top auto), padding-top 8, 1px --rule top border, gap 8.
  * Spec: sticky. It sticks to the bottom of the scrolling aside and carries the aside's bottom
- * padding (28px) itself, so the note keeps its 28px from the edge while stuck.
+ * padding itself, so the note keeps its distance from the edge while stuck. At ≥ 900px it spans
+ * the aside edge to edge with PosterModeV2's padding (below, with its shadow).
  */
 .downloads {
   position: sticky;
@@ -96,12 +97,12 @@
   background: var(--bg);
 }
 
-/* Canvas: 11px mono, --muted, line-height 1.6. */
+/* Canvas: 11px mono, --muted; line-height 1.5 (PosterModeV2). */
 .note {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--muted);
 }
 
@@ -171,6 +172,37 @@
   outline: 2px solid var(--route);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/*
+ * PosterModeV2: a top shadow on the stuck block, only while content is scrolled under it
+ * (`data-scrolled-under`, set by useScrolledUnder). Side by side only: below 900px it is static.
+ */
+@media (min-width: 900px) {
+  /* PosterModeV2: edge to edge across the aside (its padding is 40 left, 32 right), so the rule
+     and the shadow run full width; the aside clips the shadow's sides. */
+  .downloads {
+    margin-right: calc(-1 * var(--space-8));
+    margin-left: calc(-1 * var(--space-10));
+    padding: var(--space-3) var(--space-8) var(--space-6) var(--space-10);
+  }
+
+  .downloads[data-scrolled-under] {
+    box-shadow: 0 -12px 24px -12px color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+}
+
+/*
+ * The sentinel after the Download block, at the very end of the aside's content. Its negative
+ * margin takes back the aside's 24px flex gap (PageShell) and its own 1px, so it adds no scroll
+ * height and sits on the block's last pixel.
+ */
+.sentinel {
+  display: block;
+  flex: none;
+  height: 1px;
+  margin-top: calc(-1 * var(--space-6) - 1px);
+  pointer-events: none;
 }
 
 /* Below 900px the page scrolls as one column; the Download block sits in the flow. */

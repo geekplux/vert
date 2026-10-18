@@ -1,0 +1,80 @@
+/* Drag-over frame and overlay (canvas UploadV2.html, ViewDropV2.html). Nothing here takes pointer
+   events: the drop lands on the page under it. */
+
+/* 2px --ink, 8px inside the viewport. */
+.frame {
+  position: fixed;
+  z-index: 11; /* above the wash; the page's own stacking uses 1 (sticky asides) */
+  inset: var(--space-2);
+  border: 2px solid var(--ink);
+  border-radius: 8px; /* canvas, no token */
+  pointer-events: none;
+}
+
+/* Canvas: rgba(244, 246, 248, 0.72), which is --bg at 72%. */
+.wash {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  pointer-events: none;
+}
+
+/* Canvas: centred ink pill, padding 16×22, radius 6, gap 6, the poster preview's shadow. */
+.pill {
+  position: fixed;
+  z-index: 12;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px; /* canvas, no token */
+  max-width: calc(100vw - 2 * var(--space-6));
+  padding: var(--space-4) 22px; /* canvas, no token for 22 */
+  border-radius: var(--radius-panel);
+  background: var(--ink);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 18%, transparent),
+    0 12px 32px color-mix(in srgb, var(--ink) 18%, transparent);
+  color: var(--white);
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.pillTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* canvas, no token */
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pillIcon {
+  display: block;
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+/* Canvas: 11px mono, letter-spacing 0.08em, 80% opacity (white at 0.8 on --ink is 10.6:1). */
+.pillSub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+@media (forced-colors: active) {
+  .frame {
+    border-color: Highlight;
+  }
+
+  .pill {
+    border: 1px solid CanvasText;
+  }
+}

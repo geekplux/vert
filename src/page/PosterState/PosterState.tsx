@@ -29,7 +29,7 @@ import { realLoadFigureTerrain } from '../hooks';
 import type { LoadFigureTerrain } from '../hooks';
 import { PageShell } from '../PageShell/PageShell';
 import type { Run, Terrain } from '../types';
-import { useMediaQuery } from '../ViewState/useMediaQuery';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { buildExportJob, defaultExporter } from './exporter';
 import type { ExportFormat, Exporter } from './exporter';
 import { ExportNotice, ExportProgress } from './ExportProgress';
@@ -39,6 +39,7 @@ import type { RetrySide } from './FigureRetry';
 import { LivePoster, usesViewTerrain } from './LivePoster';
 import { exportAnnouncement, offersPdf, pngButtonLabel } from './posterCopy';
 import { useExport } from './useExport';
+import { useScrolledUnder } from './useScrolledUnder';
 import styles from './PosterState.module.css';
 
 /** The events Poster mode sends: poster settings, and the poster / exporting screen events. */
@@ -118,6 +119,7 @@ export function PosterState({
   const size = posterSizeById(poster.size);
   const content = posterContentFromRun(run, prefs);
   const [stageRef, stage] = useStageSize();
+  const [sentinelRef, scrolledUnder] = useScrolledUnder();
   const exporting = screen.name === 'exporting';
   const { start, cancel, cancelled, slow } = useExport(exporter, dispatch);
   const { labelRef, pngRef, pdfRef, rememberStarter } = useExportFocus(screen.name);
@@ -225,7 +227,7 @@ export function PosterState({
         </div>
       </fieldset>
 
-      <div className={styles.downloads}>
+      <div className={styles.downloads} data-scrolled-under={scrolledUnder || undefined}>
         <Button
           ref={pngRef}
           variant="primary"
@@ -259,7 +261,7 @@ export function PosterState({
           <ExportNotice notice={screen.notice} />
         ) : null}
         <p className={styles.note}>
-          Rendered in your browser in tiles. Large sizes take a few seconds.
+          Rendered in your browser, in tiles. Large sizes take a few seconds.
         </p>
         <span id={busyNoteId} hidden>
           Unavailable while the poster exports.
@@ -269,6 +271,8 @@ export function PosterState({
           {statusText(screen, cancelled, slow)}
         </p>
       </div>
+      {/* Out of view while content is scrolled under the block above (useScrolledUnder). */}
+      <span ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
     </>
   );
 

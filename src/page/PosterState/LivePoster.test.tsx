@@ -353,7 +353,7 @@ describe('Live poster figures', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to the run' }));
     fireEvent.click(await screen.findByRole('button', { name: 'New file' }));
     fakeTerrainView.props.length = 0;
-    fireEvent.click(await screen.findByRole('button', { name: 'try a sample run' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Try the sample run' }));
     const fresh = await rendered();
     expect(fresh.initialCamera).toBeUndefined();
     expect(fresh.view).toBe('oblique');

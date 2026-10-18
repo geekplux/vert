@@ -278,7 +278,7 @@ describe('ViewState', () => {
 
   it('moves focus to the route name when the View opens, and to Upload’s h1 on New file', async () => {
     render(<Page schedule={immediateSchedule} />);
-    fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
     await expectHeadingFocused(ROUTE);
     expect(screen.getByRole('heading', { level: 1, name: ROUTE }).getAttribute('tabindex')).toBe(
       '-1',

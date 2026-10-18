@@ -1,4 +1,5 @@
 import type { Story } from '@ladle/react';
+import { useEffect } from 'react';
 import { Page } from '../Page';
 import { INITIAL_PREFS, INITIAL_SCREEN } from '../state';
 import type { PageState, UploadScreen } from '../state';
@@ -37,3 +38,25 @@ Error1440.meta = { width: 1440 };
 export const Error390: Story = () => <Page initialState={ERROR} />;
 Error390.storyName = 'Error 390';
 Error390.meta = { width: 390 };
+
+/**
+ * A file held over the page: one synthetic `dragenter` carrying a file, so the page-wide drop
+ * state (Dropzone copy and the frame round the viewport) stays up. Click away from the window
+ * (blur) to clear it, or drop a real file.
+ */
+function DraggingPage() {
+  useEffect(() => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File(['<gpx/>'], 'held.gpx', { type: 'application/gpx+xml' }));
+    document.body.dispatchEvent(new DragEvent('dragenter', { bubbles: true, dataTransfer }));
+  }, []);
+  return <Page />;
+}
+
+export const DragOver1440: Story = () => <DraggingPage />;
+DragOver1440.storyName = 'Drag over 1440';
+DragOver1440.meta = { width: 1440 };
+
+export const DragOver390: Story = () => <DraggingPage />;
+DragOver390.storyName = 'Drag over 390';
+DragOver390.meta = { width: 390 };

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import type { DropzoneHandle } from '../components';
 import { AboutDialog } from './AboutDialog/AboutDialog';
 import { AppHeader } from './AppHeader/AppHeader';
 import { PosterNav } from './AppHeader/PosterNav';
 import { UploadNav } from './AppHeader/UploadNav';
 import { ViewNav } from './AppHeader/ViewNav';
+import { DropFrame } from './DropFrame/DropFrame';
+import { DropOverlay, dropOverlayAnnouncement } from './DropFrame/DropOverlay';
 import {
   RunProvider,
   useFigureTerrainLoader,
@@ -19,6 +22,7 @@ import { PosterState } from './PosterState/PosterState';
 import { isPosterMode, usePageState } from './state';
 import type { PageState } from './state';
 import { UploadState } from './UploadState/UploadState';
+import { useWindowFileDrop } from './useWindowFileDrop';
 import type { TerrainCameraSource } from './ViewState/TerrainBox';
 import { ViewState } from './ViewState/ViewState';
 import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
@@ -73,6 +77,32 @@ function PageContent({
   // Exporting is an overlay on poster mode, not a new screen: PosterState moves focus for it.
   useFocusOnScreenChange(isPosterMode(screen) ? 'poster' : screen.name, headingRef);
 
+  // A file dropped anywhere, on any screen (README "Dropping a file"). On Upload it goes straight
+  // to the Dropzone; on View and Poster mode the page leaves the run (New file) and Upload's
+  // Dropzone takes it once mounted, so every drop is checked, reported and loaded the same way.
+  const dropzoneRef = useRef<DropzoneHandle>(null);
+  const pendingFiles = useRef<File[] | null>(null);
+  const { dragOver } = useWindowFileDrop({
+    disabled:
+      screen.name === 'exporting' || (screen.name === 'upload' && screen.busy.kind !== 'idle'),
+    onFiles: (files) => {
+      if (screen.name === 'upload') {
+        dropzoneRef.current?.takeFiles(files);
+        return;
+      }
+      // Kept only if New file really leaves the screen (it is a no-op while a load is in
+      // flight), so files never wait for some later, unrelated screen change.
+      pendingFiles.current = files;
+      if (!newFile()) pendingFiles.current = null;
+    },
+  });
+  useEffect(() => {
+    const files = pendingFiles.current;
+    // Whatever the new screen, files waiting from before are used once or dropped.
+    pendingFiles.current = null;
+    if (screen.name === 'upload' && files) dropzoneRef.current?.takeFiles(files);
+  }, [screen.name]);
+
   return (
     <div
       className={[styles.page, isPosterMode(screen) && styles.posterMode].filter(Boolean).join(' ')}
@@ -120,6 +150,8 @@ function PageContent({
           units={prefs.units}
           onFile={chooseFile}
           onSample={chooseSample}
+          dragOver={dragOver}
+          dropzoneRef={dropzoneRef}
         />
       ) : screen.name === 'view' && run ? (
         // Keyed by run: a new run starts with its own scrub position.
@@ -155,6 +187,21 @@ function PageContent({
           onRetryTerrain={retryTerrain}
         />
       ) : null}
+
+      {dragOver ? (
+        screen.name === 'upload' ? (
+          <DropFrame />
+        ) : (
+          <DropOverlay routeName={run?.name ?? ''} />
+        )
+      ) : null}
+      {/*
+       * Says what the drop overlay draws. Always rendered, so the region exists before its text
+       * changes (a status inserted with the overlay is often not announced).
+       */}
+      <p role="status" className={styles.visuallyHidden}>
+        {dragOver && screen.name !== 'upload' ? dropOverlayAnnouncement(run?.name ?? '') : ''}
+      </p>
 
       <AboutDialog
         open={aboutOpen}

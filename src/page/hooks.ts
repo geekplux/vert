@@ -439,13 +439,14 @@ function loadErrorMessage(error: unknown): string {
  *   the run, then send `RUN_LOADED` (seeding the poster's title and subtitle) or `LOAD_FAILED`.
  *   While a load is in flight a second choice is ignored, as the state machine ignores it.
  * - `newFile` sends `NEW_FILE` and forgets the run, so `useRun()` is `null` and the terrain idle.
- *   It does nothing while a load is in flight (Upload ignores `NEW_FILE`). Offer it only where the
- *   state machine accepts `NEW_FILE` (View, Poster mode), not during an export.
+ *   It does nothing while a load is in flight (Upload ignores `NEW_FILE`) and returns whether it
+ *   acted. Offer it only where the state machine accepts `NEW_FILE` (View, Poster mode), not
+ *   during an export.
  */
 export function useRunChooser(dispatch: Dispatch<PageAction>): {
   chooseFile: (file: File) => void;
   chooseSample: () => void;
-  newFile: () => void;
+  newFile: () => boolean;
 } {
   const { load, clear, isLoading } = useRunContext('useRunChooser');
 
@@ -476,9 +477,10 @@ export function useRunChooser(dispatch: Dispatch<PageAction>): {
         settle(load({ kind: 'sample' }));
       },
       newFile: () => {
-        if (isLoading()) return;
+        if (isLoading()) return false;
         dispatch({ type: 'NEW_FILE' });
         clear();
+        return true;
       },
     };
   }, [dispatch, load, clear, isLoading]);

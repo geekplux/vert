@@ -24,3 +24,10 @@ body {
 p {
   line-height: 1.5;
 }
+
+/* Screens fade in when they mount (PageShell, UploadLayout; only without reduced motion there). */
+@keyframes screen-in {
+  from {
+    opacity: 0;
+  }
+}

@@ -1,4 +1,4 @@
-/* Upload frame (docs/design/canvas/Upload.html): left column and sample preview. */
+/* Upload frame (docs/design/canvas/UploadV2.html): left column and sample preview. */
 
 /* Canvas: display flex; flex-direction column; gap 24px; max-width 560px. */
 .intro {
@@ -36,23 +36,43 @@
   color: var(--muted);
 }
 
-/* Canvas: a div in 12px mono, --muted, letter-spacing 0.04em, line-height normal. */
+/* Canvas: 12px mono, --muted, letter-spacing 0.04em. Line-height 1.5 (the phone frame's), so
+   the note's two lines on a phone are not cramped. */
 .note {
   margin: 0;
   font-family: var(--font-mono);
   font-size: 12px;
-  line-height: normal;
+  line-height: 1.5;
   letter-spacing: 0.04em;
   color: var(--muted);
+  text-wrap: pretty;
 }
 
-/* Canvas: relative, --surface, radius 6, overflow hidden, aspect-ratio 4 / 3. */
+/* A button: relative, --surface, radius 6, overflow hidden, aspect-ratio 4 / 3. */
 .preview {
   position: relative;
+  display: block;
+  width: 100%;
   aspect-ratio: 4 / 3;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
+  border: 0;
   border-radius: var(--radius-panel);
   background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preview:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
+.preview:disabled {
+  cursor: not-allowed;
 }
 
 .image {
@@ -64,19 +84,59 @@
   opacity: 0.9;
 }
 
-/* Canvas: left 16, bottom 16, 12px mono, --bg, padding 8×12, radius 4. */
+/* Canvas: left 16, bottom 16, 12px mono, letter-spacing 0.04em, --bg, padding 8×12, radius 4. */
 .chip {
   position: absolute;
   bottom: var(--space-4);
   left: var(--space-4);
   max-width: calc(100% - 2 * var(--space-4));
-  margin: 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
   background: var(--bg);
+  color: var(--ink);
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: normal;
+  letter-spacing: 0.04em;
+}
+
+/* Hover fills the chip: a change of fill, and the cursor says it is a control. Only on devices
+   that hover, so a tap never leaves it stuck. */
+@media (hover: hover) {
+  .preview:hover:not(:disabled) .chip {
+    background: var(--ink);
+    color: var(--white);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip {
+    transition:
+      background-color 120ms ease-out,
+      color 120ms ease-out;
+  }
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Inline, right after the last part of the text (canvas gap 10px), even when the chip wraps. */
+.arrow {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 10px; /* canvas, no token */
+  vertical-align: -2px; /* centred on the mono x-height */
+}
+
+/* Phone frame (UploadPhoneV2.html): the chip sits 12px from the corner. */
+@media (max-width: 599.98px) {
+  .chip {
+    bottom: var(--space-3);
+    left: var(--space-3);
+    max-width: calc(100% - 2 * var(--space-3));
+  }
 }
 
 .visuallyHidden {

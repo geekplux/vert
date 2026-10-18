@@ -94,7 +94,7 @@ describe('PosterState', () => {
     expect(settings.getByRole('button', { name: 'Download PNG · 5400 × 7200' })).toBeDefined();
     expect(settings.getByRole('button', { name: 'Download PDF for print' })).toBeDefined();
     expect(
-      settings.getByText('Rendered in your browser in tiles. Large sizes take a few seconds.'),
+      settings.getByText('Rendered in your browser, in tiles. Large sizes take a few seconds.'),
     ).toBeDefined();
 
     const main = within(screen.getByRole('main'));
@@ -283,7 +283,7 @@ describe('PosterState', () => {
 
   it('moves focus to the h1 on entering Poster mode, and back to the View’s on leaving', async () => {
     render(<Page schedule={immediateSchedule} />);
-    fireEvent.click(screen.getByRole('button', { name: 'try a sample run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
     await screen.findByRole(
       'heading',
       { level: 1, name: 'Coosa Backcountry Trail' },

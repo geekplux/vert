@@ -27,7 +27,21 @@ This is the only place that owns application state and composes `components`, `t
 - Poster sizes and styles come from `src/poster/sizes.ts` and `src/poster/styles.ts`.
 - `Page.tsx`: the composition: `RunProvider`, the state machine, the header with the state's nav,
   the current state, and the About dialog. `App` renders it.
-- `UploadState/`: the Upload state (h1, intro, Dropzone, note, sample preview and chip).
+- `UploadState/`: the Upload state (h1, intro, Dropzone, note, and the sample preview: a button
+  named by its chip). It takes `dragOver` and `dropzoneRef` from the page (see "Dropping a file").
+- Dropping a file: `useWindowFileDrop.ts`, mounted once in `Page.tsx`, listens on `window` on
+  every screen and always cancels the browser's own `dragover`/`drop` (a stray drop never opens
+  the file in the tab). It ignores the files, and draws nothing, while a load or an export runs
+  or a modal dialog (About) is open. On Upload, dropped files go to the Dropzone through its ref
+  (`DropzoneHandle.takeFiles`). On View and Poster mode the page keeps them in a `pendingFiles`
+  ref and calls `newFile()` (if that is a no-op, during a load, the files are dropped at once);
+  when the screen becomes Upload, an effect in `Page` hands them, once, to the freshly mounted
+  Dropzone. Either way the Dropzone checks them (`pickGpxFile`), shows its alert
+  or calls `chooseFile`, so a drop anywhere takes the same path as a drop on the Dropzone. Files
+  left pending when the screen changes elsewhere are dropped. While a file is over the page,
+  `DropFrame/` draws the viewport frame (Upload) or `DropOverlay` the wash, frame and "Drop to
+  open a new run" pill (View, Poster mode), all `aria-hidden`; the page's always-present status
+  region says the pill's words (`dropOverlayAnnouncement`).
 - `ViewState/`: the View state (aside: date line, route name, stats, climbs, exaggeration, help;
   main: `TerrainBox` with the live `TerrainView` (lazy, its own chunk), legend and Rotate / Flat map,
   then the elevation section with its scrub readout; the scrub is shared, so the profile moves the
@@ -49,7 +63,8 @@ This is the only place that owns application state and composes `components`, `t
   wraps as a whole. At ≥ 900px the terrain box is capped at `100dvh − 339px` (floor
   460px), so the profile is in view from 800px tall windows.
 - `PosterState/`: Poster mode, also shown under the export overlay (aside: style, size, text,
-  stats, hide ends, then the sticky Download block; main: the live `PosterPreview`, fitted to the
+  stats, hide ends, then the sticky Download block, which shows a top shadow only while content is
+  scrolled under it, `useScrolledUnder.ts`; main: the live `PosterPreview`, fitted to the
   stage). At ≥ 900px the page is one viewport tall and the aside scrolls. `posterCopy.ts` holds
   the file name and button copy. `LivePoster.tsx` draws the chosen style with its live figure
   (`figureHooks.ts`): style A's three.js terrain (`renderTerrainFigure`, loaded on demand) at the

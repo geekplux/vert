@@ -186,12 +186,12 @@ describe('SAMPLE_TOTALS', () => {
 
   it('give the Upload chip the figures the View shows for the loaded sample', () => {
     for (const units of ['metric', 'imperial'] as const) {
-      const view = `SAMPLE · ${formatDistance(parsed.distance, units).text} · ${
+      const view = `TRY THE SAMPLE RUN · ${formatDistance(parsed.distance, units).text} · ${
         formatElevation(parsed.vert, units, { signed: true }).text
       }`;
       expect(sampleChipText(units)).toBe(view);
     }
-    expect(sampleChipText('metric')).toBe('SAMPLE · 21.5 km · +1,102 m');
+    expect(sampleChipText('metric')).toBe('TRY THE SAMPLE RUN · 21.5 km · +1,102 m');
     expect(formatDuration(parsed.movingTime)).toBe(formatDuration(SAMPLE_TOTALS.movingTime));
   });
 });

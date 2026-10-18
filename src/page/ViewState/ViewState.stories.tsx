@@ -17,7 +17,7 @@ export default { title: 'Page / View' };
 
 const status = { margin: 0, padding: 'var(--space-6)', fontFamily: 'var(--font-mono)' };
 
-/** The sample run as the app loads it ("try a sample run"). */
+/** The sample run as the app loads it ("Try the sample run"). */
 function useSampleRun(): Run | string | null {
   const [run, setRun] = useState<Run | string | null>(null);
   useEffect(() => {

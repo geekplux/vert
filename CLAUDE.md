@@ -73,6 +73,7 @@ src/gpx         GPX parser and stats (runs in a Web Worker: no DOMParser there)
 src/terrain     three.js mesh, shaders, route, camera
 src/poster      poster styles A, B, E and tiled export
 src/lib         pure shared maths (geodesy, tile maths, Terrarium decoding, units, formatting)
+src/hooks       shared React hooks with no app state (useMediaQuery)
 src/styles      tokens.css (DESIGN-SPEC §1), fonts.css, base.css
 worker/         Cloudflare Worker: /tiles/:z/:x/:y.png proxy for AWS Terrain Tiles, cached in R2
 e2e/            Playwright tests

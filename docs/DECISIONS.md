@@ -173,11 +173,20 @@ everything.
   stray drop never navigates the tab to the file; it counts only drags that carry files, tracks
   enter/leave depth so the state never flickers, and resets on drop and on window blur. Files are
   ignored, and nothing is drawn, while a load or an export runs or a modal dialog (About) is open.
-  On Upload the files go to the Dropzone (`takeFiles`). On View and Poster mode the page leaves
-  the run (`newFile`; the files are kept only if it really leaves, not when it is a no-op during
-  a load) and hands them, once, to Upload's Dropzone when it mounts, so a dropped file
-  is checked, reported and loaded by exactly the code a drop on the Dropzone uses (a wrong file
-  lands on Upload with the Dropzone's error).
+  On Upload the files go to the Dropzone (`takeFiles`). On View and Poster mode the page checks
+  them first (next entry); a GPX makes it leave the run (`newFile`; the file is kept only if it
+  really leaves, not when it is a no-op during a load) and hands it, once, to Upload's Dropzone
+  when it mounts, so every file is read by exactly the code a drop on the Dropzone uses.
+- **A wrong file dropped on a run stays on the run** (Sean, 2026-10-18; the first build left the
+  run and showed the error on Upload). On View and Poster mode the page runs `pickGpxFile` before
+  it leaves the run: a wrong extension or an oversize file never leaves the screen, and the reason
+  shows in `DropAlert`, a bar in flow right under the header (`--surface`, the header's padding,
+  1px `--rule` under; the Dropzone's error text style with its warning icon; a 44px Secondary-style
+  Dismiss button). In flow rather than a toast, so it covers neither the terrain nor Poster mode's
+  sticky Download block at 390. It is a `role="alert"`, remounted per message so a second wrong
+  file is announced too; it goes on Dismiss, on the next drop, or when the screen changes. A `.gpx`
+  that then fails to parse still lands on Upload with the error: reading happens there, and the
+  case is rare enough not to deserve a second loading state on the View.
 - **Drop overlay on View and Poster mode** (ViewDropV2): while a file is dragged over them, a fixed
   wash of `--bg` at 72% (`color-mix`), the viewport frame, and a centred `--ink` pill: 20px upload
   icon + "Drop to open a new run" 16/600 white, under it "REPLACES <ROUTE NAME>" in 11px mono,

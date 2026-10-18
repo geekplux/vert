@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import { installDialogPolyfill } from '../test/dialog';
-import { immediateSchedule } from './hooks';
+import { RunLoadError, immediateSchedule } from './hooks';
 import type { LoadRun } from './hooks';
 import { Page } from './Page';
 import { SAMPLE_RUN } from './sample';
@@ -209,29 +209,80 @@ describe('Page: dropping a file on View and Poster mode', () => {
     expect(sources).toEqual(['sample', 'harbour.gpx']);
   });
 
-  it('uses a rejected drop exactly once: no stale alert after the next run', async () => {
-    const { loadRun } = recordingLoader();
-    await openSample(loadRun);
+  it('keeps the run and says why when a wrong file is dropped on the View', async () => {
+    const { sources, loadRun } = recordingLoader();
+    const { container } = await openSample(loadRun);
     dropFiles(screen.getByRole('main'), [new File(['x'], 'run.fit')]);
-    expect(screen.getByRole('alert')).toBeDefined();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
-    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
-    expect(h1('Your run, as terrain.')).toBeDefined();
+    expect(h1('Coosa Backcountry Trail')).toBeDefined();
+    expect(screen.queryByTestId('drop-frame')).toBeNull();
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe("That's a .fit file. Vert reads .gpx files in v1.");
+    // In flow, right under the header: it covers nothing.
+    expect(alert.parentElement?.previousElementSibling?.tagName).toBe('HEADER');
+    expect(sources).toEqual(['sample']);
+    await expectNoAxeViolations(container);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(h1('Coosa Backcountry Trail')).toBeDefined();
   });
 
-  it('lands on Upload with the Dropzone’s error for a wrong file', async () => {
+  it('keeps the run for a file over the size limit', async () => {
+    const { sources, loadRun } = recordingLoader();
+    await openSample(loadRun);
+    const big = new File([new Uint8Array(20 * 1024 * 1024 + 1)], 'big.gpx');
+    dropFiles(screen.getByRole('main'), [big]);
+    expect(h1('Coosa Backcountry Trail')).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toBe('That file is 20.1 MB. The limit is 20 MB.');
+    expect(sources).toEqual(['sample']);
+  });
+
+  it('replaces the message on a second wrong drop, and a GPX then opens as usual', async () => {
     const { sources, loadRun } = recordingLoader();
     await openSample(loadRun);
     dropFiles(screen.getByRole('main'), [new File(['x'], 'run.fit')]);
+    dropFiles(screen.getByRole('main'), [new File(['x'], 'run.tcx')]);
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]?.textContent).toBe("That's a .tcx file. Vert reads .gpx files in v1.");
+
+    dropFiles(screen.getByRole('main'), [gpxFile('harbour.gpx')]);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(sources).toEqual(['sample', 'harbour.gpx']);
+  });
+
+  it('says why in Poster mode too, and the message goes with the screen', async () => {
+    const { loadRun } = recordingLoader();
+    await openSample(loadRun);
+    fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
+    expect(h1('Make a poster')).toBeDefined();
+    dropFiles(document.body, [new File(['x'], 'run.fit')]);
+    expect(h1('Make a poster')).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toBe(
+      "That's a .fit file. Vert reads .gpx files in v1.",
+    );
+
+    fireEvent.click(
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Back to the run' }),
+    );
+    expect(h1('Coosa Backcountry Trail')).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a GPX that fails to read still lands on Upload with the error', async () => {
+    const loadRun: LoadRun = (source) =>
+      source.kind === 'sample'
+        ? Promise.resolve(SAMPLE_RUN)
+        : Promise.reject(new RunLoadError('This file has no track points.'));
+    await openSample(loadRun);
+    dropFiles(screen.getByRole('main'), [gpxFile('empty.gpx')]);
     expect(h1('Your run, as terrain.')).toBeDefined();
     expect(
-      within(screen.getByRole('group', { name: 'Upload a GPX file' })).getByRole('alert')
+      (await within(screen.getByRole('group', { name: 'Upload a GPX file' })).findByRole('alert'))
         .textContent,
-    ).toBe("That's a .fit file. Vert reads .gpx files in v1.");
-    expect(sources).toEqual(['sample']);
+    ).toBe('This file has no track points.');
   });
 
   it('while exporting: cancels the drop, shows no overlay and ignores the files', () => {

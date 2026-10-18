@@ -4,6 +4,7 @@ export { Checkbox } from './Checkbox/Checkbox';
 export type { CheckboxProps } from './Checkbox/Checkbox';
 export { Dropzone } from './Dropzone/Dropzone';
 export type { DropzoneHandle, DropzoneProps } from './Dropzone/Dropzone';
+export { pickGpxFile } from './Dropzone/pickGpxFile';
 export { ElevationProfile } from './ElevationProfile/ElevationProfile';
 export type { ElevationProfileProps } from './ElevationProfile/ElevationProfile';
 export { Marker } from './Marker/Marker';

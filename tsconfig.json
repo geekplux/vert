@@ -8,7 +8,13 @@
       "path": "./tsconfig.node.json"
     },
     {
+      "path": "./tsconfig.scripts.json"
+    },
+    {
       "path": "./worker"
+    },
+    {
+      "path": "./e2e/library-host"
     }
   ]
 }

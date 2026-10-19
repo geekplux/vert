@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.library-host.tsbuildinfo",
+    "paths": {
+      "vert-lib": ["../../src/vert-lib/index.ts"]
+    }
+  },
+  "include": ["."]
+}

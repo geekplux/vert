@@ -1,7 +1,9 @@
 # lib
 
 Shared, pure maths with no React, DOM or three.js: geodesy (haversine, local metres), Web Mercator tile
-maths, Terrarium decoding, units (km/mi, m/ft), number and time formatting.
+maths, Terrarium decoding, units (km/mi, m/ft), number and time formatting, and the one rule for a
+summit (`summit.ts`) and for a loop (`loop.ts`), shared by the page's words and the terrain's
+markers so they never disagree.
 
 Longitudes are continuous (`geo.ts`): a run across 180° is unwrapped into its narrowest
 representation (`unwrapLongitudes`, `lonInterval`), so its bounds may run past ±180 and world / tile

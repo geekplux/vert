@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Library host</title>
+    <style>
+      /* A dark host page with its own idea of --ink, as Activities has. */
+      :root {
+        --ink: #000000;
+        --surface: #ffffff;
+      }
+      body {
+        margin: 0;
+        background: #111214;
+        color: #e6edf3;
+        font-family: system-ui, sans-serif;
+      }
+      main {
+        display: grid;
+        gap: 16px;
+        max-width: 1060px;
+        margin: 0 auto;
+        padding: 24px 16px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      p {
+        margin: 0;
+        color: #9aa8b5;
+        font-size: 12px;
+      }
+      /* README.md's dark example: Vert's tokens on a wrapper around Vert. */
+      .vert-host {
+        --surface: #1d2a36;
+        --surface-strong: #2a3a48;
+        --ink: #e6edf3;
+        --muted: #9aa8b5;
+        --route: #ff8a3d;
+        --white: #ffffff;
+        display: grid;
+        gap: 16px;
+      }
+      .terrain {
+        aspect-ratio: 16 / 9;
+        background: var(--surface);
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Coosa Backcountry Trail</h1>
+      <div id="vert" class="vert-host"></div>
+      <p id="credit"></p>
+    </main>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

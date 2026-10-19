@@ -620,3 +620,131 @@ without an error message but showed broken terrain and junk elevation. Rulings:
   every tile with the disk nearly full). When every tile arrives but none decodes, the View says
   "the elevation data arrived, but this browser couldn't read it. Reload the page and try again."
   instead of "Check your connection".
+
+## Library for Activities (phase 4)
+
+The host is Activities (activities.geekplux.org, repo geekplux/activities), whose Activity page has
+a `TerrainSlot` placeholder for Vert's TerrainView. Its two constraints decide the design: it
+publishes no latitude/longitude anywhere (its privacy test fails on any `\d{2}\.\d{4,}` in published
+text), and its Cloudflare build clones only its own repo, so it vendors files from `dist-lib/` and
+installs `three` from npm.
+
+- **Everything georeferenced happens offline**, in `pnpm bake` on Sean's machine. The browser gets
+  a `.scene`: a height grid and a route in grid-local units, with no bounds, lat/lon, tile x/y or
+  `failedTiles` (`docs/SCENE.md`). TerrainView's `scene` path never converts a coordinate.
+- **Grid-local frame**: metres from the grid's north-west corner, x east, y south; the grid's
+  samples are evenly spaced, `metresPerSample` at the grid's centre (as `Heightfield` measures it).
+- **No latitude from the grid.** The tiles' native pixel size is 156,543 m × cos(latitude) /
+  2^zoom, so any way of reading it off the grid, with `zoom`, gives the latitude. Three ways are
+  known and closed: the spacing of a grid sampled at native resolution (scene grids always have the
+  fixed long side, 320); the pixel pitch bilinear interpolation leaves in any grid (a kink at every
+  pixel line; it gave Coosa's latitude to 0.02° from a decoded scene), closed by `buildHeightfield`'s
+  `sampling: 'smooth'`, a knot-free Gaussian low-pass; and the width of that low-pass, which a fit
+  of the grid's spectrum recovers (tied to the real pixel, it gave the latitude to 0.2–2° on half
+  of 14 real stretches), closed by setting it from published values only: σ = max(1.5 × the
+  equatorial pixel size at the zoom, 2π · 6,378,137 m / (256 · 2^zoom), 0.5 × the grid spacing).
+  That is at least 1.5 real pixels everywhere (enough that no pixel-pitch ripple shows) at
+  1 / cos(latitude) more smoothing (×1.22 at Coosa, ×1.45 at Lavaredo). `buildScene` refuses any
+  other grid; the app's own grids stay bilinear (byte-identical to before). What is tested
+  (`src/scene/pitch.test.ts`, `kernel.test.ts`, SCENE.md has the numbers), not proven: neither the
+  pitch nor the kernel width gives the latitude, on synthetic pixel-noise tiles at several pitches
+  and latitudes (0°, 35°, 46°, 60°) and on real Coosa, Lavaredo, Eiger and CCC grids at z11–z14
+  (fitted widths follow the published rule; read with the old rule they miss the latitude by a
+  median 34.8°, worse than the zoom band's middle). What remains: `zoom` narrows the latitude to
+  the band where that zoom was chosen (a factor of 2 in cos(latitude), nothing for routes small
+  enough to sample z14); the terrain fingerprint (below); the route-step-length residual (the grid
+  is even in Web Mercator, so route steps vary in length by cos(latitude), about 0.5% across 30 km
+  at 45°); and the tiles' own smoothing, in real pixels, which shows in no fit measured. No value is
+  stored at a precision finer than it is useful (each field's step is in SCENE.md).
+- **Scene terrain is softer, accepted.** The smooth sampler costs fidelity at coarse zooms
+  (smooth vs bilinear on the same 320 grid): Coosa max 8.7 m / mean 1.7 m, Lavaredo 31 / 0.75 m,
+  Eiger 63 / 3.0 m, the CCC 93 / 9.2 m (highest point 4,786 → 4,744 m, slope p99 53° → 50°).
+  Rendered alone the CCC reads as natural, slightly mellower terrain and Coosa is
+  indistinguishable; only side by side are the CCC's far crests visibly rounder. A scene is an
+  embed beside a host's own stats, not a survey, so privacy wins. The scene path drapes the route
+  and markers on the grid (as the View does), never at the recorded elevations, which would float
+  up to ~55 m above a smoothed CCC summit.
+- **Ends trimmed by default** (`pnpm bake --trim <m>`, default 200, the poster's "Hide start and
+  end" default): the drawn route and its markers skip the first and last 200 m, and the grid is
+  framed on the trimmed route (as posters frame on it), so a start at home is neither drawn nor at
+  the frame's centre. The route keeps its true distances and time offsets from the real start, so
+  a host's time ↔ distance mapping stays exact; the summary gives the whole run's length and climb
+  (the host publishes those already). `--trim 0` keeps the ends.
+- **Everything positional covers only the drawn stretch.** Route, elevation profile, climbs and
+  markers hold the trimmed route only (climbs clipped to it): a profile of the whole run would give
+  the start's elevation, which on the published grid narrows home to one contour line. Only the
+  summary's totals (length, climb) describe the whole run.
+- **Accepted residual risk: the terrain is a fingerprint.** A height grid of a route's area could
+  in principle be matched against a global elevation model to find where it is. No encoding of a
+  real terrain avoids that; publishing a scene publishes the shape of the ground. The bake is per
+  activity and opt-in; Sean decides which activities get one ("Needs Sean" in PROGRESS.md).
+- **The bake (`pnpm bake`) never invents terrain.** Only a confirmed upstream 404 becomes a missing
+  tile (filled from neighbours, as the app does, and counted in the summary). A 5xx, 429, timeout or
+  dropped connection is retried once and then fails the bake, unlike the app, which fills: a
+  published scene has no "tiles missing" note, and an outage would make the same input bake
+  differently. Any other error (a decoder bug, a file system error) fails the bake too. A tile that
+  cannot be cached is still used, with a warning. The scene and its sidecar are written together
+  (temps, then a marked swap), and a bake after a crash restores the whole old pair or keeps the
+  whole new one, never a mix.
+- **Ids.** Every id is checked for coordinates of the run (degrees with a fraction, DMS, decimal
+  minutes, digits run together, any separator); timestamps (epoch µs/ms/s/min, YYYYMMDD) only in
+  the default id taken from a file name (Sean's files are named by epoch ms), which then asks for
+  `--id`. An explicit `--id` of 10 or more digits only (a Strava activity id, already public on
+  Activities) is opaque and not read: time-ordered Strava ids were refused in whole bands at a place
+  (11,413,000,000–11,426,000,000 on the Hong Kong box). Accepted residuals: someone typing
+  concatenated coordinates as a bare-digit `--id`, coordinates folded inside a hash-like token, a
+  1-digit-degree coordinate at the start of a long digit run.
+- **Scanner residual near the antimeridian.** The byte scanner does not look for a tile pair with a
+  zero in it inside the format's defined fields (it does in undefined sections): those fields hold
+  many small counts whose high half is zero, which read as column-0 tile pairs and failed about 0.5%
+  of scenes there by chance. Column 0 lies only within about 5.6° east of 180° (Tonga, eastern Fiji,
+  Wallis and Futuna, the Aleutians east of 180°, eastern Chukotka); row 0 needs latitude above 84.4°,
+  where there is no land. A leak there would need an encoder bug writing such a pair into a legal
+  value of a defined field, which the decoded-object scan also covers.
+- **The library's `TerrainView` draws scenes only.** `dist-lib` exports the scene view under the
+  name `TerrainView`; the app's union component (`heightfield` + `track`, or `scene`) stays app-side,
+  because its heightfield half reaches `gridTrackFromRun`, the tile loader and `lib/geo`, which a host
+  could not use anyway. The bundle contains no network code and no geodesy (a test greps it).
+- **Stored markers are drawn as stored.** The scene's ○ / ◉ / ▲ positions come from the bake (summit
+  on the original track's highest point); recomputing them on the 10 m-resampled route could move
+  the summit, so `GridTrack.markers` carries them through.
+- **Distances stay true on a trimmed route.** The profile plots the drawn stretch with an `origin`
+  (its first distance): ticks, slider range and readouts are metres from the run's real start ("km
+  0.2" at a 200 m trim), so a host's time ↔ distance mapping needs no offset.
+- **A small, stable public surface.** The library's types are its own (`src/vert-lib/types.ts`):
+  the handle is `rotateBy`, `resetView`, `requestRender`, `focus`, `camera` (no `stage`); only the
+  declarations the entry reaches ship, with `.js` specifiers (bundler, node16 and nodenext hosts);
+  `createRenderer` and `onRenderFrame` are documented as testing and instrumentation aids.
+- **Tokens scope to a wrapper.** The terrain reads its palette from its own container, as the
+  profile's CSS inherits from its ancestors, so a host sets Vert's custom properties once on a
+  wrapper and both follow; `palette` / `routePalette` props still win. Every property has style A's
+  value as its fallback, which suits a light page; a dark page must set them (`dist-lib/README.md`).
+  The app is pixel-identical (tokens on `:root`).
+- **`resampleTrack` starts at the track's first distance.** A trimmed track (poster hide-ends, every
+  scene) used to spend ~20 samples repeating its first point; poster A at hide-ends 200 now differs
+  by 54–108 px of route-edge antialiasing, everything else by 0 px.
+- **Scrub sync: the profile reports, the terrain follows.** The library's `ElevationProfile` calls
+  `onScrub(metres)` on every user move (press, drag, slider keys) and `onScrub(null)` on Escape while
+  there is a position; host changes of `scrub` or `scene` never call it. `TerrainView` has no scrub
+  input of its own (drag and arrow keys orbit); it shows the host's `scrub` and hides the marker for
+  `null`. The profile is controlled when `scrub` is given (`null` = no position; the slider keeps
+  `aria-valuenow` at the drawn start with `aria-valuetext` "No position selected") and uncontrolled
+  otherwise (it starts at no position again for each new scene).
+- **Escape is only taken when it can clear something**: with a position, on a profile whose clearing
+  can show (uncontrolled, or with `onScrub`); then `preventDefault()` only, so a host's own handlers
+  check `event.defaultPrevented` and a surrounding `<dialog>` stays open on that press. A read-only
+  profile leaves Escape to the page.
+- **Time ↔ distance outside the drawn stretch is `null`, not clamped**: `metresAtTime` /
+  `timeAtMetres` return `null` in the trimmed ends (and without times, for non-finite input or
+  disordered arrays), so a host hides the scrub rather than parking it where the runner was not;
+  `sceneTimeRange` tells a heart-rate chart which stretch can drive it.
+- **No version bump for the `onScrub` type** (`(metres: number | null) => void`; a
+  `useState<number>` setter no longer fits): nothing has been vendored yet, so 0.1.0 is the whole
+  phase.
+- **Attribution.** tilezen/joerd's `attribution.md` (the licence the AWS registry gives for Terrain
+  Tiles) heads its per-source list "Required attribution" and asks that it appear "in a place that is
+  reasonable to the medium". Vert's reading: the short credit `TERRAIN_ATTRIBUTION` ("AWS Terrain
+  Tiles / Mapzen (various sources)") linked to that list (`TERRAIN_ATTRIBUTION_LINK`) satisfies it.
+  A host must show it, linked, wherever a scene is shown; Vert's About dialog links it the same way.
+- **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
+  pin and report what it vendored.

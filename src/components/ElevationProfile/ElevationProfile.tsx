@@ -25,12 +25,32 @@ import {
 export type { Climb, ProfilePoint, Units } from './profileGeometry';
 
 export interface ElevationProfileProps {
-  /** Resampled profile, sorted by distance: `d` cumulative metres, `ele` metres. */
+  /**
+   * Resampled profile, sorted by distance: `d` cumulative metres (from `origin`), `ele` metres.
+   */
   points: readonly ProfilePoint[];
-  /** Scrub position, metres along the route. */
-  scrub: number;
+  /**
+   * Distance of the profile's first point, metres: 0 for a whole run; past 0 for a stretch whose
+   * distances count from an earlier start (a baked scene's drawn route, trimmed by 200 m, starts at
+   * 200). Points, climbs, `scrub`, `onScrub`, the slider's values and the ticks all use the same
+   * metres; the plot spans `origin` to the last point. Default 0.
+   */
+  origin?: number;
+  /**
+   * Scrub position, metres along the route. `null` (the library's "no position selected"; the app
+   * always passes a number) draws no scrub line or dot; the slider then reports the plot's start as
+   * its value with the value text "No position selected", and the first key or press moves from
+   * there (and always reports, even to the start).
+   */
+  scrub: number | null;
   /** Called with the new scrub distance (metres, clamped to the route) on drag and keys. */
   onScrub: (d: number) => void;
+  /**
+   * When given, Escape on the slider calls it while there is a position (to clear it: the host
+   * sets `scrub` to null) and prevents the keydown's default (it still propagates); with no
+   * position, Escape is left alone.
+   */
+  onClear?: () => void;
   /** Climbs to shade and number, metres. The `steepest` one gets the stronger shade. */
   climbs?: readonly Climb[];
   /** Ticks in km or mi; also the default value text. Default metric. */
@@ -43,6 +63,11 @@ export interface ElevationProfileProps {
   valueText?: (d: number, ele: number) => string;
   className?: string;
 }
+
+const NO_CLIMBS: readonly Climb[] = [];
+
+/** The slider's value text while `scrub` is null. */
+export const NO_POSITION_TEXT = 'No position selected';
 
 /** Dot diameter (canvas: 14px with a 3px white border). */
 const DOT = 14;
@@ -57,10 +82,12 @@ const percent = (viewX: number) => `${String((viewX / VIEW_W) * 100)}%`;
  * only cue.
  */
 export function ElevationProfile({
-  points,
-  scrub,
+  points: givenPoints,
+  origin = 0,
+  scrub: givenScrub,
   onScrub,
-  climbs = [],
+  onClear,
+  climbs: givenClimbs = NO_CLIMBS,
   units = 'metric',
   height = 140,
   label = 'Elevation profile',
@@ -71,6 +98,22 @@ export function ElevationProfile({
   const plotRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ pointerId: number; left: number; width: number } | null>(null);
   const [widthPx, setWidthPx] = useState<number | undefined>(undefined);
+
+  // The plot works from 0: points and climbs shifted by `origin` (none for a whole run).
+  const points = useMemo(
+    () => (origin === 0 ? givenPoints : givenPoints.map((p) => ({ d: p.d - origin, ele: p.ele }))),
+    [givenPoints, origin],
+  );
+  const climbs = useMemo(
+    () =>
+      origin === 0
+        ? givenClimbs
+        : givenClimbs.map((c) => ({ ...c, start: c.start - origin, end: c.end - origin })),
+    [givenClimbs, origin],
+  );
+  // No position: null, or a value that is not a number at all.
+  const hasScrub = givenScrub !== null && Number.isFinite(givenScrub);
+  const scrub = hasScrub ? givenScrub - origin : 0;
 
   // Paths depend on the points only: scrubbing never rebuilds them. The line is drawn from the
   // plotted (minimum-span, smoothed) points; the value text keeps the real elevations.
@@ -112,8 +155,12 @@ export function ElevationProfile({
     [bands, paths],
   );
 
-  const ticks = useMemo(() => buildTicks(total, units, { widthPx }), [total, units, widthPx]);
-  const description = useMemo(() => describeClimbs(climbs, units), [climbs, units]);
+  const ticks = useMemo(
+    () => buildTicks(total, units, { widthPx, origin }),
+    [total, units, widthPx, origin],
+  );
+  // In the route's own metres, as the readouts.
+  const description = useMemo(() => describeClimbs(givenClimbs, units), [givenClimbs, units]);
 
   // Measure the plot so tick labels near the end never overlap at narrow widths.
   useLayoutEffect(() => {
@@ -131,7 +178,11 @@ export function ElevationProfile({
 
   const value = total > 0 ? clamp(scrub, 0, total) : 0;
   const ele = elevationAt(points, value);
-  const text = valueText ? valueText(value, ele) : defaultValueText(value, ele, units);
+  const text = !hasScrub
+    ? NO_POSITION_TEXT
+    : valueText
+      ? valueText(value + origin, ele)
+      : defaultValueText(value + origin, ele, units);
   const scrubX = scale.x(value);
   // The dot sits on the line as drawn.
   const drawnEle = elevationAt(plot.points, value);
@@ -140,7 +191,8 @@ export function ElevationProfile({
   const commit = (d: number) => {
     if (total <= 0) return;
     const next = clamp(d, 0, total);
-    if (next !== value) onScrub(next);
+    // From no position, any move counts, even one to the start (where the value already reads).
+    if (next !== value || !hasScrub) onScrub(next + origin);
   };
 
   const commitFromPointer = (clientX: number) => {
@@ -201,6 +253,12 @@ export function ElevationProfile({
       case 'End':
         next = total;
         break;
+      case 'Escape':
+        if (!onClear || !hasScrub) return;
+        event.preventDefault();
+        drag.current = null;
+        onClear();
+        return;
       default:
         return;
     }
@@ -217,9 +275,9 @@ export function ElevationProfile({
         role="slider"
         tabIndex={0}
         aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={Math.round(total)}
-        aria-valuenow={Math.round(value)}
+        aria-valuemin={Math.round(origin)}
+        aria-valuemax={Math.round(origin + total)}
+        aria-valuenow={Math.round(origin + value)}
         aria-valuetext={text}
         aria-describedby={descriptionId}
         onKeyDown={onKeyDown}
@@ -237,7 +295,7 @@ export function ElevationProfile({
           focusable="false"
         >
           {layers}
-          {total > 0 && (
+          {total > 0 && hasScrub && (
             <line className={styles.scrubLine} x1={scrubX} y1={0} x2={scrubX} y2={VIEW_H} />
           )}
         </svg>
@@ -251,7 +309,7 @@ export function ElevationProfile({
             {index + 1}
           </span>
         ))}
-        {total > 0 && (
+        {total > 0 && hasScrub && (
           <span
             className={styles.dot}
             style={{ left: percent(scrubX), top: dotTop - DOT / 2 }}

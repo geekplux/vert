@@ -1,0 +1,5 @@
+/* The "Host sync" story's own controls (a stand-in host, not part of the library): Vert's focus ring. */
+.control:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}

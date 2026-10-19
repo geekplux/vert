@@ -24,10 +24,12 @@
   },
   "include": [
     "vite.config.ts",
+    "vite.lib.config.ts",
     "vite.tile-proxy.ts",
     "vite.tile-proxy.test.ts",
     "playwright.config.ts",
     "e2e",
     ".ladle/*.ts"
-  ]
+  ],
+  "exclude": ["e2e/library-host"]
 }

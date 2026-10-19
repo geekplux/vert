@@ -530,7 +530,12 @@ export function findClimbs(
   return markSteepest(kept);
 }
 
-function markSteepest(climbs: Climb[]): Climb[] {
+/**
+ * `climbs` with `steepest: true` on the one that has the highest average grade among those of at
+ * least {@link STEEPEST_MIN_GAIN_M} gain (among all of them when none is that big); the others
+ * keep whatever they carry. Exported for scenes, which re-mark the climbs left after a trim.
+ */
+export function markSteepest(climbs: Climb[]): Climb[] {
   if (climbs.length === 0) return climbs;
   const big = climbs.filter((c) => c.gain >= STEEPEST_MIN_GAIN_M);
   const pool = big.length > 0 ? big : climbs;

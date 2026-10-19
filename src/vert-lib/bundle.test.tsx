@@ -106,14 +106,28 @@ afterAll(() => {
 });
 
 describe('the built library', () => {
-  it('is one ES module, one stylesheet, the README and the declarations of the public API only', () => {
+  it('is one ES module, one stylesheet, the README, LICENSE, VERSION, the sample scene and the declarations of the public API only', () => {
     expect(readdirSync(OUT).sort()).toEqual([
+      'LICENSE',
       'README.md',
+      'VERSION',
+      'fixtures',
       'index.d.ts',
       'index.js',
       'types',
       'vert.css',
     ]);
+    // All a host copies: Vert's licence, the version as the bundle has it, the sample scene pair.
+    expect(read('LICENSE')).toBe(readFileSync(join(ROOT, 'LICENSE'), 'utf8'));
+    expect(read('VERSION')).toBe(`${lib.VERT_LIB_VERSION}\n`);
+    expect(readdirSync(join(OUT, 'fixtures')).sort()).toEqual([
+      'coosa-backcountry.scene',
+      'coosa-backcountry.scene.json',
+    ]);
+    for (const name of ['coosa-backcountry.scene', 'coosa-backcountry.scene.json']) {
+      const built = readFileSync(join(OUT, 'fixtures', name));
+      expect(built.equals(readFileSync(join(ROOT, 'src', 'scene', 'fixtures', name)))).toBe(true);
+    }
     // Every declaration the entry reaches, and nothing else: no renderer internals.
     const types = readdirSync(join(OUT, 'types'), { recursive: true, encoding: 'utf8' })
       .filter((name) => name.endsWith('.d.ts'))
@@ -194,7 +208,8 @@ describe('the built library', () => {
   });
 
   it('exports its version and the elevation credit', () => {
-    expect(lib.VERT_LIB_VERSION).toMatch(/^0\.1\.0\+([0-9a-f]{7,}|nogit)$/);
+    // `.dirty` when built from a checkout with uncommitted changes (as while developing).
+    expect(lib.VERT_LIB_VERSION).toMatch(/^0\.1\.1\+([0-9a-f]{7,}(\.dirty)?|nogit)$/);
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
       version: string;
     };

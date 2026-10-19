@@ -1,12 +1,13 @@
 # Vert library
 
 Vert's 3D terrain view and elevation profile for a page that shows a baked `.scene` file (the
-format is in Vert's `docs/SCENE.md`). The full guide for a host (vendoring, baking scenes, caching,
+format is in Vert's `docs/SCENE.md`). The full guide for a host (installing, baking scenes, caching,
 scrub sync with a time chart, a worked example, testing, the changelog) is
 [docs/INTEGRATION.md](https://github.com/geekplux/vert/blob/main/docs/INTEGRATION.md); this
 file is the reference that travels with the build.
 
-These are the files `pnpm build:lib` writes to `dist-lib/`:
+Install it with `pnpm add @geekplux/vert three@0.186.1`. These are the files `pnpm build:lib`
+writes to `dist-lib/`, the package's contents:
 
 - `index.js`: one ES module. It imports `react`, `react/jsx-runtime`, `three` and
   `three/examples/jsm/…` modules, and the host installs those. Nothing else is imported, nothing
@@ -15,10 +16,13 @@ These are the files `pnpm build:lib` writes to `dist-lib/`:
   hashed. It loads no fonts.
 - `index.d.ts` and `types/`: the type declarations. Relative imports carry `.js` extensions, so
   they resolve under `moduleResolution` `bundler`, `node16` and `nodenext`.
+- `bake.js`: the `vert-bake` command (`pnpm exec vert-bake <input> --out <dir>`; `--help` lists
+  the options), which bakes a `.gpx` or a points file into a scene offline. It imports only Node's
+  built-ins.
 
 ```tsx
-import { ElevationProfile, TerrainView, decodeScene, type Scene } from './vendor/vert/index.js';
-import './vendor/vert/vert.css';
+import { ElevationProfile, TerrainView, decodeScene, type Scene } from '@geekplux/vert';
+import '@geekplux/vert/vert.css';
 
 const scene: Scene = decodeScene(new Uint8Array(await (await fetch(url)).arrayBuffer()));
 // One scrub for both, in metres from the run's real start (null: none):
@@ -205,4 +209,4 @@ On a `#111214` page these colours give `--muted` 7.7:1 on the page and 6.0:1 on 
 
 You must show `TERRAIN_ATTRIBUTION` ("AWS Terrain Tiles / Mapzen (various sources)") wherever
 the terrain appears, linked to `TERRAIN_ATTRIBUTION_LINK.href`, Mapzen's list of the sources and
-the credit each asks for. `VERT_LIB_VERSION` (`0.1.1+<git sha>`, also in the `VERSION` file) says which build you vendored.
+the credit each asks for. `VERT_LIB_VERSION` (`0.2.0+<git sha>`, also in the `VERSION` file) says which build you have.

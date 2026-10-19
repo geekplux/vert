@@ -852,3 +852,53 @@ var(--route))`; width (2 px) and offset (2 px) stay fixed. It is not defined in 
   `--accept-near-end`, `--elevation`, `--json`, a light entry, exported sidecar helpers,
   `--vert-*` colour aliases, a `start` field in the points file, a new heart-rate example, a tile
   cache default outside the checkout.
+
+## Library 8: npm package (2026-10-19)
+
+Vert is published to npm so any site can install it, and Activities depends on the package instead
+of vendoring `dist-lib/`. the maintainer's rule: simple and easy to use, not over-engineered. Version 0.2.0
+(a new install surface); no change to the library's API or the scene format.
+
+- **Name `@geekplux/vert`.** `vert` on npm is someone else's package. Scoped, public
+  (`publishConfig.access`).
+- **The package is `dist-lib/`.** `files: ["dist-lib"]`; npm adds `package.json`, `LICENSE` and
+  the root `README.md`. `exports`: `.` (`types` then `import`), `./vert.css`, `./fixtures/*` and
+  `./package.json`; nothing else is importable, so `dist-lib/`'s layout stays private. No `main`
+  or top-level `types`: ESM only, and `moduleResolution` `node10` is not supported.
+  `sideEffects: ["*.css"]`.
+- **README: the root one serves both.** npm shows the root `README.md`; its "Use it in your site"
+  section has the install, the bake and an example, and links to INTEGRATION.md. Not chosen:
+  copying `dist-lib/README.md` over the root one at pack time (it would rewrite a tracked file, or
+  need a second README to keep in step). `dist-lib/README.md` still ships as the reference.
+- **Peers, no dependencies.** `react` `^19.0.0` (the components take `ref` as a prop) and
+  `three` `^0.186.1` (0.186.x: three.js breaks in minors; the docs still say to pin 0.186.1
+  exactly). `react-dom` is not a peer: the bundle never imports it (the bundle test checks every
+  import). In Vert itself `react`, `react-dom` and `three` move to `devDependencies`; the lockfile
+  resolves the same versions.
+- **`vert-bake`, the bake as a bin.** `vite.bake.config.ts` (run by `pnpm build:lib` after the
+  library) bundles `scripts/bake/bin.ts` into `dist-lib/bake.js`: one ES module for Node with a
+  `#!/usr/bin/env node` line, importing only Node built-ins, not minified (a privacy tool a host
+  may want to read; 221 KB, 72 KB gzipped). Same arguments, output, warnings and exit codes as
+  `pnpm bake`, which stays as it is (`node scripts/bake.ts`, TypeScript in place). One
+  difference: without `--cache`, the bin caches tiles in `node_modules/.cache/vert-bake/` under
+  the current directory (the usual tool cache, ignored wherever `node_modules` is), never inside
+  the installed package or a vendored folder in a host's repository. `--version` (`-v`) on both
+  commands: the bin prints `VERT_LIB_VERSION`, built in by `define`, and uses it in its
+  User-Agent; `pnpm bake` prints package.json's version.
+- **A host's importer** runs the bin with its own Node: the path is
+  `import.meta.resolve('@geekplux/vert/package.json')`'s folder + `dist-lib/bake.js` (no extra
+  export, no `.bin` shim, no shell).
+- **Publishing from GitHub Actions, no token.** `check.yml` (every pull request and push to
+  `main`; also called by the release) runs lint, typecheck, unit tests, both builds and the e2e
+  (all but `e2e/touch.spec.ts`'s two swipe tests: headless Chromium on Linux does not scroll the
+  page for a CDP touch swipe, so those run only locally; about 6 minutes in all);
+  `release.yml` runs on a `v<digit>*` tag, needs the check, refuses a tag that is not
+  `v<package.json version>`, and runs `npm publish --provenance` with npm trusted publishing
+  (OIDC). The first version goes up by hand, because npm sets a trusted publisher only on a
+  package that exists (`docs/PUBLISH.md`). `prepublishOnly` is `pnpm build:lib` plus a refusal of
+  a `VERSION` marked `.dirty` or `nogit`, so neither a hand publish nor CI ships a build of
+  uncommitted files. `scripts/release.test.ts` keeps the changelog's newest entry equal to
+  `package.json`'s version (and, on a tag build, the tag).
+- **Not done, on purpose:** changesets or any release tool, CI publishing with a token, a CommonJS
+  build, `main`/`types` fallbacks, a `./bake` export, minifying the bin, a separate package for the
+  bake, and an OS cache folder for the bin's default.

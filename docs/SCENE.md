@@ -262,8 +262,8 @@ time).
 in float64 and kept as float32 or float64, not the decimal itself: a route elevation of 412.3 m is
 the float32 412.29998779296875. They re-encode to the same bytes, and they are fine for drawing and
 arithmetic. **A host must never write them into published text as they are**: printed in full,
-such numbers match Activities' coordinate check `\d{2}\.\d{4,}` and fail its build. Round to the
-step's decimals (or whole units) before printing.
+such numbers match Activities' coordinate pattern `\d{2}\.\d{4,}`, which its guards apply to its
+published data. Round to the step's decimals (or whole units) before printing.
 
 A sketch of a decoder's main loop, for orientation (the reference code is `src/scene/decode.ts`):
 
@@ -297,14 +297,15 @@ for (let j = 0; j < height; j++)
 ## Sidecar
 
 Next to each `<id>.scene` the bake publishes `<id>.scene.json` (two-space JSON and a trailing
-newline; shown here more compactly):
+newline; shown here more compactly). The Coosa sample's,
+`src/scene/fixtures/coosa-backcountry.scene.json`:
 
 ```json
 {
   "format": "vert-scene",
   "version": 1,
-  "bytes": 50297,
-  "hash": "0598323a",
+  "bytes": 43115,
+  "hash": "c787f362",
   "summary": {
     "distance": 21476,
     "climb": 1102,
@@ -324,8 +325,10 @@ newline; shown here more compactly):
 | `summary` | the decoded summary in **whole metres** (`climb` is `null` when unknown)                 |
 
 The sidecar's summary is read back from the scene bytes, so it always matches the file. Every
-number in it is a whole number: Activities' build fails on any published text matching
-`\d{2}\.\d{4,}` (a coordinate-like decimal), and whole numbers never do.
+number in it is a whole number, so it never matches Activities' coordinate pattern
+`\d{2}\.\d{4,}` (a coordinate-like decimal). Activities' privacy test and deploy guard apply that
+pattern to its published data files (`data/activities.json`, `data/meta.json`), not to scenes or
+sidecars; a host can extend its guard to sidecars and they pass (docs/INTEGRATION.md, "Scenes").
 
 ## Forbidden content
 

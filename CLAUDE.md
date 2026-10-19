@@ -5,7 +5,8 @@ styles. Nothing else in v1.
 
 Read before working: `docs/PLAN.md` (decisions, phases, roles), `docs/DESIGN-SPEC.md` (tokens,
 components, page states, poster styles, accessibility), `docs/DECISIONS.md` (main-agent rulings where sources disagree; it outranks the canvas and the
-spec text), `docs/PROGRESS.md` (where the build is).
+spec text), `docs/PROGRESS.md` (where the build is), `docs/SCENE.md` (the scene format and the
+bake), `docs/INTEGRATION.md` (how a host page uses the library).
 The design canvas ((design canvas)) wins over DESIGN-SPEC.md on
 visual detail when you can open it; local copies of every frame are in `docs/design/` (HTML source
 and PNG renders).
@@ -58,6 +59,7 @@ pnpm format         # Prettier write
 pnpm typecheck      # tsc -b (app, node configs, worker)
 pnpm stories        # Ladle on http://localhost:61000
 pnpm stories:build  # static Ladle build to build/
+pnpm build:lib      # the library for host pages to dist-lib/ (docs/INTEGRATION.md)
 pnpm bake <in> --out <dir>  # one .gpx or points .json → <id>.scene + sidecar (docs/SCENE.md)
 pnpm worker:dev     # run the tile Worker locally
 pnpm worker:types   # regenerate worker/worker-configuration.d.ts after editing wrangler.toml
@@ -74,6 +76,7 @@ src/gpx         GPX parser and stats (runs in a Web Worker: no DOMParser there)
 src/terrain     three.js mesh, shaders, route, camera
 src/poster      poster styles A, B, E and tiled export
 src/scene       the .scene format: codec, builder, privacy scanners (docs/SCENE.md)
+src/vert-lib    the library for host pages (entry, public types), built to dist-lib/
 src/lib         pure shared maths (geodesy, tile maths, Terrarium decoding, units, formatting)
 src/hooks       shared React hooks with no app state (useMediaQuery)
 src/styles      tokens.css (DESIGN-SPEC §1), fonts.css, base.css

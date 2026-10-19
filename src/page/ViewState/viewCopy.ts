@@ -14,7 +14,7 @@ import {
   mToFt,
 } from '../../lib/format';
 import type { Units } from '../../lib/format';
-import { haversine } from '../../lib/geo';
+import { isLoop } from '../../lib/loop';
 import { hasSummit } from '../../lib/summit';
 import type { ProfilePoint, Run, RunTrack, TerrainStatus } from '../types';
 
@@ -152,23 +152,9 @@ export function exaggerationText(exaggeration: number): string {
   return `Vertical ×${exaggeration.toFixed(1)}`;
 }
 
-/**
- * A route that ends within this many metres of its start is a loop. Same rule as the terrain's
- * markers (`LOOP_DISTANCE_M` in src/terrain/markers.ts, which this module cannot import without
- * pulling three.js into the main bundle; a test keeps the two equal).
- */
-export const LOOP_DISTANCE_M = 50;
-
-/** Whether the track ends within {@link LOOP_DISTANCE_M} of its start (one ○ marks both). */
-export function isLoop(track: Pick<RunTrack, 'lat' | 'lon'>): boolean {
-  const last = track.lat.length - 1;
-  if (last < 1) return true;
-  const gap = haversine(
-    { lat: track.lat[0] ?? 0, lon: track.lon[0] ?? 0 },
-    { lat: track.lat[last] ?? 0, lon: track.lon[last] ?? 0 },
-  );
-  return gap <= LOOP_DISTANCE_M;
-}
+// The loop rule lives in src/lib/loop.ts, shared with the terrain's markers (gridTrackFromRun
+// decides it once for them), so the legend, the accessible name and the shapes always agree.
+export { LOOP_DISTANCE_M, isLoop } from '../../lib/loop';
 
 /**
  * The terrain's accessible name, describing the markers the terrain draws (src/terrain/markers.ts).

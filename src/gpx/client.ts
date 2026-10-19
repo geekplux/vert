@@ -16,9 +16,9 @@
 import { RunLoadError } from '../page/errors';
 import type { Run } from '../page/types';
 import type { ParseRequest, ParseResponse } from './handler';
+import { MAX_FILE_BYTES } from './limits';
 
-/** Largest GPX Vert reads, bytes (matches the Dropzone's limit). */
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+export { MAX_FILE_BYTES };
 
 /** A parse taking longer than this (ms) is abandoned. */
 export const PARSE_TIMEOUT_MS = 20_000;

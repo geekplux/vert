@@ -40,10 +40,15 @@ This is the only place that owns application state and composes `components`, `t
   while the page calls `newFile()` (if that is a no-op, during a load, the file is dropped at
   once); when the screen becomes Upload, an effect in `Page` hands it, once, to the freshly mounted
   Dropzone, so it is read the same way as a drop on the Dropzone, and a GPX that fails to read
-  shows the error there. Files left pending when the screen changes elsewhere are dropped. While a
-  file is over the page, `DropFrame/` draws the viewport frame (Upload) or `DropOverlay` the wash,
-  frame and "Drop to open a new run" pill (View, Poster mode), all `aria-hidden`; the page's
-  always-present status region says the pill's words (`dropOverlayAnnouncement`).
+  shows the error there. Files left pending when the screen changes elsewhere are dropped. The
+  ref remembers the screen they were dropped on: a drop the instant a loaded run's View appears
+  can arrive before React has run that commit's effects, and that late effect, for the screen the
+  files came from, leaves them for Upload. The effect is keyed on the screen as the page shows it
+  (exporting is Poster mode), so an export finishing runs no screen effect at all and a drop then
+  is safe too. While a file is over the page, `DropFrame/` draws the viewport frame (Upload) or
+  `DropOverlay` the wash, frame and "Drop to open a new run" pill (View, Poster mode), all
+  `aria-hidden`; the page's always-present status region says the pill's words
+  (`dropOverlayAnnouncement`).
 - `ViewState/`: the View state (aside: date line, route name, stats, climbs, exaggeration, help;
   main: `TerrainBox` with the live `TerrainView` (lazy, its own chunk), legend and Rotate / Flat map,
   then the elevation section with its scrub readout; the scrub is shared, so the profile moves the

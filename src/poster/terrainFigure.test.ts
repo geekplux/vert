@@ -6,7 +6,9 @@ import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import type { ViewCamera } from '../terrain/camera';
 import { TerrainStage, applyViewOffset, figureViewOffset, setLensShift } from '../terrain/stage';
 import type { PixelRect, StageRenderer } from '../terrain/stage';
+import { gridTrackFromRun } from '../terrain/gridTrack';
 import { STYLE_A_PALETTE } from '../terrain/mesh';
+import { createRouteLayer } from '../terrain/route';
 import { hills, makeTrack } from '../terrain/testing';
 import {
   TILE_BLEED,
@@ -16,6 +18,12 @@ import {
   figurePixelSize,
 } from './terrainFigure';
 import type { TerrainFigureScene } from './terrainFigure';
+
+// Counts route builds and records the grid track each is built from.
+vi.mock('../terrain/route', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../terrain/route')>();
+  return { ...actual, createRouteLayer: vi.fn(actual.createRouteLayer) };
+});
 
 /** Where a world point lands, px from the image's (or tile's) top-left corner. */
 function pixelOf(
@@ -198,6 +206,35 @@ describe('TerrainFigureRenderer', () => {
     figures.dispose();
     expect(renderer.forceContextLoss).toHaveBeenCalledTimes(1);
     expect(renderer.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the track on each heightfield’s grid once, and builds the route once per change', () => {
+    const builds = vi.mocked(createRouteLayer);
+    builds.mockClear();
+    const { figures } = figureRenderer();
+    const box = { width: 300, height: 200, pixelScale: 1 };
+    figures.render({ ...scene(), ...box });
+    expect(builds).toHaveBeenCalledTimes(1);
+    expect(builds.mock.calls[0]?.[1].col).toEqual(gridTrackFromRun(HILLS, TRACK).col);
+    // Same heightfield and track, another size, exaggeration or camera: nothing to rebuild.
+    figures.render({ ...scene({ ...DEFAULT_VIEW_CAMERA, azimuth: 0.4 }), ...box, exaggeration: 2 });
+    expect(builds).toHaveBeenCalledTimes(1);
+    // Another heightfield (east of the first): the route is built once, on the new grid.
+    const east = { ...hills(), bounds: { west: -83.99, south: 34.7, east: -83.95, north: 34.72 } };
+    figures.render({ ...scene(), heightfield: east, ...box });
+    expect(builds).toHaveBeenCalledTimes(2);
+    const moved = builds.mock.calls[1]?.[1];
+    expect(moved?.col).toEqual(gridTrackFromRun(east, TRACK).col);
+    expect(moved?.col[0]).toBeCloseTo((gridTrackFromRun(HILLS, TRACK).col[0] ?? 0) - 29.75, 6);
+    // A new track on the same heightfield.
+    const other = makeTrack([
+      [34.706, -83.98],
+      [34.712, -83.96],
+    ]);
+    figures.render({ ...scene(), heightfield: east, track: other, ...box });
+    expect(builds).toHaveBeenCalledTimes(3);
+    expect(builds.mock.calls[2]?.[1].col).toEqual(gridTrackFromRun(east, other).col);
+    figures.dispose();
   });
 
   it('draws tiles that stitch into the whole figure exactly (camera matrices)', () => {

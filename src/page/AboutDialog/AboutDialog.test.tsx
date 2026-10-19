@@ -39,6 +39,14 @@ describe('AboutDialog', () => {
     expect(dialog.textContent).toContain(
       'Elevation: AWS Terrain Tiles / Mapzen (various sources).',
     );
+    // The elevation credit links the list of the tiles' sources (docs/INTEGRATION.md).
+    const credit = within(dialog).getByRole('link', {
+      name: 'AWS Terrain Tiles / Mapzen (various sources)',
+    });
+    expect(credit.getAttribute('href')).toBe(
+      'https://github.com/tilezen/joerd/blob/master/docs/attribution.md',
+    );
+    expect(credit.hasAttribute('target')).toBe(false);
     expect(dialog.textContent).toContain('Sample route: © OpenStreetMap contributors, ODbL.');
     expect(dialog.textContent).toContain('Type: Archivo and IBM Plex Mono (SIL OFL).');
     const github = within(dialog).getByRole('link', { name: 'geekplux on GitHub' });

@@ -5,9 +5,10 @@
  * apart (DESIGN-SPEC §5):
  *
  * - start: hollow circle, white fill, 3 px ink ring;
- * - finish (only when the route does not end within {@link LOOP_DISTANCE_M} of its start): the
- *   start circle with a solid ink dot in the middle (◉), so it never reads as a second start;
- *   a loop gets one ○ ("Start / finish" in the legend);
+ * - finish (only when the route is not a loop, `track.loop`: decided once by `isLoop` in
+ *   src/lib/loop.ts, the legend's and the accessible name's rule): the start circle with a solid
+ *   ink dot in the middle (◉), so it never reads as a second start; a loop gets one ○
+ *   ("Start / finish" in the legend);
  * - summit: solid ink triangle with a 2.5 px white edge, its centroid on the highest point (only
  *   when that stands 10 m or more above the lowest, `hasSummit`);
  * - scrub: route-coloured dot with a 3 px white ring and a 1 px ink hairline outside it (the
@@ -27,12 +28,10 @@
  * hidden marker to {@link OCCLUDED_OPACITY}: still there, plainly behind something.
  */
 import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
-import { haversine } from '../lib/geo';
-import { hasSummit } from '../lib/summit';
 import { sampleBilinear } from '../lib/terrarium';
-import type { RunTrack } from '../page/types';
-import { elevationAt, type Heightfield } from './heightfield';
-import { heightfieldToLocal, modelBounds } from './mesh';
+import type { GridMarkers, GridTrack, TerrainGrid } from './grid';
+import { gridToLocal, modelBounds } from './mesh';
+import { routeMarkerIndices, type RouteMarkerIndices } from './routeRules';
 import {
   APP_ROUTE_PALETTE,
   DEFAULT_LIFT_M,
@@ -41,10 +40,9 @@ import {
   type RouteTrack,
 } from './route';
 
-export type TerrainMarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
+export { routeMarkerIndices, type RouteMarkerIndices } from './routeRules';
 
-/** A route that ends this close to its start is a loop: one ○ marks start and finish. */
-export const LOOP_DISTANCE_M = 50;
+export type TerrainMarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
 
 /** Marker geometry, CSS px. */
 export const START_DIAMETER_PX = 22;
@@ -82,69 +80,20 @@ const RENDER_ORDER: Record<TerrainMarkerKind, number> = {
   scrub: 5,
 };
 
-/** Indices of the route's markers in the track. */
-export interface RouteMarkerIndices {
-  readonly start: number;
-  /** Null for a loop (the start marker stands for both). */
-  readonly finish: number | null;
-  /** Null when the high point is no summit (`hasSummit`: under 10 m above the lowest point). */
-  readonly summit: number | null;
-}
-
-/**
- * Where the markers go: start at the first point, finish at the last unless the route is a loop,
- * summit at the highest point (the track's elevations as the stats use them, so it matches the
- * high point shown in the aside; the terrain's elevations when the file has none), and only when
- * it stands out (`hasSummit`, the same rule as the legend and the posters).
- */
-export function routeMarkerIndices(
-  track: Pick<RunTrack, 'lat' | 'lon' | 'ele'>,
-  heightfield?: Heightfield,
-): RouteMarkerIndices {
-  const n = track.lat.length;
-  if (n === 0) throw new RangeError('The track has no points');
-  const last = n - 1;
-  const gap = haversine(
-    { lat: track.lat[0] ?? 0, lon: track.lon[0] ?? 0 },
-    { lat: track.lat[last] ?? 0, lon: track.lon[last] ?? 0 },
-  );
-  const elevation = (i: number): number => {
-    const recorded = track.ele?.[i];
-    if (recorded !== undefined && Number.isFinite(recorded)) return recorded;
-    return heightfield ? elevationAt(heightfield, track.lon[i] ?? 0, track.lat[i] ?? 0) : -Infinity;
-  };
-  let summit = 0;
-  let highest = -Infinity;
-  let lowest = Infinity;
-  for (let i = 0; i < n; i++) {
-    const e = elevation(i);
-    if (e > highest) {
-      highest = e;
-      summit = i;
-    }
-    if (e < lowest) lowest = e;
-  }
-  return {
-    start: 0,
-    finish: n > 1 && gap > LOOP_DISTANCE_M ? last : null,
-    summit: hasSummit(highest, lowest) ? summit : null,
-  };
-}
-
 /**
  * True when the terrain hides `point` (local frame, at `exaggeration`) from `eye`: some sample on
  * the segment between them, past the first two grid cells, lies more than `toleranceMetres` below
  * the surface. Samples every half grid cell until the ray leaves the model or rises above its top.
  */
 export function isOccluded(
-  heightfield: Heightfield,
+  grid: TerrainGrid,
   point: Vector3,
   eye: Vector3,
   exaggeration: number,
   toleranceMetres = 3,
 ): boolean {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const bounds = modelBounds(heightfield, exaggeration);
+  const { width: w, height: h, elevations, min } = grid;
+  const bounds = modelBounds(grid, exaggeration);
   const cell = Math.max(bounds.width / (w - 1), bounds.depth / (h - 1));
   const vertical = bounds.scale * exaggeration;
   const tolerance = toleranceMetres * vertical;
@@ -348,7 +297,13 @@ export interface MarkerLayerOptions {
 
 export interface MarkerLayer {
   readonly group: Group;
-  readonly indices: RouteMarkerIndices;
+  /**
+   * The markers' indices in the track (`routeMarkerIndices`), or null when the track brings its
+   * own marker positions (`track.markers`, a baked scene's stored markers).
+   */
+  readonly indices: RouteMarkerIndices | null;
+  /** Where the fixed markers stand, grid coordinates (finish and summit null when absent). */
+  readonly positions: GridMarkers;
   /** The sprite for `kind`, or null when this route has none (finish on a loop). */
   sprite(kind: TerrainMarkerKind): Sprite | null;
   /**
@@ -375,13 +330,34 @@ export interface MarkerLayer {
   dispose(): void;
 }
 
-/** Start (and finish), summit and scrub markers for `track` on `heightfield`. */
+/**
+ * Where the fixed markers of `track` stand: its own `markers` when it brings them (a baked scene's,
+ * stored exactly), else the points `routeMarkerIndices` picks.
+ */
+export function markerPositions(
+  track: RouteTrack & Pick<GridTrack, 'ele' | 'loop' | 'markers'>,
+  grid: TerrainGrid,
+): { indices: RouteMarkerIndices | null; positions: GridMarkers } {
+  if (track.markers) return { indices: null, positions: track.markers };
+  const indices = routeMarkerIndices(track, grid);
+  const at = (index: number) => ({ col: track.col[index] ?? 0, row: track.row[index] ?? 0 });
+  return {
+    indices,
+    positions: {
+      start: at(indices.start),
+      finish: indices.finish === null ? null : at(indices.finish),
+      summit: indices.summit === null ? null : at(indices.summit),
+    },
+  };
+}
+
+/** Start (and finish), summit and scrub markers for `track` (in `grid`'s sample coordinates). */
 export function createMarkerLayer(
-  heightfield: Heightfield,
-  track: RouteTrack & Pick<RunTrack, 'ele'>,
+  grid: TerrainGrid,
+  track: RouteTrack & Pick<GridTrack, 'ele' | 'loop' | 'markers'>,
   { palette = APP_ROUTE_PALETTE, exaggeration = 1, lift = DEFAULT_LIFT_M }: MarkerLayerOptions = {},
 ): MarkerLayer {
-  const indices = routeMarkerIndices(track, heightfield);
+  const { indices, positions } = markerPositions(track, grid);
   const group = new Group();
   group.name = 'marker-layer';
   const markers = new Map<TerrainMarkerKind, MarkerSprite>();
@@ -397,26 +373,27 @@ export function createMarkerLayer(
     }
   };
 
-  const place = (marker: MarkerSprite, lon: number, lat: number) => {
-    marker.base.copy(heightfieldToLocal(heightfield, lon, lat, 1, lift));
+  const place = (marker: MarkerSprite, col: number, row: number) => {
+    marker.base.copy(gridToLocal(grid, col, row, 1, lift));
     marker.sprite.position.set(marker.base.x, marker.base.y * currentExaggeration, marker.base.z);
   };
-  const add = (kind: TerrainMarkerKind, index: number | null) => {
+  const add = (kind: TerrainMarkerKind, at: GridMarkers['start'] | null) => {
     const marker = createMarkerSprite(kind, palette);
     markers.set(kind, marker);
     group.add(marker.sprite);
-    if (index !== null) place(marker, track.lon[index] ?? 0, track.lat[index] ?? 0);
+    if (at !== null) place(marker, at.col, at.row);
     return marker;
   };
-  add('start', indices.start);
-  if (indices.finish !== null) add('finish', indices.finish);
-  if (indices.summit !== null) add('summit', indices.summit);
+  add('start', positions.start);
+  if (positions.finish !== null) add('finish', positions.finish);
+  if (positions.summit !== null) add('summit', positions.summit);
   const scrub = add('scrub', null);
   scrub.sprite.visible = false;
 
   return {
     group,
     indices,
+    positions,
     sprite: (kind) => markers.get(kind)?.sprite ?? null,
     fixedMarkers: () =>
       [...markers.values()]
@@ -454,14 +431,14 @@ export function createMarkerLayer(
         return;
       }
       const point = pointAtDistance(track, d);
-      place(scrub, point.lon, point.lat);
+      place(scrub, point.col, point.row);
       scrub.sprite.visible = true;
     },
     updateOcclusion(eye) {
       let changed = false;
       for (const marker of markers.values()) {
         if (!marker.sprite.visible) continue;
-        const hidden = isOccluded(heightfield, marker.sprite.position, eye, currentExaggeration);
+        const hidden = isOccluded(grid, marker.sprite.position, eye, currentExaggeration);
         const opacity = hidden ? OCCLUDED_OPACITY : 1;
         if (marker.material.opacity !== opacity) {
           marker.material.opacity = opacity;

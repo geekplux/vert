@@ -2,11 +2,15 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
+import type { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import type { GridTrack } from './grid';
 import type { Heightfield } from './heightfield';
+import type { TerrainMesh } from './mesh';
 import type { StageRenderer } from './stage';
 import { createRouteLayer } from './route';
-import { makeTrack } from './testing';
-import { TerrainView, type TerrainViewHandle } from './TerrainView';
+import { SceneTerrainView } from './SceneTerrainView';
+import { hills, makeTrack, sceneOn } from './testing';
+import { TerrainView, type TerrainViewHandle, type TerrainViewProps } from './TerrainView';
 
 // Counts route builds (each rebuild of the route also rebuilds the markers).
 vi.mock('./route', async (importOriginal) => {
@@ -254,6 +258,57 @@ describe('TerrainView', () => {
     vi.restoreAllMocks();
   });
 
+  it('draws style A’s colours on a host without Vert’s tokens, and the host’s own where it sets them', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const root = document.documentElement;
+    const colours = async () => {
+      const { factory } = fakeRenderer();
+      const ref = { current: null as TerrainViewHandle | null };
+      const track = makeTrack([
+        [46.002, 10.002],
+        [46.008, 10.004],
+      ]);
+      const view = render(
+        <TerrainView
+          ref={ref}
+          heightfield={heightfield()}
+          track={track}
+          exaggeration={1}
+          ariaLabel="Terrain"
+          createRenderer={factory}
+        />,
+      );
+      await flushFrames();
+      const scene = ref.current?.stage?.scene;
+      const mesh = scene?.getObjectByName('terrain') as TerrainMesh | undefined;
+      const hex = (name: string) =>
+        `#${(scene?.getObjectByName(name) as Line2 | undefined)?.material.color.getHexString() ?? ''}`;
+      const result = {
+        surface: `#${mesh?.material.uniforms.uSurface.value.getHexString() ?? ''}`,
+        ink: `#${mesh?.material.uniforms.uInk.value.getHexString() ?? ''}`,
+        route: hex('route'),
+        halo: hex('route-halo'),
+      };
+      view.unmount();
+      return result;
+    };
+    // No tokens at all (jsdom loads no stylesheet), then an empty and a blank one.
+    root.style.setProperty('--surface', '');
+    root.style.setProperty('--white', '   ');
+    expect(await colours()).toEqual({
+      surface: '#e6eaee',
+      ink: '#1b2a3a',
+      route: '#d9480f',
+      halo: '#ffffff',
+    });
+    root.style.setProperty('--route', '#0b7285');
+    root.style.setProperty('--ink', '#222222');
+    expect(await colours()).toMatchObject({ surface: '#e6eaee', ink: '#222222', route: '#0b7285' });
+    for (const name of ['--surface', '--white', '--route', '--ink'])
+      root.style.removeProperty(name);
+    vi.restoreAllMocks();
+  });
+
   it('builds the route once when the track changes in the render that brings the heightfield', async () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     const builds = vi.mocked(createRouteLayer);
@@ -274,7 +329,130 @@ describe('TerrainView', () => {
     rerender(<TerrainView {...props} heightfield={heightfield()} track={filled} />);
     await flushFrames();
     expect(builds).toHaveBeenCalledTimes(1);
-    expect(builds.mock.calls[0]?.[1]).toBe(filled);
+    // Built from the filled track (put on the grid once: its own distance and elevation arrays).
+    const built = builds.mock.calls[0]?.[1] as GridTrack | undefined;
+    expect(built?.cumulative).toBe(filled.cumulative);
+    expect(built?.ele).toBe(filled.ele);
     vi.restoreAllMocks();
+  });
+
+  describe('with a scene', () => {
+    const POINTS: [number, number][] = [
+      [10, 20],
+      [40, 30],
+      [70, 45],
+      [100, 60],
+    ];
+
+    it('takes a scene or a heightfield and track, never both', () => {
+      const scene = sceneOn(hills(), POINTS);
+      const base = { exaggeration: 1, ariaLabel: 'Terrain' };
+      const ok: TerrainViewProps[] = [
+        { ...base, scene },
+        { ...base, scene: null },
+        { ...base, heightfield: null },
+        { ...base, heightfield: heightfield(), track: null },
+      ];
+      expect(ok).toHaveLength(4);
+      // @ts-expect-error -- a scene and a heightfield together
+      const both: TerrainViewProps = { ...base, scene, heightfield: heightfield() };
+      // @ts-expect-error -- a scene with a track
+      const withTrack: TerrainViewProps = { ...base, scene, track: makeTrack([[46, 10]]) };
+      // @ts-expect-error -- neither
+      const neither: TerrainViewProps = { ...base };
+      expect([both, withTrack, neither]).toHaveLength(3);
+    });
+
+    it('takes a host’s own colours over its tokens when they mean something else', async () => {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+      const root = document.documentElement;
+      // A dark host: its --ink is light text, its --surface a dark card, its --route its accent.
+      root.style.setProperty('--ink', '#f0f0f0');
+      root.style.setProperty('--surface', '#101820');
+      root.style.setProperty('--route', '#00ff00');
+      const { factory } = fakeRenderer();
+      const ref = { current: null as TerrainViewHandle | null };
+      render(
+        <SceneTerrainView
+          ref={ref}
+          scene={sceneOn(hills(), POINTS)}
+          exaggeration={1}
+          ariaLabel="Terrain"
+          createRenderer={factory}
+          palette={{ surface: '#1d3346', ink: '#c9dbe6' }}
+          routePalette={{ route: '#ff8a3d', halo: '#0f2233', ink: '#e8f1f5' }}
+        />,
+      );
+      await flushFrames();
+      const scene = ref.current?.stage?.scene;
+      const mesh = scene?.getObjectByName('terrain') as TerrainMesh | undefined;
+      const line = (name: string) =>
+        (scene?.getObjectByName(name) as Line2 | undefined)?.material.color.getHexString();
+      expect(mesh?.material.uniforms.uSurface.value.getHexString()).toBe('1d3346');
+      expect(mesh?.material.uniforms.uInk.value.getHexString()).toBe('c9dbe6');
+      expect(line('route')).toBe('ff8a3d');
+      expect(line('route-halo')).toBe('0f2233');
+      for (const name of ['--ink', '--surface', '--route']) root.style.removeProperty(name);
+      vi.restoreAllMocks();
+    });
+
+    it.each([
+      ['TerrainView', TerrainView],
+      ['SceneTerrainView (the library’s)', SceneTerrainView],
+    ] as const)(
+      '%s drapes the route once per scene, its stored markers, and scrubs in the scene’s metres',
+      async (_, View) => {
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+        const builds = vi.mocked(createRouteLayer);
+        builds.mockClear();
+        const { factory } = fakeRenderer();
+        const ref = { current: null as TerrainViewHandle | null };
+        const onReady = vi.fn();
+        const scene = sceneOn(hills(), POINTS, { start: 200, summit: [72, 40] });
+        const props = { exaggeration: 1, ariaLabel: 'Terrain', createRenderer: factory, onReady };
+        const { rerender, container } = render(
+          <View ref={ref} {...props} scene={scene} scrub={null} />,
+        );
+        await flushFrames();
+        expect(onReady).toHaveBeenCalledTimes(1);
+        expect(builds).toHaveBeenCalledTimes(1);
+        const stage = ref.current?.stage;
+        const objects = stage?.scene;
+        expect(objects?.getObjectByName('route')).toBeDefined();
+        expect(objects?.getObjectByName('marker-start')).toBeDefined();
+        expect(objects?.getObjectByName('marker-finish')).toBeDefined();
+        expect(objects?.getObjectByName('marker-summit')).toBeDefined();
+        expect(screen.getByRole('img', { name: 'Terrain' }).parentElement?.tabIndex).toBe(0);
+        const scrub = objects?.getObjectByName('marker-scrub');
+        expect(scrub?.visible).toBe(false);
+
+        // Scrub in the scene's metres: the drawn route starts at 200 m, so 200 is its first point
+        // and anything before it clamps there.
+        rerender(<View ref={ref} {...props} scene={scene} scrub={200} />);
+        const atStart = scrub?.position.clone();
+        expect(scrub?.visible).toBe(true);
+        rerender(<View ref={ref} {...props} scene={scene} scrub={0} />);
+        expect(atStart && scrub?.position.equals(atStart)).toBe(true);
+        const middle = (scene.route.distance[0] ?? 0) + scene.summary.drawnLength / 2;
+        rerender(<View ref={ref} {...props} scene={scene} scrub={middle} />);
+        expect(atStart && scrub?.position.equals(atStart)).toBe(false);
+
+        // Re-rendering with the same scene object never rebuilds the route.
+        rerender(<View ref={ref} {...props} scene={scene} scrub={middle} exaggeration={2} />);
+        await flushFrames();
+        expect(builds).toHaveBeenCalledTimes(1);
+        await expectNoAxeViolations(container);
+
+        // A loop's scene has no ◉ finish; null draws nothing.
+        rerender(<View ref={ref} {...props} scene={sceneOn(hills(), POINTS, { finish: null })} />);
+        await flushFrames();
+        expect(builds).toHaveBeenCalledTimes(2);
+        expect(objects?.getObjectByName('marker-finish')).toBeUndefined();
+        rerender(<View ref={ref} {...props} scene={null} />);
+        await flushFrames();
+        expect(objects?.getObjectByName('route')).toBeUndefined();
+        vi.restoreAllMocks();
+      },
+    );
   });
 });

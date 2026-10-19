@@ -1,17 +1,18 @@
 {
   "name": "vert",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Turn one GPX file into a 3D terrain visualization and a poster.",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@8.6.10",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:lib": "vite build -c vite.lib.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,6 +21,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc -b",
     "sample": "node scripts/make-sample.mjs",
+    "bake": "node scripts/bake.ts",
     "fixtures": "node scripts/fetch-courses.mjs",
     "stories": "ladle serve",
     "stories:build": "ladle build",

@@ -6,7 +6,9 @@
  *
  * One off-screen `TerrainStage` (no controls, no overlays, no render loop) is reused between
  * renders: a new heightfield rebuilds its mesh, a new track its route, anything else is a uniform
- * or the camera. `releaseTerrainFigure` (or `dispose`) frees it and loses its WebGL context.
+ * or the camera. The track is put on the heightfield's grid with `gridTrackFromRun` (the stage
+ * works in grid space), once per heightfield and track. `releaseTerrainFigure` (or `dispose`)
+ * frees it and loses its WebGL context.
  *
  * Sizes: the figure box is `width × height` logical px (what the poster's `onFigureBox` reports)
  * and `pixelScale` output px per logical px (the preview's scale, or the export's). The model is
@@ -18,6 +20,8 @@
  */
 import type { RunTrack } from '../page/types';
 import type { ViewCamera } from '../terrain/camera';
+import type { GridTrack } from '../terrain/grid';
+import { gridTrackFromRun } from '../terrain/gridTrack';
 import type { Heightfield } from '../terrain/heightfield';
 import { DEFAULT_WALL_SHADE } from '../terrain/mesh';
 import type { TerrainPalette } from '../terrain/mesh';
@@ -119,6 +123,12 @@ export class TerrainFigureRenderer {
   private stage: TerrainStage | null = null;
   private stageCanvas: HTMLCanvasElement | null = null;
   private heightfield: Heightfield | null = null;
+  /** The last track on the last heightfield's grid, and what it was made from. */
+  private gridTrack: {
+    heightfield: Heightfield;
+    track: RunTrack;
+    grid: GridTrack;
+  } | null = null;
   private exaggeration = NaN;
   private disposed = false;
   private readonly options: TerrainFigureRendererOptions;
@@ -144,20 +154,34 @@ export class TerrainFigureRenderer {
       });
     }
     const { stage } = this;
+    const track = this.gridTrackFor(scene);
     if (scene.heightfield !== this.heightfield) {
       this.heightfield = scene.heightfield;
       this.exaggeration = scene.exaggeration;
+      // The track comes with the grid it belongs to: the route is built once, here.
       stage.show(scene.heightfield, {
         exaggeration: scene.exaggeration,
         view: scene.camera.view,
         reducedMotion: true,
+        track,
       });
     } else if (scene.exaggeration !== this.exaggeration) {
       this.exaggeration = scene.exaggeration;
       stage.setExaggeration(scene.exaggeration);
     }
-    stage.setTrack(scene.track);
+    stage.setTrack(track);
     return { stage, canvas: this.stageCanvas };
+  }
+
+  /** `scene.track` on `scene.heightfield`'s grid, converted once per heightfield and track. */
+  private gridTrackFor(scene: TerrainFigureScene): GridTrack | null {
+    const { heightfield, track } = scene;
+    if (!track) return null;
+    const cached = this.gridTrack;
+    if (cached?.heightfield === heightfield && cached.track === track) return cached.grid;
+    const grid = gridTrackFromRun(heightfield, track);
+    this.gridTrack = { heightfield, track, grid };
+    return grid;
   }
 
   /**

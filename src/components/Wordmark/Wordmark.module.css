@@ -35,8 +35,14 @@
   transform: translate(-50%, -50%);
 }
 
+/*
+ * Inert (during an export): greyed like the disabled header button beside it, in that button's
+ * --muted, but at full opacity (5.06:1 on --bg; the button's 0.8 gives 3.39:1). Still focusable,
+ * with its focus ring.
+ */
 .link[aria-disabled='true'] {
-  cursor: default;
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .link:focus-visible {

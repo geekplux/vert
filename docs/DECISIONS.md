@@ -889,7 +889,9 @@ of vendoring `dist-lib/`. Sean's rule: simple and easy to use, not over-engineer
   `import.meta.resolve('@geekplux/vert/package.json')`'s folder + `dist-lib/bake.js` (no extra
   export, no `.bin` shim, no shell).
 - **Publishing from GitHub Actions, no token.** `check.yml` (every pull request and push to
-  `main`; also called by the release) runs lint, typecheck, unit tests, both builds and the e2e;
+  `main`; also called by the release) runs lint, typecheck, unit tests, both builds and the e2e
+  (all but `e2e/touch.spec.ts`'s two swipe tests: headless Chromium on Linux does not scroll the
+  page for a CDP touch swipe, so those run only locally; about 6 minutes in all);
   `release.yml` runs on a `v<digit>*` tag, needs the check, refuses a tag that is not
   `v<package.json version>`, and runs `npm publish --provenance` with npm trusted publishing
   (OIDC). The first version goes up by hand, because npm sets a trusted publisher only on a

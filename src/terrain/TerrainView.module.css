@@ -13,8 +13,9 @@
   touch-action: pan-y;
 }
 
+/* A host sets --vert-focus to match its own focus ring; Vert's is --route. */
 .view:focus-visible {
-  outline: 2px solid var(--route);
+  outline: 2px solid var(--vert-focus, var(--route));
   outline-offset: 2px;
 }
 

@@ -85,7 +85,7 @@ Flat is the `view` prop, not a method: `'flat'` is top-down and north up, with n
   Pointer: press or drag anywhere on the plot. Touch: a tap, or a sideways drag past 8 px, sets the
   position; a vertical swipe scrolls the page and sets nothing.
 
-Both show a 2px `--route` focus ring, offset 2px.
+Both show a 2px focus ring, offset 2px, in `--vert-focus` (default `--route`).
 
 ## Scrub sync
 
@@ -168,6 +168,7 @@ your page already uses these names for something else, and both components follo
 | `--ink`            | `#1b2a3a`                     | terrain ridge lines (JS); start ring and summit fill (JS); profile line and fill (12%); the steepest climb's number |
 | `--muted`          | `#5b6b7a`                     | distance ticks and climb numbers in the profile                                                                     |
 | `--route`          | `#d9480f`                     | the route and scrub marker on the terrain (JS); the profile's scrub line and dot; the focus ring                    |
+| `--vert-focus`     | `--route`                     | the focus ring of the view and the profile (set it to your page's own focus colour)                                 |
 | `--white`          | `#ffffff`                     | the route's halo, start fill, summit edge, scrub ring (JS); the profile dot's ring                                  |
 | `--font-mono`      | IBM Plex Mono, …, `monospace` | ticks and climb numbers                                                                                             |
 | `--space-1`        | `4px`                         | climb numbers' inset                                                                                                |
@@ -176,8 +177,8 @@ your page already uses these names for something else, and both components follo
 `routePalette` (`route`, `halo`, `ink`) props override them.
 
 Contrast is yours to keep on your colours: `--muted` and `--ink` on your page and on `--surface`,
-at least 4.5:1; `--route` on your page, at least 3:1. The focus ring is a 2px `--route` outline,
-offset 2px.
+at least 4.5:1; `--route` (or `--vert-focus`) on your page, at least 3:1. The focus ring is a 2px
+outline in `--vert-focus`, falling back to `--route`, offset 2px.
 
 ### A dark page
 

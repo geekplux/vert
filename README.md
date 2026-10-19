@@ -143,20 +143,21 @@ Vert was designed with and for a color-weak runner, so color never carries infor
 - With `prefers-reduced-motion`, the intro animation becomes a fade.
 - axe-core reports 0 violations across every page state at desktop and phone widths.
 
-## Embed Vert in your site
+## Use it in your site
 
-`pnpm build:lib` writes a library to `dist-lib/`: one ES module, one CSS file and type
-declarations. It exports `TerrainView`, `ElevationProfile`, `decodeScene` and a scrub-sync API, so
-the view can follow a heart-rate or pace chart. The library has no network code and no geodesy: it
-draws a `.scene` file baked offline.
+Vert is also a library on npm, [`@geekplux/vert`](https://www.npmjs.com/package/@geekplux/vert):
+`TerrainView`, `ElevationProfile`, `decodeScene` and a scrub-sync API, so the view can follow a
+heart-rate or pace chart. It has no network code and no geodesy: it draws a `.scene` file that
+the package's `vert-bake` command bakes offline, on your machine, from a `.gpx` or a points file.
 
 ```sh
-pnpm bake my-run.gpx --out public/scenes   # → <id>.scene + <id>.scene.json, about 20–60 KB
+pnpm add @geekplux/vert three@0.186.1
+pnpm exec vert-bake my-run.gpx --out public/scenes   # → <id>.scene + <id>.scene.json, about 20–60 KB
 ```
 
 ```tsx
-import { ElevationProfile, TerrainView, decodeScene } from './vendor/vert/index.js';
-import './vendor/vert/vert.css';
+import { ElevationProfile, TerrainView, decodeScene } from '@geekplux/vert';
+import '@geekplux/vert/vert.css';
 
 const scene = decodeScene(new Uint8Array(await (await fetch(url)).arrayBuffer()));
 
@@ -165,7 +166,12 @@ function RunTerrain() {
   return (
     <>
       <div style={{ aspectRatio: '16 / 9' }}>
-        <TerrainView scene={scene} scrub={scrub} ariaLabel="3D terrain of my morning run" />
+        <TerrainView
+          scene={scene}
+          exaggeration={1.6}
+          scrub={scrub}
+          ariaLabel="3D terrain of my morning run"
+        />
       </div>
       <ElevationProfile scene={scene} scrub={scrub} onScrub={setScrub} />
     </>
@@ -174,24 +180,25 @@ function RunTerrain() {
 ```
 
 A scene holds a height grid and a route in local metres. It has no latitude, no longitude and no
-tile numbers. The full host guide (vendoring, caching, theming with CSS custom properties, syncing
-the scrub with a time chart, and testing) is in [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
+tile numbers. The full host guide (installing, baking, caching, theming with CSS custom
+properties, syncing the scrub with a time chart, and testing) is in
+[`docs/INTEGRATION.md`](https://github.com/geekplux/vert/blob/main/docs/INTEGRATION.md).
 
 ## Development
 
-| Command                      | What it does                                                    |
-| ---------------------------- | --------------------------------------------------------------- |
-| `pnpm dev`                   | Vite dev server                                                 |
-| `pnpm build`                 | Typecheck, then a production build to `dist/`                   |
-| `pnpm test`                  | Vitest unit tests (app, scene format, bake and Worker)          |
-| `pnpm test:e2e`              | Playwright against the production build, at 1440 and 390 wide   |
-| `pnpm lint`                  | ESLint and the Prettier check                                   |
-| `pnpm typecheck`             | `tsc -b` across the app, Node, scripts and Worker configs       |
-| `pnpm stories`               | The Ladle component workshop on http://localhost:61000          |
-| `pnpm build:lib`             | The embeddable library to `dist-lib/`                           |
-| `pnpm bake <in> --out <dir>` | Bake a `.gpx` or points `.json` into a `.scene` and its sidecar |
-| `pnpm worker:dev`            | Run the tile Worker locally                                     |
-| `pnpm posters`               | Regenerate the poster examples, screenshots and social card ¹   |
+| Command                      | What it does                                                        |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `pnpm dev`                   | Vite dev server                                                     |
+| `pnpm build`                 | Typecheck, then a production build to `dist/`                       |
+| `pnpm test`                  | Vitest unit tests (app, scene format, bake and Worker)              |
+| `pnpm test:e2e`              | Playwright against the production build, at 1440 and 390 wide       |
+| `pnpm lint`                  | ESLint and the Prettier check                                       |
+| `pnpm typecheck`             | `tsc -b` across the app, Node, scripts and Worker configs           |
+| `pnpm stories`               | The Ladle component workshop on http://localhost:61000              |
+| `pnpm build:lib`             | The npm package's contents (library and `vert-bake`) to `dist-lib/` |
+| `pnpm bake <in> --out <dir>` | Bake a `.gpx` or points `.json` into a `.scene` and its sidecar     |
+| `pnpm worker:dev`            | Run the tile Worker locally                                         |
+| `pnpm posters`               | Regenerate the poster examples, screenshots and social card ¹       |
 
 ¹ Needs `pnpm build && pnpm preview --port 4173` running, and macOS `sips` and `cwebp` (see the
 header of `scripts/capture-posters.mjs`).
@@ -219,6 +226,7 @@ docs/           plan, design spec, decisions, scene format, integration guide
 - [`docs/DECISIONS.md`](docs/DECISIONS.md): every design and engineering ruling, with the reasons
 - [`docs/SCENE.md`](docs/SCENE.md): the binary scene format, the bake and its privacy model
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md): how a host page embeds Vert
+- [`docs/PUBLISH.md`](docs/PUBLISH.md): how a release reaches npm
 - [`docs/PLAN.md`](docs/PLAN.md) and [`docs/PROGRESS.md`](docs/PROGRESS.md): how Vert was built,
   phase by phase
 

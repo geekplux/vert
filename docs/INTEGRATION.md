@@ -6,11 +6,11 @@ page has a `TerrainSlot` placeholder for it, so its examples are written for tha
 it is specific to Activities otherwise.
 
 Read with it: [`docs/SCENE.md`](SCENE.md) (the scene format and the bake, in full) and
-`dist-lib/README.md` (the library's own reference, shipped with it; source
+the package's `dist-lib/README.md` (the library's own reference, shipped with it; source
 [`src/vert-lib/README.md`](../src/vert-lib/README.md)). Where this guide and the code disagree, the
 code wins; please report it.
 
-Contents: [What you get](#1-what-you-get) · [Vendoring](#2-vendoring-dist-lib) ·
+Contents: [What you get](#1-what-you-get) · [Installing](#2-installing) ·
 [Scenes](#3-scenes) · [Baking](#4-baking) ·
 [Tile proxy policy](#5-tile-proxy-policy-for-offline-bakes) · [Attribution](#6-attribution) ·
 [Rendering](#7-rendering) · [CSS custom properties](#8-css-custom-properties) ·
@@ -19,11 +19,11 @@ Contents: [What you get](#1-what-you-get) · [Vendoring](#2-vendoring-dist-lib) 
 
 ## 1. What you get
 
-| piece                                | what it is                                                                                                                                                                                                                    |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<id>.scene` and `<id>.scene.json`   | One activity's terrain: a height grid and the drawn route in grid-local metres, with markers, climbs and times; its sidecar holds the size, a hash and whole-metre totals.                                                    |
-| `pnpm bake` (`node scripts/bake.ts`) | The command that makes them, offline, from a `.gpx` or a `.json` points file, on the machine that has the activity.                                                                                                           |
-| `dist-lib/` (`pnpm build:lib`)       | The library a host vendors: `TerrainView`, `ElevationProfile`, `decodeScene`, time ↔ distance helpers, the credit text. One ES module (98 KB, 31 KB gzipped) plus `vert.css` (2 KB), `LICENSE`, `VERSION` and a sample scene. |
+| piece                              | what it is                                                                                                                                                                                                                                                                                      |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<id>.scene` and `<id>.scene.json` | One activity's terrain: a height grid and the drawn route in grid-local metres, with markers, climbs and times; its sidecar holds the size, a hash and whole-metre totals.                                                                                                                      |
+| `vert-bake` (`pnpm bake` in Vert)  | The command that makes them, offline, from a `.gpx` or a `.json` points file, on the machine that has the activity.                                                                                                                                                                             |
+| `@geekplux/vert` on npm            | The library: `TerrainView`, `ElevationProfile`, `decodeScene`, time ↔ distance helpers, the credit text. One ES module (98 KB, 31 KB gzipped) plus `vert.css` (2 KB), `LICENSE`, `VERSION`, a sample scene and `vert-bake`; it is `dist-lib/` (`pnpm build:lib`), which a host can also vendor. |
 
 **Privacy model.** Everything georeferenced happens offline, in the bake on the owner's machine:
 it reads the coordinates, fetches elevation tiles by tile number, and writes a scene that holds no
@@ -46,9 +46,6 @@ in `docs/DECISIONS.md` ("Library for Activities") and `docs/SCENE.md` ("Forbidde
   format's defined fields (column 0 lies within about 5.6° east of 180°); the decoded-object scan
   still covers them.
 
-**Vendoring into a public repository.** Vert's repository is public (since 2026-10-19, MIT), so a
-public host such as `geekplux/activities` may commit `dist-lib/`; its `LICENSE` (Vert's) travels with it.
-
 **For Activities, the whole change**, each item explained below:
 
 - **Approval first.** Embedding Vert reverses an Activities decision marked "do not relitigate"
@@ -56,8 +53,8 @@ public host such as `geekplux/activities` may commit `dist-lib/`; its `LICENSE` 
   later as a package"), adds a runtime dependency (`three`, exact) and a vendored folder. Sean
   approved it on 2026-10-19 (Vert's `docs/DECISIONS.md`); Activities records it in its own
   `docs/DECISIONS.md`.
-- `vendor/vert/` committed, ignored by ESLint and Prettier; `three@0.186.1` installed
-  ([Vendoring](#2-vendoring-dist-lib)); a pin test under `scripts/`.
+- `@geekplux/vert` and `three@0.186.1` installed ([Installing](#2-installing)). Before 0.2.0
+  Activities vendored `vendor/vert/` with a pin test; both go when it moves to the package.
 - `public/scenes/` with the baked pairs, the `virtual:vert-scenes` plugin, a `/scenes/*` rule in
   `public/_headers` and its line in `deploy.test.ts` ([Scenes](#3-scenes)).
 - In `Activity.tsx`, `TerrainSlot` replaced by the worked example's `TerrainCard` (in
@@ -83,69 +80,72 @@ public host such as `geekplux/activities` may commit `dist-lib/`; its `LICENSE` 
 
 - A script that bakes chosen activities on Sean's machine ([Baking](#from-activities-importer)).
 
-## 2. Vendoring `dist-lib/`
+## 2. Installing
 
-> **Vert is public.** Vendoring publishes Vert's bundle, declarations and README wherever the
-> host's repository is visible; since Vert's own repository is public (2026-10-19, MIT), a public
-> host such as `geekplux/activities` may vendor it. The MIT licence asks that its notice travel
-> with copies: `dist-lib/LICENSE` is Vert's, so copy the folder whole.
+Install the package from npm. Vendoring the built folder (below) is the alternative for a host
+that cannot install packages.
 
-A host whose build cannot see Vert's repository (Activities' Cloudflare build clones only its own)
-copies the built files into its own repository and commits them.
+### From npm
+
+```sh
+pnpm add @geekplux/vert three@0.186.1   # or npm install / yarn add
+```
+
+```tsx
+import { ElevationProfile, TerrainView, decodeScene, type Scene } from '@geekplux/vert';
+import '@geekplux/vert/vert.css';
+```
+
+| path                                                                  | what                                                                                           |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `@geekplux/vert`                                                      | the library (`dist-lib/index.js`) and its declarations                                         |
+| `@geekplux/vert/vert.css`                                             | the stylesheet                                                                                 |
+| `@geekplux/vert/fixtures/coosa-backcountry.scene` (and `.scene.json`) | the sample scene (public, no coordinates), for your tests ([Testing](#10-testing-in-the-host)) |
+| `pnpm exec vert-bake`                                                 | the bake, for the machine that has the activities ([Baking](#4-baking))                        |
+
+The package is `dist-lib/` as `pnpm build:lib` writes it, with Vert's `LICENSE` and README.
+`package.json` and your lockfile pin the version: `^0.2.0` takes 0.2.x and never 0.3, and before
+1.0 a breaking change always bumps the minor version (the [changelog](#11-changelog) says what to
+change). The package has no dependencies, only peers: `react` 19 and `three` 0.186.
+
+### Or vendor `dist-lib/`
+
+A host that cannot install packages copies the built folder into its own repository and commits
+it. The MIT licence asks that its notice travel with copies: `dist-lib/LICENSE` is Vert's, so copy
+the folder whole.
 
 ```sh
 # In Vert, from a clean, committed checkout (the version records HEAD's sha, not local edits):
 pnpm install --frozen-lockfile
 pnpm build:lib
-# In the host (here Activities, next to vert/):
+# In the host, next to vert/:
 rm -rf vendor/vert && mkdir -p vendor && cp -R ../vert/dist-lib vendor/vert
 ```
 
-`dist-lib/` holds everything a host copies:
-
-| file                                                 | what                                                                                                     |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `index.js`, `vert.css`                               | the library and its stylesheet                                                                           |
-| `index.d.ts`, `types/`                               | the declarations                                                                                         |
-| `README.md`                                          | the library's own reference                                                                              |
-| `LICENSE`                                            | Vert's MIT licence, which travels with copies                                                            |
-| `VERSION`                                            | `VERT_LIB_VERSION` and a newline ([Version](#version))                                                   |
-| `fixtures/coosa-backcountry.scene` and `.scene.json` | the committed sample scene (public, no coordinates), for your tests ([Testing](#10-testing-in-the-host)) |
-
-Keep the folder as it is built: `vendor/vert/` at the host's root (outside `src/`) works, and keep it out of the
-host's lint and format checks, since `index.js` is minified. For Activities:
-
-- `eslint.config.js`: add `'vendor'` to `globalIgnores([...])`.
-- `.prettierignore`: add `vendor/`.
-
-### Version
-
-`VERT_LIB_VERSION` is `package.json`'s version plus the short git sha the library was built from,
-for example `0.1.1+1face09`; `.dirty` is appended when the checkout had uncommitted changes
-(`0.1.1+1face09.dirty`: not that commit's build, so do not vendor it), and it is `0.1.1+nogit`
-outside a git checkout. `dist-lib/VERSION` holds the same string and a newline, so you can read
-what is vendored without running or searching the bundle.
-
-Pin it with a test, so a re-vendor changes one line on purpose. In Activities it goes under
-`scripts/` (say `scripts/vendor.test.ts`): `tsconfig.node.json` covers `scripts/` with Node's
-types, and Vitest collects `scripts/**/*.test.ts`, whereas `tsconfig.app.json` gives `src/` only
-`vite/client` types, so `node:fs` there fails to typecheck.
+`dist-lib/` holds `index.js` and `vert.css`, the declarations (`index.d.ts`, `types/`), `bake.js`
+(the bake as one Node module), `README.md`, `LICENSE`, `VERSION` and `fixtures/`. Import from
+`vendor/vert/index.js` and `vendor/vert/vert.css` instead of the package names; run the bake as
+`node vendor/vert/bake.js`, always with `--cache` outside the repository. Keep the folder out of
+your lint and format checks (`index.js` is minified), and pin `VERSION` with a test so a re-vendor
+changes one line on purpose:
 
 ```ts
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 
-/** The Vert build in vendor/vert/, pinned: a re-vendor must change this line on purpose. */
-const PINNED = '0.1.1+1face09';
-
-describe('vendored Vert', () => {
-  it('is the pinned build', () => {
-    // dist-lib/VERSION is VERT_LIB_VERSION; reading it needs no three.js.
-    expect(readFileSync('vendor/vert/VERSION', 'utf8')).toBe(`${PINNED}\n`);
-  });
+it('vendors the pinned Vert build', () => {
+  expect(readFileSync('vendor/vert/VERSION', 'utf8')).toBe('0.2.0+1face09\n');
 });
 ```
+
+### Version
+
+`VERT_LIB_VERSION` is `package.json`'s version plus the short git sha the library was built from,
+for example `0.2.0+1face09`; `.dirty` is appended when the checkout had uncommitted changes
+(`0.2.0+1face09.dirty`: not that commit's build, never published, do not vendor it), and it is
+`0.2.0+nogit` outside a git checkout. `dist-lib/VERSION` holds the same string and a newline, and
+`vert-bake --version` prints it.
 
 ### Packages the host installs
 
@@ -154,22 +154,24 @@ and nothing else.
 
 - **`three`, at exactly the version Vert builds against: 0.186.1** (Vert's lockfile and
   `node_modules/three/package.json`). three.js makes breaking changes in minor releases, and the
-  `examples/jsm` modules move with it, so pin it: `pnpm add --save-exact three@0.186.1`. When Vert
-  moves to a new three, its changelog entry says so.
+  `examples/jsm` modules move with it, so pin it: `pnpm add --save-exact three@0.186.1`. The
+  package's peer range is `^0.186.1` (0.186.x); when Vert moves to a new three, its changelog
+  entry says so.
 - **`react` 19** (Vert builds with 19.3.0): the components take `ref` as a prop, which needs
   React 19. `react-dom` is your own (the library does not import it).
 - **`@types/three` (0.186.0, dev)**: only if your TypeScript checks declaration files. The
   declarations import `WebGLRenderer` from `three`, which ships no types: with `skipLibCheck: false`
-  that is `TS7016` in `vendor/vert/types/vert-lib/types.d.ts`; with `skipLibCheck: true` (as
-  Activities has) everything type-checks without it, and only `TerrainRenderer`'s members become
-  untyped. To add it: `pnpm add -D --save-exact @types/three@0.186.0`.
+  that is `TS7016` in `types/vert-lib/types.d.ts`; with `skipLibCheck: true` (as Activities has)
+  everything type-checks without it, and only `TerrainRenderer`'s members become untyped. To add
+  it: `pnpm add -D --save-exact @types/three@0.186.0`.
 
 ### TypeScript
 
-Import from `vendor/vert/index.js`. The declarations' relative imports carry `.js` extensions, so
-`moduleResolution` `bundler`, `node16` and `nodenext` all resolve them (checked under `strict` with
-Activities' own options: `verbatimModuleSyntax`, `noUncheckedSideEffectImports`,
-`noUncheckedIndexedAccess`). The side-effect import `vendor/vert/vert.css` needs a `*.css` module
+The package's `exports` carry a `types` condition, and the declarations' relative imports carry
+`.js` extensions, so `moduleResolution` `bundler`, `node16` and `nodenext` all resolve them
+(checked under `strict` with Activities' own options: `verbatimModuleSyntax`,
+`noUncheckedSideEffectImports`, `noUncheckedIndexedAccess`); the old `node` (`node10`) resolution
+does not read `exports`. The side-effect import `@geekplux/vert/vert.css` needs a `*.css` module
 declaration, which `vite/client` (in Activities' `types`) provides.
 
 ### Load it lazily
@@ -178,7 +180,7 @@ three.js is most of the weight: the terrain chunk of the example in
 [Rendering](#a-worked-example-activities-terrain-card) is 657 KB minified (172 KB gzipped) with
 three inside. Import Vert only from a module you load with `import()`, so it loads on pages that
 show a scene and nowhere else: `React.lazy` does that. Everything the page itself imports from
-`vendor/vert` must be `import type`, or the bundle comes back into the page's chunk.
+`@geekplux/vert` must be `import type`, or the bundle comes back into the page's chunk.
 
 ```tsx
 // Excerpt; the whole card is in "A worked example" below.
@@ -199,17 +201,15 @@ const VertTerrain = lazy(() => import('../vert/VertTerrain.tsx'));
 ```
 
 Vite warns that the chunk is over 500 KB; that is expected (`build.chunkSizeWarningLimit` silences
-it).
+it). The package declares `sideEffects: ["*.css"]`, so a bundler drops what you do not import.
 
 ### Updating
 
-1. In Vert: read the changelog entries since your version ([below](#11-changelog)); breaking
-   changes come first.
-2. `pnpm build:lib` from a clean checkout of the version you want.
-3. In the host: replace `vendor/vert/` as above (check `VERSION` has no `.dirty`), bump `PINNED`,
-   install the `three` version the entry names, run your tests, and commit the folder in one
-   commit ("Vendor Vert 0.2.0+abc1234").
-4. A new **scene format version** needs a re-bake of every scene before the new library ships:
+1. Read the [changelog](#11-changelog) entries since your version; breaking changes come first.
+2. `pnpm add @geekplux/vert@<version>` (vendoring: `pnpm build:lib` from a clean checkout of that
+   version, replace `vendor/vert/`, check `VERSION` has no `.dirty`, bump the pin), install the
+   `three` version the entry names, run your tests, commit.
+3. A new **scene format version** needs a re-bake of every scene before the new library ships:
    a library that knows only version 2 refuses version-1 files (`SceneError` reason `version`), and
    the other way round.
 
@@ -283,7 +283,7 @@ declare module 'virtual:vert-scenes' {
 ### Fetching
 
 ```ts
-import { decodeScene, SceneError, type Scene } from '../../vendor/vert/index.js';
+import { decodeScene, SceneError, type Scene } from '@geekplux/vert';
 
 /**
  * The scene `<id>.scene` from `public/scenes/`, or null when it is not there or not a scene.
@@ -300,7 +300,7 @@ export async function loadScene(
     return decodeScene(await response.arrayBuffer());
   } catch (error) {
     // A missing file can come back as the SPA's index.html with 200: reason 'magic'.
-    // 'version' is a scene newer than the vendored library: update dist-lib.
+    // 'version' is a scene newer than the installed library: update Vert.
     if (error instanceof SceneError) return null;
     throw error;
   }
@@ -388,28 +388,32 @@ What Activities built (its `scripts/import/sceneGuard.ts`, `scripts/deploy/check
 ## 4. Baking
 
 ```sh
-pnpm bake <input> --out <dir> [--id <id>] [--trim <metres>] [--tiles <url-template>] [--cache <dir>]
+pnpm exec vert-bake <input> --out <dir> [--id <id>] [--trim <metres>] [--tiles <url-template>] [--cache <dir>]
 ```
 
-`pnpm bake` is `node scripts/bake.ts`. It needs Node 22.18 or later (it runs Vert's TypeScript
-directly) and no installed packages: no `pnpm install` is needed in Vert to bake. It runs on the
-machine that has the activity, never in a host's build.
+`vert-bake` is the package's command (`dist-lib/bake.js`, the bake bundled into one Node module
+that imports only Node's built-ins); without installing, `npx -p @geekplux/vert vert-bake` (never
+`npx vert-bake`: that names another, unrelated package). In Vert's checkout the same command
+line is `pnpm bake` (`node scripts/bake.ts`, Vert's TypeScript run directly, no `pnpm install`
+needed). Both need Node 22.18 or later. It runs on the machine that has the activity, never in a
+host's build.
 
-| option    | default                                           | meaning                                                                                                                                                  |
-| --------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<input>` | (required)                                        | one `.gpx`, or one `.json` points file (below); relative to the current directory; `-` reads a points file from standard input (needs `--id`)            |
-| `--out`   | (required)                                        | the directory to write `<id>.scene` and `<id>.scene.json` to; created if needed; relative to the current directory                                       |
-| `--id`    | from the input's file name (required with `-`)    | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                                     |
-| `--trim`  | `200`                                             | metres hidden at each end of the route, 0–10,000; `0` keeps the ends                                                                                     |
-| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png` | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                                         |
-| `--cache` | Vert's `scripts/.cache/terrarium/`                | the tile cache, `{z}/{x}/{y}.png`; the default sits beside the script, whatever the current directory. It holds tile numbers: never commit or publish it |
-| `-h`      |                                                   | the usage text                                                                                                                                           |
+| option    | default                                                                                                                   | meaning                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<input>` | (required)                                                                                                                | one `.gpx`, or one `.json` points file (below); relative to the current directory; `-` reads a points file from standard input (needs `--id`) |
+| `--out`   | (required)                                                                                                                | the directory to write `<id>.scene` and `<id>.scene.json` to; created if needed; relative to the current directory                            |
+| `--id`    | from the input's file name (required with `-`)                                                                            | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                          |
+| `--trim`  | `200`                                                                                                                     | metres hidden at each end of the route, 0–10,000; `0` keeps the ends                                                                          |
+| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`                                                                         | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                              |
+| `--cache` | `node_modules/.cache/vert-bake/` in the current directory (`vert-bake`); Vert's `scripts/.cache/terrarium/` (`pnpm bake`) | the tile cache, `{z}/{x}/{y}.png`. It holds tile numbers: never commit or publish it                                                          |
+| `-v`      |                                                                                                                           | the version (`VERT_LIB_VERSION` for `vert-bake`, `package.json`'s for `pnpm bake`)                                                            |
+| `-h`      |                                                                                                                           | the usage text                                                                                                                                |
 
 **Exit codes**: `0` both files written; `1` the bake failed and nothing was written (unreadable or
 invalid input, an id that reads as a coordinate of the run, a route too short for the trim, a tile
 problem, a privacy finding, a write error); `2` a usage error (arguments, `--trim` out of range, a
 malformed `--id`, a default id that looks like a timestamp, `-` without `--id`). An older Node
-refuses the `.ts` entry before the bake starts. Warnings go to stderr with exit 0.
+refuses `pnpm bake`'s `.ts` entry before the bake starts. Warnings go to stderr with exit 0.
 
 ### Input: GPX or points
 
@@ -500,7 +504,8 @@ mistake) shows there; to draw the route on the terrain instead, leave `ele` out 
 
 ### A worked example
 
-From Vert's checkout, the bundled sample into a host's `public/scenes/`:
+From Vert's checkout, the bundled sample into a host's `public/scenes/` (in a host,
+`pnpm exec vert-bake <file> …` takes the same arguments):
 
 ```sh
 pnpm bake public/samples/coosa-backcountry.gpx --out ../host/public/scenes --id coosa-sample
@@ -524,32 +529,30 @@ Nothing printed, errors included, holds a coordinate, a bound, a tile x/y or a t
 
 ### From a host's importer
 
-The bake lives in Vert's repository and Activities' Cloudflare build cannot see it, so scenes are
-baked on Sean's machine and committed; the deployed build only copies them. Activities'
-`pnpm run import` (`scripts/import/scenes.ts`, with Vert checked out next to it) bakes the
+Scenes are baked on the owner's machine and committed; a deployed build only copies them.
+Activities' `pnpm run import` (`scripts/import/scenes.ts`, with Vert checked out next to it until
+it installs the package) bakes the
 activities its config lists (scenes are opt-in, each with its own `trim`, and an `elevation`
 option, `file` or `terrain`, that leaves `ele` out of the points for a recorder it does not
 trust), and removes pairs no longer listed. As of 0.1.0 it writes each points file to a private
 temporary folder, owned by a child process that removes it on exit and on signals.
 
 With 0.1.1 a host can pipe the points to the bake instead, so no coordinate file touches disk
-(Activities moves to this with its next sync). The recommended pattern:
+(Activities moves to this with its next sync). The recommended pattern, with the package
+installed (from a checkout next to the host, the script is `'../vert/scripts/bake.ts'`):
 
 ```ts
+import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// The package's bin, run with this Node (no shell, no `.bin` shim).
+const VERT = dirname(fileURLToPath(import.meta.resolve('@geekplux/vert/package.json')));
+const BAKE = join(VERT, 'dist-lib', 'bake.js');
+
 const result = spawnSync(
   process.execPath,
-  [
-    '../vert/scripts/bake.ts',
-    '-',
-    '--id',
-    id,
-    '--out',
-    'public/terrain',
-    '--trim',
-    String(trim),
-    '--cache',
-    cacheDir,
-  ],
+  [BAKE, '-', '--id', id, '--out', 'public/terrain', '--trim', String(trim), '--cache', cacheDir],
   {
     input: JSON.stringify({ points }),
     encoding: 'utf8',
@@ -566,9 +569,10 @@ standard input as a stream, so any size up to the 128 MB limit goes through a pi
   a tile cache it could not write), showing the bake's words; this is what Activities does. Then
   run your own guard on the pair (Activities' scene guard), and record the scene's hash and the
   [time offset](#scrub-sync-with-a-time-chart) next to its id.
-- Always pass `--cache`: without it the tiles land in `../vert/scripts/.cache/terrarium/`, inside
-  Vert's checkout. The cache's paths are tile numbers, that is locations: keep it outside both
-  repositories (or in an ignored folder), never committed or published.
+- Always pass `--cache`: without it the tiles land in `node_modules/.cache/vert-bake/` under the
+  current directory (`vert-bake`) or in `../vert/scripts/.cache/terrarium/`, inside Vert's
+  checkout (`pnpm bake`). The cache's paths are tile numbers, that is locations: keep it outside
+  both repositories (or in an ignored folder), never committed or published.
 
 ## 5. Tile proxy policy for offline bakes
 
@@ -813,7 +817,7 @@ passes on a copy of it):
        {more.length ? (
 ```
 
-**The card, page-side**, which replaces `TerrainSlot` (it imports nothing from `vendor/vert`). It
+**The card, page-side**, which replaces `TerrainSlot` (it imports nothing from `@geekplux/vert`). It
 renders only for an activity with a baked scene, and it is the same size in every state: a 16:9 box
 (at most 420 px tall) and a row of fixed height under it, empty in the ghost, the Suspense fallback
 and the error fallback, filled once the scene is drawn. `TerrainCardGhost` renders nothing without
@@ -1009,8 +1013,8 @@ import {
   type Scene,
   type TerrainViewHandle,
   type TerrainViewMode,
-} from '../../vendor/vert/index.js';
-import '../../vendor/vert/vert.css';
+} from '@geekplux/vert';
+import '@geekplux/vert/vert.css';
 import frame from '../components/TerrainCard.module.css';
 import { loadScene } from './loadScene.ts';
 import styles from './VertTerrain.module.css';
@@ -1573,7 +1577,7 @@ import {
   VERT_LIB_VERSION,
   decodeScene,
   type TerrainRenderer,
-} from '../../vendor/vert/index.js';
+} from '@geekplux/vert';
 
 const scene = decodeScene(readFileSync('public/scenes/8071241781.scene'));
 
@@ -1631,13 +1635,13 @@ it('renders the terrain and drives the scrub from the profile', async () => {
   expect(onScrub).toHaveBeenLastCalledWith(scene.route.distance[scene.route.distance.length - 1]);
   fireEvent.keyDown(slider, { key: 'Escape' });
   expect(onScrub).toHaveBeenLastCalledWith(null);
-  expect(VERT_LIB_VERSION).toMatch(/^0\.1\.1\+/);
+  expect(VERT_LIB_VERSION).toMatch(/^0\.2\.0\+/);
 });
 ```
 
 A committed scene is fine as a fixture (it holds no coordinates). Building one needs Vert's
-repository, so tests use a baked file: `dist-lib/fixtures/coosa-backcountry.scene` (and its
-sidecar) comes with the library for that.
+repository, so tests use a baked file: `@geekplux/vert/fixtures/coosa-backcountry.scene` (and
+its sidecar; `dist-lib/fixtures/` when vendored) comes with the library for that.
 
 **axe.** Run it in a real browser, where the canvas draws and colours resolve: Activities'
 Playwright suite (`@axe-core/playwright`, 0 violations at 1440, 768 and 390) covers the Activity
@@ -1656,6 +1660,22 @@ Newest first. Each entry: the version, the date, then **breaking changes first**
 change: a new scene format version and the re-bake it needs, a new `three` version, a changed prop
 or handle method), then additions, then fixes. A host updating across several versions reads every
 entry in between.
+
+### 0.2.0 (2026-10-19)
+
+Vert is on npm as **`@geekplux/vert`**. No breaking change to the library or the scenes: same
+scene format (version 1), same props and handle, same `three` 0.186.1. Install it instead of
+vendoring ([Installing](#2-installing)).
+
+- **The package**: `import … from '@geekplux/vert'`, `import '@geekplux/vert/vert.css'`, the
+  sample scene at `@geekplux/vert/fixtures/…`. Peers: `react` 19 and `three` 0.186; no
+  dependencies.
+- **`vert-bake`**: the bake as the package's command (`pnpm exec vert-bake`), the same arguments,
+  output and exit codes as `pnpm bake`. Without `--cache` its tiles go to
+  `node_modules/.cache/vert-bake/` in the current directory. `dist-lib/bake.js` is that command
+  for a host that vendors.
+- **`--version`** (`-v`) on both commands.
+- Vendoring still works, and `dist-lib/` keeps `VERSION`.
 
 ### 0.1.1 (2026-10-19)
 

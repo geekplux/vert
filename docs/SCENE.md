@@ -483,6 +483,9 @@ pnpm bake <input> --out <dir> [--id <id>] [--trim <metres>] [--tiles <url-templa
 needs Node 22.18 or later (`engines.node`, `.nvmrc`): it runs the TypeScript in `src/` directly,
 with Node's type stripping and a small resolve hook for `src/`'s extensionless imports (an older
 Node refuses the `.ts` entry before it can say so). No dependency, DOM or WebGL.
+The npm package ships the same command as `vert-bake` (`dist-lib/bake.js`, built by
+`vite.bake.config.ts` from `scripts/bake/bin.ts`: one Node module importing only Node's built-ins);
+it differs only in its default `--cache`, `node_modules/.cache/vert-bake/` in the current directory.
 Integrating the files into a host page is `docs/INTEGRATION.md`'s subject.
 
 | option    | default                                              | meaning                                                                                         |

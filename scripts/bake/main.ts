@@ -1,6 +1,6 @@
 /**
  * `pnpm bake`'s command line: reads the arguments, bakes, writes `<out>/<id>.scene` and
- * `<out>/<id>.scene.json`, prints a summary. Usage in {@link USAGE} and docs/SCENE.md ("Baking a
+ * `<out>/<id>.scene.json`, prints a summary. Usage in {@link usage} and docs/SCENE.md ("Baking a
  * scene").
  *
  * Nothing printed (summary or error) holds a coordinate, a bound, a tile x/y or a tile URL: the
@@ -15,6 +15,7 @@ import { checkDefaultIdTimestamp, checkExplicitId, idFromFileName } from './id';
 import { STDIN_INPUT, readInput, readStdinInput } from './input';
 import { DEFAULT_TRIM_M, MAX_TRIM_M, bakeScene, type BakedScene } from './pipeline';
 import {
+  BAKE_VERSION,
   DEFAULT_CACHE_DIR,
   DEFAULT_TILE_TEMPLATE,
   createTileSource,
@@ -28,7 +29,26 @@ import {
   type FileOps,
 } from './write';
 
-export const USAGE = `Usage: pnpm bake <input> --out <dir> [options]
+/** What differs between `pnpm bake` in Vert's checkout and the packaged `vert-bake` command. */
+export interface BakeDefaults {
+  /** How the usage text names the command. */
+  readonly command: string;
+  /** The tile cache when `--cache` is not given. */
+  readonly cache: string;
+  /** How the usage text names that cache. */
+  readonly cacheLabel: string;
+}
+
+/** `pnpm bake` (scripts/bake.ts): the cache sits beside the script, in Vert's checkout. */
+export const CHECKOUT_DEFAULTS: BakeDefaults = {
+  command: 'pnpm bake',
+  cache: DEFAULT_CACHE_DIR,
+  cacheLabel: 'scripts/.cache/terrarium',
+};
+
+/** The usage text. */
+export function usage({ command, cacheLabel }: BakeDefaults = CHECKOUT_DEFAULTS): string {
+  return `Usage: ${command} <input> --out <dir> [options]
 
 Bakes one activity (.gpx, or a .json points file; - reads a points file from
 standard input) into <dir>/<id>.scene and <dir>/<id>.scene.json for a host page
@@ -41,9 +61,11 @@ Options:
   --trim <metres>   metres hidden at each end of the route (default ${String(DEFAULT_TRIM_M)}; 0 keeps them)
   --tiles <url>     tile URL template with {z} {x} {y}
                     (default ${DEFAULT_TILE_TEMPLATE})
-  --cache <dir>     tile cache (default scripts/.cache/terrarium)
+  --cache <dir>     tile cache (default ${cacheLabel})
+  -v, --version     print the version
   -h, --help        show this help
 `;
+}
 
 export interface CliArguments {
   readonly input: string;
@@ -57,10 +79,13 @@ export interface CliArguments {
 /**
  * The command line's arguments, checked.
  *
- * @returns null when help was asked for.
+ * @returns `'help'` or `'version'` when either was asked for.
  * @throws UsageError for anything that cannot be understood.
  */
-export function parseCli(argv: readonly string[]): CliArguments | null {
+export function parseCli(
+  argv: readonly string[],
+  defaults: BakeDefaults = CHECKOUT_DEFAULTS,
+): CliArguments | 'help' | 'version' {
   let parsed;
   try {
     parsed = parseArgs({
@@ -74,6 +99,7 @@ export function parseCli(argv: readonly string[]): CliArguments | null {
         tiles: { type: 'string' },
         cache: { type: 'string' },
         help: { type: 'boolean', short: 'h' },
+        version: { type: 'boolean', short: 'v' },
       },
     });
   } catch (error) {
@@ -81,7 +107,8 @@ export function parseCli(argv: readonly string[]): CliArguments | null {
     throw new UsageError(error instanceof Error ? error.message : 'Unreadable arguments.');
   }
   const { values, positionals } = parsed;
-  if (values.help) return null;
+  if (values.help) return 'help';
+  if (values.version) return 'version';
   if (positionals.length !== 1) throw new UsageError('Give exactly one input file.');
   const [input = ''] = positionals;
   if (!values.out) throw new UsageError('--out <dir> is required.');
@@ -101,7 +128,7 @@ export function parseCli(argv: readonly string[]): CliArguments | null {
     id: values.id === undefined ? null : checkExplicitId(values.id),
     trim,
     tiles: values.tiles ?? DEFAULT_TILE_TEMPLATE,
-    cache: values.cache ?? DEFAULT_CACHE_DIR,
+    cache: values.cache ?? defaults.cache,
   };
 }
 
@@ -217,11 +244,19 @@ export interface Io {
 }
 
 /** Runs the command line; resolves to the exit code (0 done, 1 bake failed, 2 usage). */
-export async function main(argv: readonly string[], io: Io): Promise<number> {
+export async function main(
+  argv: readonly string[],
+  io: Io,
+  defaults: BakeDefaults = CHECKOUT_DEFAULTS,
+): Promise<number> {
   try {
-    const args = parseCli(argv);
-    if (!args) {
-      io.stdout(USAGE);
+    const args = parseCli(argv, defaults);
+    if (args === 'help') {
+      io.stdout(usage(defaults));
+      return 0;
+    }
+    if (args === 'version') {
+      io.stdout(`${BAKE_VERSION}\n`);
       return 0;
     }
     const outcome = await runBake(args);
@@ -230,7 +265,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     return 0;
   } catch (error) {
     if (error instanceof UsageError) {
-      io.stderr(`vert-bake: ${error.message}\n\n${USAGE}`);
+      io.stderr(`vert-bake: ${error.message}\n\n${usage(defaults)}`);
       return 2;
     }
     io.stderr(`vert-bake: ${printableMessage(error)}\nNothing was written.\n`);

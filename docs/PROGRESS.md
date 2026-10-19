@@ -164,8 +164,24 @@ Gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:lib`
 tests, 22 skipped without the git-ignored tile cache); `pnpm test:e2e` 46 passed, 10 skipped (the
 touch spec at 1440, the exports at 390).
 
+## Library 8: npm package (2026-10-19)
+
+Vert as `@geekplux/vert` on npm (rulings in DECISIONS.md "Library 8"); version 0.2.0, no breaking
+change, branch `npm-package`.
+
+| Done | Item                                                                         | Notes                                                                                   |
+| ---- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [x]  | Manifest: name, `exports`, `files`, peers, `bin`, `prepublishOnly`           | `pnpm pack` holds only `dist-lib/**`, `package.json`, `LICENSE`, `README.md`.           |
+| [x]  | `vert-bake`: `dist-lib/bake.js` (vite.bake.config.ts), `--version`           | `scripts/bake/bin.test.ts` builds it and bakes from stdin to `pnpm bake`'s exact bytes. |
+| [x]  | Scratch host from the tarball: types (bundler, nodenext), CSS, bin, fixtures | Outside the repo; see the PR.                                                           |
+| [x]  | GitHub Actions: `check.yml`, `release.yml` (trusted publishing)              | `docs/PUBLISH.md`: the first publish by hand, then a tag per release.                   |
+| [x]  | INTEGRATION.md §2 "Installing" (npm first, vendoring after), §4, changelog   | README "Use it in your site"; SCENE.md and the library README name `vert-bake`.         |
+
 ## Needs Sean
 
+- **Publish 0.2.0** (`docs/PUBLISH.md`): merge the `npm-package` PR, `npm login` and
+  `pnpm publish` from a clean `main` once, add the trusted publisher on npmjs.com; later releases
+  are a version bump and a `v<version>` tag.
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one
   poster from each, and judge whether at least 8 are worth printing. The agent pass is above.
 - **Phase 4, ruled 2026-10-19** (DECISIONS.md "Sean's rulings on embedding"): embedding and

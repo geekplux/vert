@@ -1,0 +1,63 @@
+# The gate on every push to main and every pull request; release.yml runs it before publishing.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request cancels the older run.
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The version comes from package.json's packageManager.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Build the library
+        run: pnpm build:lib
+
+      # Tiles are synthetic in the e2e (e2e/tiles.ts): no network beyond the runner.
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Except e2e/touch.spec.ts's two swipe tests: headless Chromium on Linux does not scroll the
+      # page for a CDP touch swipe (scrolled 0 px), so they run only locally (macOS).
+      - name: End to end
+        run: pnpm test:e2e --grep-invert "vertical swipe scrolls the page"

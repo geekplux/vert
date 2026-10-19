@@ -474,6 +474,9 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     const home = page.getByRole('link', { name: 'Vert, home' });
     await shiftTabUntil(page, isFocused(home), 10);
     await expectVisibleFocus(page);
+    // Greyed like the disabled Back to the run: --muted, not --ink.
+    await expect(home).toHaveAttribute('aria-disabled', 'true');
+    await expect(home).toHaveCSS('color', 'rgb(91, 107, 122)');
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeVisible();
     await expect(cancel).toBeVisible();
@@ -523,6 +526,9 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
 
     // On Upload: no change of state, focus back on the h1.
     await shiftTabUntil(page, isFocused(home), 5);
+    // At rest (no export) it is drawn in --ink again.
+    await expect(home).not.toHaveAttribute('aria-disabled');
+    await expect(home).toHaveCSS('color', 'rgb(27, 42, 58)');
     await page.keyboard.press('Enter');
     await expect(uploadHeading).toBeFocused();
     expect(await stillLoaded()).toBe(true);

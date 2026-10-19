@@ -205,4 +205,4 @@ On a `#111214` page these colours give `--muted` 7.7:1 on the page and 6.0:1 on 
 
 You must show `TERRAIN_ATTRIBUTION` ("AWS Terrain Tiles / Mapzen (various sources)") wherever
 the terrain appears, linked to `TERRAIN_ATTRIBUTION_LINK.href`, Mapzen's list of the sources and
-the credit each asks for. `VERT_LIB_VERSION` (`0.1.0+<git sha>`) says which build you vendored.
+the credit each asks for. `VERT_LIB_VERSION` (`0.1.1+<git sha>`, also in the `VERSION` file) says which build you vendored.

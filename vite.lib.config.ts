@@ -7,14 +7,17 @@
  *   declarations `tsc -p tsconfig.lib.json` writes to `types/` once the bundle is written, their
  *   relative imports given explicit `.js` extensions (so `node16` / `nodenext` resolve them too);
  *   and only the declarations the public entry reaches are kept. `README.md` is
- *   src/vert-lib/README.md, the host's CSS contract. `react`, `react-dom` (and their subpaths,
+ *   src/vert-lib/README.md, the host's CSS contract. `LICENSE` (Vert's, MIT), `VERSION` (the
+ *   version below, one line) and `fixtures/` (the committed Coosa sample scene and its sidecar,
+ *   for a host's tests) travel with it, so the folder is all a host copies. `react`, `react-dom` (and their subpaths,
  *   `react/jsx-runtime` among them) and `three` (and every `three/…` module) stay imports: the
  *   host installs them. Nothing else is imported at run time.
  * - The CSS reads only custom properties, each with a fallback (the value in
  *   src/styles/tokens.css), so a host without Vert's tokens still gets style A and a host can
  *   restyle by setting them.
  *   Class names are CSS-module hashes with a `vert-` prefix, so they never meet a host's own.
- * - `VERT_LIB_VERSION` is `package.json`'s version plus the short git sha it was built from.
+ * - `VERT_LIB_VERSION` is `package.json`'s version plus the short git sha it was built from, and
+ *   `.dirty` when the checkout had uncommitted changes.
  * - No public directory (fonts, samples) is copied: hosts bring their own fonts.
  */
 import { execFileSync } from 'node:child_process';
@@ -27,22 +30,59 @@ import { defineConfig, type Plugin, type UserConfig } from 'vite';
 
 const root = new URL('./', import.meta.url);
 
-/** `package.json`'s version plus the short sha of HEAD (`+nogit` outside a git checkout). */
+/**
+ * `package.json`'s version plus the short sha of HEAD, `.dirty` appended when the checkout has
+ * uncommitted changes (the build is then not that commit's): `0.1.1+3a36a74`,
+ * `0.1.1+3a36a74.dirty`; `+nogit` outside a git checkout.
+ */
 export function libVersion(): string {
   const { version } = JSON.parse(readFileSync(new URL('package.json', root), 'utf8')) as {
     version: string;
   };
-  let sha = 'nogit';
-  try {
-    sha = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+  const git = (args: string[]) =>
+    execFileSync('git', args, {
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
+  let sha = 'nogit';
+  try {
+    sha = git(['rev-parse', '--short', 'HEAD']);
+    if (git(['status', '--porcelain']) !== '') sha += '.dirty';
   } catch {
     // Not a git checkout (an exported tarball): the version alone, marked.
   }
   return `${version}+${sha}`;
+}
+
+/** The sample scene a host's tests can load (`fixtures/` in the build). */
+export const FIXTURE_SCENE = 'src/scene/fixtures/coosa-backcountry.scene';
+
+/**
+ * The files besides the bundle that make `dist-lib/` all a host copies: `LICENSE` (Vert's MIT
+ * licence, which travels with copies), `VERSION` (`version` and a newline) and
+ * `fixtures/<sample>.scene` with its `.scene.json` sidecar.
+ */
+export function libFiles(version: string): Plugin {
+  return {
+    name: 'vert-lib-files',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'LICENSE',
+        source: readFileSync(new URL('LICENSE', root), 'utf8'),
+      });
+      this.emitFile({ type: 'asset', fileName: 'VERSION', source: `${version}\n` });
+      for (const file of [FIXTURE_SCENE, `${FIXTURE_SCENE}.json`]) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `fixtures/${file.slice(file.lastIndexOf('/') + 1)}`,
+          source: new Uint8Array(readFileSync(new URL(file, root))),
+        });
+      }
+    },
+  };
 }
 
 /** The custom properties tokens.css defines, with their values. */
@@ -186,10 +226,11 @@ export const LIB_EXTERNAL = /^(react|react-dom|three)(\/.*)?$/;
 
 export default defineConfig((): UserConfig => {
   const tokens = readTokens(readFileSync(new URL('src/styles/tokens.css', root), 'utf8'));
+  const version = libVersion();
   return {
-    plugins: [tokenFallbacks(tokens), react(), libDeclarations()],
+    plugins: [tokenFallbacks(tokens), react(), libDeclarations(), libFiles(version)],
     publicDir: false,
-    define: { __VERT_LIB_VERSION__: JSON.stringify(libVersion()) },
+    define: { __VERT_LIB_VERSION__: JSON.stringify(version) },
     // The production JSX runtime (`react/jsx-runtime`) even when NODE_ENV says otherwise (the
     // bundle test builds under Vitest, where it is "test").
     oxc: { jsx: { development: false } },

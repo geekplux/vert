@@ -620,3 +620,35 @@ without an error message but showed broken terrain and junk elevation. Rulings:
   every tile with the disk nearly full). When every tile arrives but none decodes, the View says
   "the elevation data arrived, but this browser couldn't read it. Reload the page and try again."
   instead of "Check your connection".
+
+## Library for Activities (phase 4)
+
+The host is Activities (activities.geekplux.org, repo the host site repo), whose Activity page has
+a `TerrainSlot` placeholder for Vert's TerrainView. Its two constraints decide the design: it
+publishes no latitude/longitude anywhere (its privacy test fails on any `\d{2}\.\d{4,}` in published
+text), and its Cloudflare build clones only its own repo, so it vendors files from `dist-lib/` and
+installs `three` from npm.
+
+- **Everything georeferenced happens offline**, in `pnpm bake` on the maintainer's machine. The browser gets
+  a `.scene`: a height grid and a route in grid-local units, with no bounds, lat/lon, tile x/y or
+  `failedTiles` (`docs/SCENE.md`). TerrainView's `scene` path never converts a coordinate.
+- **Grid-local frame**: metres from the grid's north-west corner, x east, y south; the grid's
+  samples are evenly spaced, `metresPerSample` at the grid's centre (as `Heightfield` measures it).
+- **No latitude from the grid's spacing.** A grid sampled at native resolution gives cos(latitude)
+  as `metresPerSample` ÷ the tile pixel size at `zoom`. The bake therefore always resamples to the
+  scene's fixed long side (never the native pixel count), so the ratio between them is unknown;
+  `zoom` is kept (it narrows the latitude only to the band where that zoom was chosen, a factor of 2
+  in cos(latitude), and to nothing for routes small enough to sample z14). No value is stored at a
+  precision finer than it is useful (each field's step is in SCENE.md).
+- **Ends trimmed by default** (`pnpm bake --trim <m>`, default 200, the poster's "Hide start and
+  end" default): the drawn route and its markers skip the first and last 200 m, and the grid is
+  framed on the trimmed route (as posters frame on it), so a start at home is neither drawn nor at
+  the frame's centre. The route keeps its true distances and time offsets from the real start, so
+  a host's time ↔ distance mapping stays exact; the summary gives the whole run's length and climb
+  (the host publishes those already). `--trim 0` keeps the ends.
+- **Accepted residual risk: the terrain is a fingerprint.** A height grid of a route's area could
+  in principle be matched against a global elevation model to find where it is. No encoding of a
+  real terrain avoids that; publishing a scene publishes the shape of the ground. The bake is per
+  activity and opt-in; the maintainer decides which activities get one ("Needs the maintainer" in PROGRESS.md).
+- **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
+  pin and report what it vendored.

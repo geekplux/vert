@@ -55,7 +55,7 @@ Each component: `src/components/<Name>/<Name>.tsx`, `<Name>.stories.tsx`, `<Name
 | `SizePicker` | `sizes`, `value`, `onChange` | 2×2 grid of 44px-min buttons; each shows name 14/600 and "print · 5400 × 7200" in 11 mono. Selected = ink bg. |
 | `Checkbox` | `label`, `checked` | Native, `accent-color: var(--ink)`, 18px, row min-height 44. |
 | `Marker` (SVG) | `kind: "start" \| "summit" \| "scrub"` | start: circle r6 white fill, ink 2.5 stroke. summit: triangle ink fill. scrub: circle r5 route fill, white 2.5 stroke. Never distinguished by color alone. |
-| `Wordmark` | `tagline?`, `link?` (`href`, `label`, `onClick`, `disabled`) | "VERT" 30/800/62% + optional tagline 12 mono muted. With `link` the name (not the tagline) is an `<a>` drawn the same (no underline, cursor pointer), hit area 44 tall, focus ring 2px `--route` offset 2. |
+| `Wordmark` | `tagline?`, `link?` (`href`, `label`, `onClick`, `disabled`) | "VERT" 30/800/62% + optional tagline 12 mono muted. With `link` the name (not the tagline) is an `<a>` drawn the same (no underline, cursor pointer), hit area 44 tall, focus ring 2px `--route` offset 2; `disabled` (during an export) keeps it focusable with `aria-disabled`, drawn `--muted` with `cursor: not-allowed`. |
 
 ## 3. The one page, four states (phase 2)
 

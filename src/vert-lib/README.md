@@ -1,7 +1,13 @@
 # Vert library
 
 Vert's 3D terrain view and elevation profile for a page that shows a baked `.scene` file (the
-format is in Vert's `docs/SCENE.md`). These are the files `pnpm build:lib` writes to `dist-lib/`:
+format is in Vert's `docs/SCENE.md`). The full guide for a host (vendoring, baking scenes, caching,
+scrub sync with a time chart, a worked example, testing, the changelog) is
+[docs/INTEGRATION.md](https://github.com/geekplux/vert/blob/main/docs/INTEGRATION.md) (a 404
+for outside readers until Vert's repository is public); this file is the reference that travels
+with the build.
+
+These are the files `pnpm build:lib` writes to `dist-lib/`:
 
 - `index.js`: one ES module. It imports `react`, `react/jsx-runtime`, `three` and
   `three/examples/jsm/…` modules, and the host installs those. Nothing else is imported, nothing
@@ -70,9 +76,10 @@ Flat is the `view` prop, not a method: `'flat'` is top-down and north up, with n
 ### Keyboard
 
 - **The view**: a focusable wrapper around the canvas (`role="img"` with your `ariaLabel`), in the
-  tab order once a scene is drawn. Arrow keys orbit (← → around, ↑ ↓ up and down; Shift for steps
-  three times as big; not in the flat view), `+` and `-` (or `=` and `_`) zoom. A visually hidden
-  hint says so to screen readers. Pointer: drag orbits, wheel or pinch zooms.
+  tab order as soon as it has a scene (before the first frame). Arrow keys orbit (← → around,
+  ↑ ↓ up and down; Shift for steps three times as big; not in the flat view), `+` and `-` (or `=`
+  and `_`) zoom. A visually hidden hint says so to screen readers. Pointer: drag orbits, wheel or
+  pinch zooms.
 - **The profile**: one ARIA slider (`role="slider"`). Arrow keys move ±1% of the drawn route
   (Shift ±10%), PageUp / PageDown ±10%, Home / End to the drawn ends, Escape clears the position.
   Pointer: press or drag anywhere on the plot.
@@ -194,6 +201,6 @@ On a `#111214` page these colours give `--muted` 7.7:1 on the page and 6.0:1 on 
 
 ## Credit
 
-Show `TERRAIN_ATTRIBUTION` ("AWS Terrain Tiles / Mapzen (various sources)") wherever the terrain
-appears. `TERRAIN_ATTRIBUTION_LINK.href` links Mapzen's list of the sources. `VERT_LIB_VERSION`
-(`0.1.0+<git sha>`) says which build you vendored.
+You must show `TERRAIN_ATTRIBUTION` ("AWS Terrain Tiles / Mapzen (various sources)") wherever
+the terrain appears, linked to `TERRAIN_ATTRIBUTION_LINK.href`, Mapzen's list of the sources and
+the credit each asks for. `VERT_LIB_VERSION` (`0.1.0+<git sha>`) says which build you vendored.

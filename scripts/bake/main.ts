@@ -13,7 +13,7 @@ import { formatNumber } from '../../src/lib/format';
 import { BakeError, UsageError, printableMessage } from './errors';
 import { checkDefaultIdTimestamp, checkExplicitId, idFromFileName } from './id';
 import { STDIN_INPUT, readInput } from './input';
-import { DEFAULT_TRIM_M, bakeScene, type BakedScene } from './pipeline';
+import { DEFAULT_TRIM_M, MAX_TRIM_M, bakeScene, type BakedScene } from './pipeline';
 import {
   DEFAULT_CACHE_DIR,
   DEFAULT_TILE_TEMPLATE,
@@ -44,9 +44,6 @@ Options:
   --cache <dir>     tile cache (default scripts/.cache/terrarium)
   -h, --help        show this help
 `;
-
-/** Largest `--trim`, metres. */
-const MAX_TRIM_M = 10_000;
 
 export interface CliArguments {
   readonly input: string;
@@ -170,6 +167,7 @@ export async function runBake(
 
 const km = (metres: number) => `${formatNumber(metres / 1000, 2)} km`;
 const m = (metres: number) => `${formatNumber(metres)} m`;
+const signed = (metres: number) => `${formatNumber(metres, 0, true)} m`;
 
 const ELEVATION_SOURCES: Record<string, string> = {
   gpx: 'from the file',
@@ -188,9 +186,16 @@ export function summaryText({ baked, scenePath, sidecarPath, seconds }: BakeOutc
       ? 'ends kept'
       : `${m(summary.trim.start)} hidden at the start, ${m(summary.trim.end)} at the end`;
   const elevation = ELEVATION_SOURCES[baked.elevationSource ?? ''] ?? 'unknown';
+  const offset = baked.elevationOffset;
   const lines = [
     `Baked ${baked.id}`,
     `  run      ${km(summary.distance)}, ${climb}; elevation ${elevation}`,
+    ...(offset
+      ? [
+          `  offset   file − terrain elevation ${signed(offset.mean)} on average, ` +
+            `${signed(offset.min)} to ${signed(offset.max)} along the drawn route`,
+        ]
+      : []),
     `  drawn    ${km(summary.drawnLength)} (${trim})`,
     `  grid     ${String(scene.grid.width)} × ${String(scene.grid.height)} samples, ` +
       `${m(summary.extent.x)} × ${m(summary.extent.y)}, zoom ${String(scene.grid.zoom)}`,

@@ -23,6 +23,8 @@ import {
   clearingTrim,
   distanceToTrack,
   elevationOffset,
+  howNear,
+  nearestOnTrack,
   trackBounds,
 } from './pipeline';
 import { decodeTerrariumPngBytes } from './png';
@@ -310,8 +312,8 @@ describe('warnings', () => {
     expect(baked.warnings).toEqual(
       ['start', 'finish'].map(
         (name) =>
-          `The run's real ${name} lies within 10 m of the drawn route at km ${half} of ${total}: ` +
-          `the route passes its ${name} again, so no --trim hides it.`,
+          `The drawn route passes within 10 m of the run's real ${name} at about km ${half} of ` +
+          `${total}: the route passes its ${name} again, so no --trim hides it.`,
       ),
     );
     // Three laps: a trim of a little over one lap hides both ends.
@@ -319,7 +321,7 @@ describe('warnings', () => {
     const lap = three.run.distance / 3;
     const warned = await bakeScene(three, { id: 'loop', trim: 200, tiles: tiles().source });
     for (const warning of warned.warnings) {
-      const trim = Number(/a --trim of ([\d,]+) m does\./.exec(warning)?.[1]?.replace(',', ''));
+      const trim = Number(/; --trim (\d+) does\.$/.exec(warning)?.[1]);
       expect(trim).toBeGreaterThan(lap);
       expect(trim).toBeLessThan(lap + 200);
     }
@@ -334,11 +336,13 @@ describe('warnings', () => {
     const baked = await bakeScene(loop, { id: 'loop', trim: 50, tiles: tiles().source });
     expect(baked.warnings).toHaveLength(2);
     expect(baked.warnings[0]).toMatch(
-      /^The run's real start lies about \d+0 m from the drawn route at km \d\.\d of \d\.\d \(a loop or laps pass it again\), so the trim does not hide it; a --trim of (\d+) m does\.$/,
+      /^The drawn route passes about \d0 m from the run's real start at about km \d\.\d of \d\.\d \(a loop or laps pass it again\), so the trim does not hide it; --trim \d+ does\.$/,
     );
-    expect(baked.warnings[1]).toMatch(/^The run's real finish .* a --trim of \d+ m does\.$/);
+    expect(baked.warnings[1]).toMatch(
+      /^The drawn route passes .* real finish .*; --trim \d+ does\.$/,
+    );
     // That trim does hide them, and 10 m less does not.
-    const trims = baked.warnings.map((w) => Number(/--trim of (\d+) m/.exec(w)?.[1]));
+    const trims = baked.warnings.map((w) => Number(/--trim (\d+) does/.exec(w)?.[1]));
     const enough = Math.max(...trims);
     expect(enough).toBeGreaterThan(50);
     expect(enough).toBeLessThan(400);
@@ -362,6 +366,27 @@ describe('warnings', () => {
     // Four laps pass the start halfway: no trim clears it.
     const laps = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute(4))), 'laps.gpx');
     expect(clearingTrim(laps.points, start, 200)).toBeNull();
+  });
+
+  it('howNear: tens of metres, never "about 100 m"', () => {
+    expect(howNear(3)).toBe('within 10 m of');
+    expect(howNear(44)).toBe('about 40 m from');
+    expect(howNear(94.9)).toBe('about 90 m from');
+    expect(howNear(95)).toBe('within 100 m of');
+    expect(howNear(99.9)).toBe('within 100 m of');
+  });
+
+  it('nearestOnTrack: how far and where along, interpolated within the step', () => {
+    const track = {
+      lat: Float64Array.from([46, 46, 46]),
+      lon: Float64Array.from([7, 7.001, 7.002]),
+      cumulative: Float64Array.from([0, 77, 154]),
+    };
+    // Half-way along the second step, 50 m north of it.
+    const point = { lat: 46 + 50 / 111_320, lon: 7.0015 };
+    const near = nearestOnTrack(point, track);
+    expect(near.distance).toBeCloseTo(50, 0);
+    expect(near.along).toBeCloseTo(115.5, 0);
   });
 
   it('none with --trim 0 (the ends are drawn on purpose)', async () => {

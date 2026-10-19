@@ -145,10 +145,43 @@ export function distanceToTrack(point: LatLon, track: Pick<RunTrack, 'lat' | 'lo
   return best;
 }
 
+/**
+ * The nearest approach of the polyline `track` to `point`: how far, metres, and where along the
+ * track (its own `cumulative` metres, interpolated within the step).
+ */
+export function nearestOnTrack(
+  point: LatLon,
+  track: Pick<RunTrack, 'lat' | 'lon' | 'cumulative'>,
+): { distance: number; along: number } {
+  const at = (i: number) => localMetres(point, { lat: track.lat[i] ?? 0, lon: track.lon[i] ?? 0 });
+  let a = at(0);
+  let best = { distance: Math.hypot(a.x, a.y), along: track.cumulative[0] ?? 0 };
+  for (let i = 1; i < track.lat.length; i++) {
+    const b = at(i);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = dx * dx + dy * dy;
+    const t = length > 0 ? Math.min(1, Math.max(0, -(a.x * dx + a.y * dy) / length)) : 0;
+    const distance = Math.hypot(a.x + t * dx, a.y + t * dy);
+    if (distance < best.distance) {
+      const from = track.cumulative[i - 1] ?? 0;
+      best = { distance, along: from + t * ((track.cumulative[i] ?? 0) - from) };
+    }
+    a = b;
+  }
+  return best;
+}
+
 /** Whether `point` lies at least {@link NEAR_END_WARNING_M} from the route drawn with `trim`. */
 function clearAt(track: RunTrack, point: LatLon, trim: number): boolean {
   const drawn = trimTrack(track, trim);
   return drawn !== null && distanceToTrack(point, drawn) >= NEAR_END_WARNING_M;
+}
+
+/** The largest trim, in whole tens of metres, that leaves something drawn and `--trim` allows. */
+function widestTrim(track: RunTrack): number {
+  const total = track.cumulative[track.cumulative.length - 1] ?? 0;
+  return Math.floor(Math.min(MAX_TRIM_M, total / 2 - 0.01) / 10) * 10;
 }
 
 /**
@@ -158,9 +191,8 @@ function clearAt(track: RunTrack, point: LatLon, trim: number): boolean {
  * clear only ever turns on as the trim grows: a binary search finds the first.
  */
 export function clearingTrim(track: RunTrack, point: LatLon, from: number): number | null {
-  const total = track.cumulative[track.cumulative.length - 1] ?? 0;
   let lo = Math.floor(from / 10) + 1;
-  let hi = Math.floor(Math.min(MAX_TRIM_M, total / 2) / 10);
+  let hi = widestTrim(track) / 10;
   if (lo > hi || !clearAt(track, point, hi * 10)) return null;
   while (lo < hi) {
     const mid = Math.floor((lo + hi) / 2);
@@ -170,37 +202,29 @@ export function clearingTrim(track: RunTrack, point: LatLon, from: number): numb
   return lo * 10;
 }
 
-/**
- * Where along the whole route (its own metres) it passes within {@link NEAR_END_WARNING_M} of
- * `point` farthest from both ends: the pass a trim would have to reach. Null when no recorded
- * point is that close (only a step between two points is).
- */
-function deepestPass(track: RunTrack, point: LatLon): number | null {
-  const total = track.cumulative[track.cumulative.length - 1] ?? 0;
-  let best: number | null = null;
-  for (let i = 0; i < track.lat.length; i++) {
-    const m = localMetres(point, { lat: track.lat[i] ?? 0, lon: track.lon[i] ?? 0 });
-    if (Math.hypot(m.x, m.y) >= NEAR_END_WARNING_M) continue;
-    const along = track.cumulative[i] ?? 0;
-    if (best === null || Math.min(along, total - along) > Math.min(best, total - best)) {
-      best = along;
-    }
-  }
-  return best;
-}
-
 const km = (metres: number) => `km ${formatNumber(metres / 1000, 1)}`;
 
 /**
+ * How near a pass is, in words: "within 10 m of", "about 40 m from", and "within 100 m of" when
+ * the tens would round up to the warning's threshold (never "about 100 m", which reads as clear).
+ */
+export function howNear(metres: number): string {
+  if (metres < 10) return 'within 10 m of';
+  const tens = Math.round(metres / 10) * 10;
+  if (tens >= NEAR_END_WARNING_M) return `within ${String(NEAR_END_WARNING_M)} m of`;
+  return `about ${String(tens)} m from`;
+}
+
+/**
  * Warnings for a real start or finish that lies near the drawn route (a loop or laps pass it
- * again after the trim): how near (tens of metres), where along the route (km, one decimal), and
- * the smallest `--trim` that hides it or that none does. Distances along the route only, never a
- * coordinate.
+ * again after the trim): how near (tens of metres, never rounded up to the threshold), where the
+ * route makes that closest pass (km along it, one decimal), and the smallest `--trim` that hides
+ * it, printed to paste, or that none does. Distances along the route only, never a coordinate.
  */
 function nearEndWarnings(track: RunTrack, drawn: RunTrack, trim: number): string[] {
   if (!(trim > 0)) return [];
   const n = track.lat.length;
-  const total = track.cumulative[n - 1] ?? 0;
+  const total = formatNumber((track.cumulative[n - 1] ?? 0) / 1000, 1);
   const ends = [
     ['start', 0],
     ['finish', n - 1],
@@ -208,18 +232,19 @@ function nearEndWarnings(track: RunTrack, drawn: RunTrack, trim: number): string
   const warnings: string[] = [];
   for (const [name, i] of ends) {
     const point = { lat: track.lat[i] ?? 0, lon: track.lon[i] ?? 0 };
-    const d = distanceToTrack(point, drawn);
-    if (d >= NEAR_END_WARNING_M) continue;
-    const near = d < 10 ? 'within 10 m of' : `about ${String(Math.round(d / 10) * 10)} m from`;
-    const pass = deepestPass(track, point);
-    const where = pass === null ? '' : ` at ${km(pass)} of ${formatNumber(total / 1000, 1)}`;
+    if (distanceToTrack(point, drawn) >= NEAR_END_WARNING_M) continue;
     const clearing = clearingTrim(track, point, trim);
+    // The pass to name: the closest approach of the route drawn now, or, when no trim hides the
+    // end, of the shortest route a trim can leave (the pass no trim reaches).
+    const shown = clearing === null ? (trimTrack(track, widestTrim(track)) ?? drawn) : drawn;
+    const pass = nearestOnTrack(point, shown);
+    const near = howNear(pass.distance);
+    const where = `The drawn route passes ${near} the run's real ${name} at about ${km(pass.along)} of ${total}`;
     warnings.push(
       clearing === null
-        ? `The run's real ${name} lies ${near} the drawn route${where}: the route passes its ` +
-            `${name} again, so no --trim hides it.`
-        : `The run's real ${name} lies ${near} the drawn route${where} (a loop or laps pass it ` +
-            `again), so the trim does not hide it; a --trim of ${formatNumber(clearing)} m does.`,
+        ? `${where}: the route passes its ${name} again, so no --trim hides it.`
+        : `${where} (a loop or laps pass it again), so the trim does not hide it; ` +
+            `--trim ${String(clearing)} does.`,
     );
   }
   return warnings;

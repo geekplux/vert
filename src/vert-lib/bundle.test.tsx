@@ -85,6 +85,7 @@ const CSS_PROPERTIES = [
   '--space-1',
   '--surface',
   '--surface-strong',
+  '--vert-focus',
   '--white',
 ];
 
@@ -182,8 +183,9 @@ describe('the built library', () => {
     const classes = [...css.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1] ?? '');
     expect(classes.length).toBeGreaterThan(10);
     for (const name of classes) expect(name).toMatch(/^vert-/);
-    // Focus ring: 2px --route outline, offset 2.
-    expect(css).toMatch(/outline:2px solid var\(--route,#d9480f\);outline-offset:2px/);
+    // Focus ring: 2px outline in the host's --vert-focus, else --route, offset 2; both components.
+    const ring = /outline:2px solid var\(--vert-focus,var\(--route,#d9480f\)\);outline-offset:2px/g;
+    expect(css.match(ring)).toHaveLength(2);
     // Touch: the view, its canvas and the profile's plot let a vertical swipe scroll the page.
     expect(css.match(/touch-action:pan-y/g)).toHaveLength(3);
     expect(css).not.toMatch(/touch-action:none/);

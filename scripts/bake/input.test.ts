@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { handleMessage } from '../../src/gpx/handler';
 import { DEFAULT_MAX_POINTS } from '../../src/gpx/parse';
 import { BakeError } from './errors';
-import { MAX_JSON_BYTES, parsePointsJson, readInput, runFromPoints } from './input';
+import { parsePointsJson, readInput, runFromPoints } from './input';
 import { gpxOf, pointsJsonOf, syntheticRoute } from './testing';
 
 const dir = mkdtempSync(join(tmpdir(), 'vert-bake-input-'));
@@ -151,30 +151,5 @@ describe('readInput', () => {
   it('refuses other extensions and missing files', () => {
     expect(() => readInput(file('run.fit', 'x'))).toThrow(/\.gpx file or a \.json/);
     expect(() => readInput(join(dir, 'missing.gpx'))).toThrow(/cannot be read/);
-  });
-
-  it('reads a points file from standard input for -, as it reads one from disk', () => {
-    const route = syntheticRoute(40);
-    const text = pointsJsonOf(route);
-    const fromStdin = readInput('-', () => new TextEncoder().encode(text));
-    const fromFile = readInput(file('same.json', text));
-    expect(fromStdin.kind).toBe('json');
-    expect(fromStdin.fileName).toBe('stdin.json');
-    expect(fromStdin.run).toEqual(fromFile.run);
-    expect(fromStdin.points).toEqual(fromFile.points);
-  });
-
-  it('refuses unreadable, oversized or broken standard input, without echoing a value', () => {
-    expect(() =>
-      readInput('-', () => {
-        throw new Error('EAGAIN');
-      }),
-    ).toThrow(/Standard input cannot be read/);
-    expect(() => readInput('-', () => new Uint8Array(MAX_JSON_BYTES + 1))).toThrow(
-      /the limit is 128 MB/,
-    );
-    expect(() =>
-      readInput('-', () => new TextEncoder().encode(json([point(), point({ lng: 1 })]))),
-    ).toThrow(/points\[1\] has an unknown key "lng"/);
   });
 });

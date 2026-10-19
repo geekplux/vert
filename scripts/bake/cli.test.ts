@@ -3,7 +3,7 @@
  * `node scripts/bake.ts` end to end, in a child process (exactly as `pnpm bake` runs it, resolve
  * hook included), against a local tile server.
  */
-import { execFile, spawn } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -93,8 +93,12 @@ function bake(...args: string[]): Promise<Result> {
   });
 }
 
-/** `bake(...args)` with `input` written to the child's standard input. */
-function bakeWithStdin(input: string, ...args: string[]): Promise<Result> {
+/**
+ * `bake(...args)` with `input` written to the child's standard input, through a pipe, as a host's
+ * async `spawn` does; a string is written whole, a number is that many megabytes of spaces, written
+ * a megabyte at a time until the child stops reading.
+ */
+function bakeWithStdin(input: string | number, ...args: string[]): Promise<Result> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [ENTRY, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
@@ -105,7 +109,25 @@ function bakeWithStdin(input: string, ...args: string[]): Promise<Result> {
     child.on('close', (code) => {
       resolve({ code: code ?? 1, stdout, stderr });
     });
-    child.stdin.end(input);
+    // The child may stop reading (over the limit): its end of the pipe closes, which is fine.
+    child.stdin.on('error', () => undefined);
+    if (typeof input === 'string') {
+      child.stdin.end(input);
+      return;
+    }
+    const megabyte = Buffer.alloc(2 ** 20, ' ');
+    let left = input;
+    const write = () => {
+      while (left > 0) {
+        left--;
+        if (!child.stdin.write(megabyte)) {
+          child.stdin.once('drain', write);
+          return;
+        }
+      }
+      child.stdin.end();
+    };
+    write();
   });
 }
 
@@ -224,6 +246,36 @@ describe('node scripts/bake.ts', () => {
       ),
     ).toBe(true);
     expectNoCoordinates(result.stdout);
+  });
+
+  it('reads standard input larger than a pipe’s buffer: async spawn (2 MB) and spawnSync (20 MB)', async () => {
+    const reference = outputs(join(dir, 'gpx'), 'test-run').bytes;
+    // JSON allows trailing whitespace: the same points, padded past what one pipe buffer holds.
+    const padded = (mb: number) => pointsJsonOf(route) + ' '.repeat(mb * 2 ** 20);
+    const common = ['--id', 'test-run', '--tiles', tiles, '--cache', cache];
+    const out = join(dir, 'stdin-large');
+    const result = await bakeWithStdin(padded(2), '-', '--out', out, ...common);
+    expect(result.stderr).toBe('');
+    expect(result.code).toBe(0);
+    expect(Buffer.from(outputs(out, 'test-run').bytes).equals(Buffer.from(reference))).toBe(true);
+    const outSync = join(dir, 'stdin-sync');
+    const sync = spawnSync(process.execPath, [ENTRY, '-', '--out', outSync, ...common], {
+      input: padded(20),
+      encoding: 'utf8',
+    });
+    expect(sync.stderr).toBe('');
+    expect(sync.status).toBe(0);
+    expect(Buffer.from(outputs(outSync, 'test-run').bytes).equals(Buffer.from(reference))).toBe(
+      true,
+    );
+  });
+
+  it('standard input over 128 MB: exit 1 as the limit passes, nothing written', async () => {
+    const out = join(dir, 'stdin-huge');
+    const result = await bakeWithStdin(130, '-', '--out', out, '--id', 'huge');
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/The input is over the 128 MB limit\.\nNothing was written\./);
+    expect(existsSync(out)).toBe(false);
   });
 
   it('broken points on standard input: exit 1, nothing written, no value echoed', async () => {

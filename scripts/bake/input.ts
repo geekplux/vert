@@ -50,17 +50,13 @@ export interface BakeInput {
   readonly points: RunTrack;
 }
 
-/** All of standard input, as Node reads it (blocking until the writer closes it). */
-const readStandardInput = (): Uint8Array => readFileSync(0);
-
 /**
- * Reads and parses `path` by its extension (`.gpx` or `.json`), or, for `-`, a points file from
- * standard input (`readStdin`, replaceable for tests).
+ * Reads and parses `path` by its extension (`.gpx` or `.json`). Standard input (`-`) is
+ * {@link readStdinInput}'s.
  *
  * @throws BakeError when the file cannot be read or used.
  */
-export function readInput(path: string, readStdin = readStandardInput): BakeInput {
-  if (path === STDIN_INPUT) return stdinInput(readStdin);
+export function readInput(path: string): BakeInput {
   const fileName = basename(path);
   const extension = extname(path).toLowerCase();
   if (extension !== '.gpx' && extension !== '.json') {
@@ -83,20 +79,31 @@ export function readInput(path: string, readStdin = readStandardInput): BakeInpu
   return { kind: 'json', fileName, ...runFromPoints(parsePointsJson(bytes.toString('utf8'))) };
 }
 
-/** A points file on standard input, under the same size limit as one on disk. */
-function stdinInput(readStdin: () => Uint8Array): BakeInput {
-  let bytes: Uint8Array;
+/**
+ * A points file on standard input (`-`), under the same size limit as one on disk. Read as a
+ * stream, chunk by chunk as the writer sends it: a pipe's reader must wait for data, which a
+ * synchronous read of fd 0 does not (EAGAIN once the input outgrows the pipe's buffer). Stops
+ * as soon as the limit is passed.
+ *
+ * @throws BakeError when standard input cannot be read or used.
+ */
+export async function readStdinInput(): Promise<BakeInput> {
+  const chunks: Buffer[] = [];
+  let size = 0;
   try {
-    bytes = readStdin();
-  } catch {
+    for await (const chunk of process.stdin as AsyncIterable<Buffer>) {
+      size += chunk.byteLength;
+      if (size > MAX_JSON_BYTES) {
+        process.stdin.destroy();
+        throw new BakeError(`The input is over the ${String(MAX_JSON_BYTES / 2 ** 20)} MB limit.`);
+      }
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    if (error instanceof BakeError) throw error;
     throw new BakeError('Standard input cannot be read (pipe the points file into the bake).');
   }
-  if (bytes.byteLength > MAX_JSON_BYTES) {
-    throw new BakeError(
-      `The input is ${String(Math.ceil(bytes.byteLength / 2 ** 20))} MB; the limit is ${String(MAX_JSON_BYTES / 2 ** 20)} MB.`,
-    );
-  }
-  const text = new TextDecoder().decode(bytes);
+  const text = Buffer.concat(chunks).toString('utf8');
   return { kind: 'json', fileName: STDIN_FILE_NAME, ...runFromPoints(parsePointsJson(text)) };
 }
 

@@ -191,7 +191,10 @@ the scrub with a time chart, and testing) is in [`docs/INTEGRATION.md`](docs/INT
 | `pnpm build:lib`             | The embeddable library to `dist-lib/`                           |
 | `pnpm bake <in> --out <dir>` | Bake a `.gpx` or points `.json` into a `.scene` and its sidecar |
 | `pnpm worker:dev`            | Run the tile Worker locally                                     |
-| `pnpm posters`               | Regenerate the poster examples, screenshots and social card     |
+| `pnpm posters`               | Regenerate the poster examples, screenshots and social card ¹   |
+
+¹ Needs `pnpm build && pnpm preview --port 4173` running, and macOS `sips` and `cwebp` (see the
+header of `scripts/capture-posters.mjs`).
 
 Before opening a pull request, run `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
 

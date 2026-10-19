@@ -135,6 +135,17 @@ zero in `src/lib/format.ts`); hk-hilly's +569 m is the noisy-recorder vert alrea
 known limitation; each viewport resize redraws the terrain (~13 ms), which slows hosts' resize
 sweeps (Activities' 1 px sweep 2.2 s → 23 s) — rate-limit if it matters.
 
+## Public release (2026-10-19)
+
+Sean made the repository public and bound vert.geekplux.org to the Worker, and asked for the
+project's presentation to be redone without changing what Vert does. Rulings in DECISIONS.md
+"Public release". Same protocol: implementation sub-agent (own worktree) → independent
+verification sub-agent → fix → verify; branch `presentation`, one PR.
+
+| Done | Task                                                                   | Rounds | Verdict | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---- | ---------------------------------------------------------------------- | ------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x]  | Domain, wordmark home link, poster styles band, sharing metadata, docs | 1      | PASS    | Posters print VERT.GEEKPLUX.ORG; bake default and proxy User-Agent use vert.geekplux.org (Coosa still bakes byte-identical). The wordmark is a home link in every state (inert and muted during an export). Upload's poster styles band: no overlap with the hero at 11 viewports in the error and busy states; first screen pixel-identical to main except the band's rule; axe 0 at 1440 / 390; CLS 0. Open Graph / Twitter tags and a 1280 × 640 card. Gate: 1,879 unit, 44 e2e. R1 PASS with should-fixes (docs gaps, an unused 1 MB screenshot, no visual cue on the inert link). |
+
 ## Needs Sean
 
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one

@@ -64,7 +64,8 @@ pnpm build:lib      # the library for host pages to dist-lib/ (docs/INTEGRATION.
 pnpm bake <in> --out <dir>  # one .gpx or points .json → <id>.scene + sidecar (docs/SCENE.md)
 pnpm worker:dev     # run the tile Worker locally
 pnpm worker:types   # regenerate worker/worker-configuration.d.ts after editing wrangler.toml
-pnpm posters        # regenerate the landing page's poster examples, README screenshots, og-image
+pnpm posters        # regenerate poster examples, README shots, og-image (needs `pnpm preview
+                    # --port 4173` running, macOS sips and cwebp; header of scripts/capture-posters.mjs)
 ```
 
 Before reporting work as done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

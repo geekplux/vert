@@ -139,15 +139,12 @@ sweeps (Activities' 1 px sweep 2.2 s → 23 s) — rate-limit if it matters.
 
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one
   poster from each, and judge whether at least 8 are worth printing. The agent pass is above.
-- **Keep the repo private** until BlackRock's outside-activity and IP policy check is done (CLAUDE.md).
-- **Phase 4, ruled 2026-10-19** (DECISIONS.md "Sean's rulings on embedding"): vendoring into
-  Activities waits for the policy check; embedding and `three` are approved (Activities records
-  them in its own DECISIONS.md); scenes are opt-in per activity, and a run whose start warning a
-  larger `--trim` cannot clear gets none unless its start is a public place.
-- **Name and domain**: check "Vert" for name collisions, and point `vert.geekplux.com` (the URL in
-  the posters' footer) at the Worker when you want it public.
-- **Disk**: the system volume was down to ~100 MB free during this phase (agents moved their temp
-  files to /Volumes/Extra); about 4 GB is free now.
+- **Phase 4, ruled 2026-10-19** (DECISIONS.md "Sean's rulings on embedding"): embedding and
+  `three` are approved (Activities records them in its own DECISIONS.md); scenes are opt-in per
+  activity, and a run whose start warning a larger `--trim` cannot clear gets none unless its start
+  is a public place. Vendoring no longer waits: the repository is public since 2026-10-19.
+- **GitHub social preview (optional)**: GitHub has no API for it; upload `public/og-image.png` in
+  the repository's Settings → General → Social preview.
 - **Cloudflare's network-error reports (optional)**: every response carries Cloudflare's
   `report-to` / `nel` headers, so a browser may report failed requests (URL only, i.e. tile z/x/y,
   never GPX data) to `a.nel.cloudflare.com`. Strictly that is a third-party request; Cloudflare's

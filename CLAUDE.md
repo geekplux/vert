@@ -58,6 +58,7 @@ pnpm format         # Prettier write
 pnpm typecheck      # tsc -b (app, node configs, worker)
 pnpm stories        # Ladle on http://localhost:61000
 pnpm stories:build  # static Ladle build to build/
+pnpm bake <in> --out <dir>  # one .gpx or points .json → <id>.scene + sidecar (docs/SCENE.md)
 pnpm worker:dev     # run the tile Worker locally
 pnpm worker:types   # regenerate worker/worker-configuration.d.ts after editing wrangler.toml
 ```
@@ -72,9 +73,11 @@ src/page        the one page and its four states; the only place that owns app s
 src/gpx         GPX parser and stats (runs in a Web Worker: no DOMParser there)
 src/terrain     three.js mesh, shaders, route, camera
 src/poster      poster styles A, B, E and tiled export
+src/scene       the .scene format: codec, builder, privacy scanners (docs/SCENE.md)
 src/lib         pure shared maths (geodesy, tile maths, Terrarium decoding, units, formatting)
 src/hooks       shared React hooks with no app state (useMediaQuery)
 src/styles      tokens.css (DESIGN-SPEC §1), fonts.css, base.css
+scripts/bake    the headless bake (Node ≥ 22.18, no DOM)
 worker/         Cloudflare Worker: /tiles/:z/:x/:y.png proxy for AWS Terrain Tiles, cached in R2
 e2e/            Playwright tests
 docs/           plan, spec, brief, prompts, PROGRESS.md

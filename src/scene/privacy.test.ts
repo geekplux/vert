@@ -296,3 +296,30 @@ describe('the scanner on objects', () => {
     expect(scanText('{"distance": 21468, "grade": 0.1428}')).toEqual([]);
   });
 });
+
+describe('by the antimeridian', () => {
+  // A box past −180° (the e2e Taveuni loop), longitudes unwrapped as the run holds them.
+  const secrets: LocationSecrets = {
+    lat: [-16.86, -16.85],
+    lon: [-180.01, -179.99],
+    bounds: [{ west: -180.03, east: -179.97, south: -16.88, north: -16.84 }],
+  };
+
+  it('finds a tile pair stored as the column it wraps to', () => {
+    const bytes = new Uint8Array(12);
+    const view = new DataView(bytes.buffer);
+    view.setUint16(4, 63, true); // zoom 6: column −1 is stored as 63
+    view.setUint16(6, 35, true);
+    expect(scanBytes(bytes, secrets).map((f) => f.what)).toContain('u16 tile pair at byte 4');
+  });
+
+  it('finds a longitude written a turn away (+179.99 for −180.01)', () => {
+    const bytes = new Uint8Array(24);
+    const view = new DataView(bytes.buffer);
+    view.setFloat64(4, -16.8612, true);
+    view.setFloat64(12, 179.9912, true);
+    expect(scanBytes(bytes, secrets).map((f) => f.what)).toContain(
+      'float64 lat/lon pair at byte 4',
+    );
+  });
+});

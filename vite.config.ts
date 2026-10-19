@@ -13,7 +13,12 @@ export default defineConfig({
   preview: { proxy: tileProxy },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}', 'worker/src/**/*.test.ts', 'vite.tile-proxy.test.ts'],
+    include: [
+      'src/**/*.test.{ts,tsx}',
+      'scripts/**/*.test.ts',
+      'worker/src/**/*.test.ts',
+      'vite.tile-proxy.test.ts',
+    ],
     setupFiles: ['src/test/setup.ts'],
   },
 });

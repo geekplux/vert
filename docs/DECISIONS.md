@@ -678,5 +678,28 @@ installs `three` from npm.
   in principle be matched against a global elevation model to find where it is. No encoding of a
   real terrain avoids that; publishing a scene publishes the shape of the ground. The bake is per
   activity and opt-in; the maintainer decides which activities get one ("Needs the maintainer" in PROGRESS.md).
+- **The bake (`pnpm bake`) never invents terrain.** Only a confirmed upstream 404 becomes a missing
+  tile (filled from neighbours, as the app does, and counted in the summary). A 5xx, 429, timeout or
+  dropped connection is retried once and then fails the bake, unlike the app, which fills: a
+  published scene has no "tiles missing" note, and an outage would make the same input bake
+  differently. Any other error (a decoder bug, a file system error) fails the bake too. A tile that
+  cannot be cached is still used, with a warning. The scene and its sidecar are written together
+  (temps, then a marked swap), and a bake after a crash restores the whole old pair or keeps the
+  whole new one, never a mix.
+- **Ids.** Every id is checked for coordinates of the run (degrees with a fraction, DMS, decimal
+  minutes, digits run together, any separator); timestamps (epoch µs/ms/s/min, YYYYMMDD) only in
+  the default id taken from a file name (the maintainer's files are named by epoch ms), which then asks for
+  `--id`. An explicit `--id` of 10 or more digits only (a Strava activity id, already public on
+  Activities) is opaque and not read: time-ordered Strava ids were refused in whole bands at a place
+  (11,413,000,000–11,426,000,000 on the Hong Kong box). Accepted residuals: someone typing
+  concatenated coordinates as a bare-digit `--id`, coordinates folded inside a hash-like token, a
+  1-digit-degree coordinate at the start of a long digit run.
+- **Scanner residual near the antimeridian.** The byte scanner does not look for a tile pair with a
+  zero in it inside the format's defined fields (it does in undefined sections): those fields hold
+  many small counts whose high half is zero, which read as column-0 tile pairs and failed about 0.5%
+  of scenes there by chance. Column 0 lies only within about 5.6° east of 180° (Tonga, eastern Fiji,
+  Wallis and Futuna, the Aleutians east of 180°, eastern Chukotka); row 0 needs latitude above 84.4°,
+  where there is no land. A leak there would need an encoder bug writing such a pair into a legal
+  value of a defined field, which the decoded-object scan also covers.
 - **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
   pin and report what it vendored.

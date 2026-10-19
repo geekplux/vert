@@ -20,7 +20,7 @@ Contents: [Conventions](#conventions) · [File layout](#file-layout) · [Streams
 [Sections](#sections) · [Rules a valid file follows](#rules-a-valid-file-follows) ·
 [Decoding](#decoding) · [Versioning](#versioning-and-compatibility) · [Sidecar](#sidecar) ·
 [Forbidden content](#forbidden-content) · [How the builder fills it](#how-the-builder-fills-it) ·
-[Sizes](#sizes)
+[Baking a scene](#baking-a-scene) · [Sizes](#sizes)
 
 ## Conventions
 
@@ -422,7 +422,9 @@ enough for zoom 14.
   bounding box of all the secrets (so derived values, such as interpolated route points or a value
   nudged by 10⁻⁷, are caught too). Outside the Rice streams: int32 (lat, lon) pairs and int32 key
   values at 10⁵, 10⁶ and 10⁷ units per degree and in semicircles (2³¹/180), and tile (x, y) pairs at
-  zooms 6–15 as u16 or u32. In sections the format does not define: any single float32, float64 or
+  zooms 6–15 as u16 or u32 (columns past ±180° folded back; a pair with a zero in it, column 0 by the
+  antimeridian, is the same bytes as one u32, such as a section's length, so it is looked for only
+  where single tile numbers are). A box past ±180° also holds the longitudes a turn away. In sections the format does not define: any single float32, float64 or
   int32 (at those scales) inside the box; any u16 or u32 tile number; float32 or float64 (x, y)
   pairs inside the box in projected form (Web Mercator world units 0–1, EPSG:3857 metres,
   fractional tile coordinates at zooms 6–15); and decimals written as text (`34.76375`) inside the
@@ -466,6 +468,133 @@ only code in `src/scene` that reads latitude or longitude.
   (under 50 m gain or 4%); the steepest is marked again among those left.
 - **Determinism**: the same inputs give the same bytes (no clock, no randomness, no iteration over
   unordered collections, and one rounding rule: `Math.round(value / step)`, halves rounded up).
+
+## Baking a scene
+
+```sh
+pnpm bake <input> --out <dir> [--id <id>] [--trim <metres>] [--tiles <url-template>] [--cache <dir>]
+```
+
+`pnpm bake` (`node scripts/bake.ts`, code in `scripts/bake/`) turns one activity into
+`<dir>/<id>.scene` and `<dir>/<id>.scene.json`, offline, on the machine that has the activity. It
+needs Node 22.18 or later (`engines.node`, `.nvmrc`): it runs the TypeScript in `src/` directly,
+with Node's type stripping and a small resolve hook for `src/`'s extensionless imports (an older
+Node refuses the `.ts` entry before it can say so). No dependency, DOM or WebGL.
+Integrating the files into a host page is `docs/INTEGRATION.md`'s subject.
+
+| option    | default                                              | meaning                                                                       |
+| --------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `<input>` | (required)                                           | a `.gpx`, or a `.json` points file (below)                                    |
+| `--out`   | (required)                                           | the directory to write to (created if needed)                                 |
+| `--id`    | the input's file name, lower-cased, other runs → `-` | the files' base name: `a-z`, `0-9`, `_`, `-`, at most 64, given ids as typed  |
+| `--trim`  | 200                                                  | metres hidden at each end of the route (the poster's default); `0` keeps them |
+| `--tiles` | `https://vert.fum.workers.dev/tiles/{z}/{x}/{y}.png` | elevation tile URL template (the tile Worker, or anything with its answers)   |
+| `--cache` | `scripts/.cache/terrarium` (git-ignored)             | the tile cache, `{z}/{x}/{y}.png`                                             |
+
+**What is checked in an id** (`scripts/bake/id.ts`). The id becomes a published file name, so:
+
+- **No coordinate of the run.** The id's digit runs are the groups; any run of other characters,
+  of any length, separates them. They are read as: one run of 5 or more digits with 1–7 decimals
+  implied (`hike-34766`), and with its first 2 or 3 digits as degrees and the rest as their fraction
+  (latitude and longitude run together: `347663839251`); degrees (1–3 digits, leading zeros
+  allowed) and a fraction of 3 or more digits (`34-7663`, `34point7663`, `0034-7663`, the default
+  id of `34.7663_-83.9251.gpx`); degrees and minutes below 60 (`34-45`); degrees, minutes and
+  seconds below 60 (`34d45m58s`, the default id of `track 34°45'58"N 85°36'16"W.gpx`); degrees,
+  minutes and a fraction of minutes (`n34-45-966`, or run together: `34d45966`). If any reading
+  falls within the run's latitude or longitude range (as a magnitude: a minus cannot survive in an
+  id), widened by 0.01°, the id is refused. A date in an id can collide with a run's box by chance
+  (`lap-10-03` reads as 10° 3′); the message then asks for another id.
+  - **Hashes are skipped**: a run of 16 or more hex characters, or a UUID, with a letter in it
+    (Activities' file ids are `f:<sha1>`, `f-<sha1>` once sanitised). Over 5,000 random ids each
+    against the Coosa, CCC and a Hong Kong box, none of `f-<sha1>` or UUIDs is refused.
+  - **An explicit `--id` of 10 or more digits and nothing else is not read at all**: it is an
+    opaque public identifier, such as a Strava activity id. Strava's ids are 11 digits that rise
+    with time, so the prefix readings refused whole bands of them, not a scattering, wherever a
+    run's latitude or longitude is 10–19° or 100–199° (every id from 11,413,000,000 to
+    11,426,000,000 on a Hong Kong run; 1.2116e10–1.2203e10 on Lavaredo). A sweep of every
+    millionth id from 1.0e9 to 2.0e10 is refused nowhere on the test boxes. The residual risk,
+    accepted: someone typing concatenated coordinates as a bare-digit `--id`. A default id (from
+    the file name) keeps every reading, digit-only or not, and so does any explicit id with
+    anything besides digits (`a-11413500000`).
+  - A long run's first digit alone is not read as degrees: by a 1-digit degree (the CCC, near
+    7° E) that refused about 5% of uniformly random 10-digit ids. Runs of 6–8 digits still get that
+    reading from the implied decimals, so uniformly random 8-digit ids are refused about 5% of the
+    time there.
+- **Default ids only: no timestamp.** An id made from the file name is refused when a digit run reads
+  as epoch microseconds, milliseconds, seconds or minutes from 2000 to 2100 (15–16, 12–13, 9–10 or 8
+  digits) or as a date YYYYMMDD (1990–2100): some apps name exports by the time of the run
+  (`1607437156744.gpx`), which the file name would then publish (exit 2, "pass --id"). An explicit
+  `--id` is never refused for being numeric or date-like: a host passes its own activity ids (a
+  10-digit Strava id reads as epoch seconds), and it publishes those already. A date written with
+  separators (`morning-run-2026-10-03`) is not looked for.
+
+Local bakes of your own tracks belong in `fixtures/scenes/` (git-ignored).
+
+**Points file.** For a host whose activities are FIT or similar:
+`{ "points": [{ "lat": 46.1, "lon": 7.2, "ele": 1250.5, "t": "2026-10-03T11:10:00Z" }, …] }`.
+`lat` (−90…90) and `lon` (−180…180) are required finite numbers; `ele` (metres) is optional;
+`t` is optional and is either an ISO 8601 date-time **with a zone** or **epoch milliseconds**
+(1990–2100; seconds are refused). At least 2 points, at most 500,000; present times must not go
+backwards; no other keys (a typo such as `lng` would otherwise drop data). Errors name the point and
+field, never the value.
+
+**What it does.** The run is built exactly as the app builds it: a GPX goes through the parse
+worker's own handler, a points file through the same `buildRun`; a file with no usable elevations
+(or long gaps) gets them from the terrain with the app's `withTerrainElevation`, sampled from the
+app's own grid of the whole run (`buildHeightfield(run.bounds)`, bilinear), so the summary matches
+Vert's View for the same file. The drawn stretch is `trimTrack(track, trim)`; the scene grid is
+`buildHeightfield` on its bounds with `SCENE_HEIGHTFIELD_OPTIONS`; then `buildScene`,
+`encodeScene` and the sidecar. Before anything is written, the privacy scanners run on the bytes,
+the decoded scene and the sidecar text, and the pixel-pitch attack runs with the true latitude; any
+finding refuses the scene. Both files are written to temporary names and renamed into place
+together; if any step fails, both are left as they were (absent, or the previous pair), never one
+new and one old. A bake killed mid-write (SIGKILL, power loss) leaves files beside the targets:
+temporary `<name>.tmp-*`, the previous file moved aside as `<name>.old-*`, an empty
+`<name>.none-*` for a target that did not exist, and, once the swap is committed, `<name>.done-*`.
+Before it starts, the next bake of the same id settles the pair: after a commit the new pair stays
+(and every `.old-*` and `.none-*` of the pair is deleted before any `.done-*`, so a second crash
+during that cleanup still reads as committed); before one, if either target has an `.old-*` or
+`.none-*`, the pair reverts as a whole (each `.old-*` put back, each target marked `.none-*`
+removed); then every leftover is deleted. So the pair is the old one (or none) or the new one, never
+one of each. The same input and tiles give byte-identical files. A route across the
+antimeridian works as in the app (its longitudes stay unwrapped, and the grid is framed in them).
+
+**Loops and laps.** The trim hides the first and last metres along the route, but a loop or a lap
+session passes its start again: when the real start or finish lies within 100 m of the drawn route,
+the bake says so on stderr (the distance in tens of metres, never a coordinate) and suggests a
+larger `--trim`. It still writes the scene: the start is then one point among many of the route,
+but you decide whether that is enough.
+
+**Tiles.** At most 4 requests in flight, `User-Agent: vert-bake/<version> (offline scene bake)`,
+20 s per request, only z/x/y in the path (as from the app). Answers, as the Worker gives them
+(`worker/README.md`):
+
+| answer                                     | the bake                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| 200 PNG                                    | decoded and checked (256 × 256), then cached atomically                         |
+| 404 (no tile upstream: open sea)           | a missing tile, filled from its neighbours as in the app; not retried or cached |
+| 400                                        | stops: a bug in the request or a wrong `--tiles`                                |
+| 5xx, 429, network error, timeout           | retried once, then stops                                                        |
+| 200 text/HTML/JSON/XML, or not a valid PNG | stops: the URL serves no tiles                                                  |
+| any other status                           | stops                                                                           |
+
+The app fills a tile from its neighbours after a 5xx or a timeout too, and says so on screen; a
+published scene has no such note, so the bake stops instead of publishing invented terrain (and a
+re-run would bake differently). Only a confirmed 404 is ever filled: anything else that goes wrong
+loading a tile (a decoder fault, an unexpected file system error) stops the bake. Only verified PNGs
+are cached; a second bake of the same activity makes no request. A tile that cannot be written to
+the cache (read-only or full) is used all the same, and the bake warns: the elevations are verified
+and in memory, and the cache only saves a later download.
+
+**Output.** The summary gives the id, the whole run's length and climb and where its elevations
+came from, the drawn length, the grid's samples, extent in metres and zoom, the bytes and hash, the
+tiles fetched, read from the cache and missing upstream (across both grids, and how many of those
+lie under the scene), and the privacy result; warnings go to stderr. Nothing printed, errors
+included, holds a coordinate, a bound, a tile x/y or a tile URL. Exit codes: 0 written, 1 the bake
+failed (nothing written), 2 a usage error.
+
+`src/scene/fixtures/coosa-backcountry.scene` (and its sidecar) is the sample baked with the
+defaults; `scripts/bake/fixture.test.ts` re-bakes it byte for byte when the tiles are cached.
 
 ## Sizes
 

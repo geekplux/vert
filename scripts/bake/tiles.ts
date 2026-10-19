@@ -178,7 +178,12 @@ function limiter(limit: number) {
   };
 }
 
+/** Set by the packaged command's build (vite.bake.config.ts); absent when Node runs the source. */
+declare const __VERT_LIB_VERSION__: string | undefined;
+
 function packageVersion(): string {
+  // The packaged `vert-bake` has the library's version built in (`0.2.0+<sha>`).
+  if (typeof __VERT_LIB_VERSION__ === 'string') return __VERT_LIB_VERSION__;
   try {
     const url = new URL('../../package.json', import.meta.url);
     const { version } = JSON.parse(readFileSync(url, 'utf8')) as { version?: unknown };
@@ -188,8 +193,11 @@ function packageVersion(): string {
   }
 }
 
-/** `vert-bake/<package version> (offline scene bake)`. */
-export const USER_AGENT = `vert-bake/${packageVersion()} (offline scene bake)`;
+/** What `--version` prints: package.json's version, or the packaged command's built-in one. */
+export const BAKE_VERSION = packageVersion();
+
+/** `vert-bake/<version> (offline scene bake)`. */
+export const USER_AGENT = `vert-bake/${BAKE_VERSION} (offline scene bake)`;
 
 /** A tile source for `buildHeightfield` (see the module comment for what each answer does). */
 export function createTileSource({

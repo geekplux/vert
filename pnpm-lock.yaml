@@ -4,17 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-dependencies:
-  react:
-    specifier: ^19.3.0
-    version: 19.3.0
-  react-dom:
-    specifier: ^19.3.0
-    version: 19.3.0(react@19.3.0)
-  three:
-    specifier: ^0.186.1
-    version: 0.186.1
-
 devDependencies:
   '@eslint/js':
     specifier: ^9.39.5
@@ -64,6 +53,15 @@ devDependencies:
   prettier:
     specifier: ^3.9.10
     version: 3.9.10
+  react:
+    specifier: ^19.3.0
+    version: 19.3.0
+  react-dom:
+    specifier: ^19.3.0
+    version: 19.3.0(react@19.3.0)
+  three:
+    specifier: ^0.186.1
+    version: 0.186.1
   typescript:
     specifier: ~6.0.3
     version: 6.0.3
@@ -5645,6 +5643,7 @@ packages:
     dependencies:
       react: 19.3.0
       scheduler: 0.28.0
+    dev: true
 
   /react-hotkeys-hook@4.6.2(react-dom@19.3.0)(react@19.3.0):
     resolution: {integrity: sha512-FmP+ZriY3EG59Ug/lxNfrObCnW9xQShgk7Nb83+CkpfkcCpfS95ydv+E9JuXA5cp8KtskU7LGlIARpkc92X22Q==}
@@ -5680,6 +5679,7 @@ packages:
   /react@19.3.0:
     resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
     engines: {node: '>=0.10.0'}
+    dev: true
 
   /readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
@@ -5966,6 +5966,7 @@ packages:
 
   /scheduler@0.28.0:
     resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
+    dev: true
 
   /semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
@@ -6282,7 +6283,7 @@ packages:
 
   /three@0.186.1:
     resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
-    dev: false
+    dev: true
 
   /tinybench@6.2.2:
     resolution: {integrity: sha512-nIZ2N2dFpjBsg2hgitKu7mA+FvsIJuGJOwysRngmVRRmWgR/UyPjwJj8c/fT/dhm8EkHnF5EOogRf+0Z2qrimA==}

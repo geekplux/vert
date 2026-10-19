@@ -1,8 +1,7 @@
 {
-  "name": "vert",
-  "version": "0.1.1",
-  "private": true,
-  "description": "Turn one GPX file into a 3D terrain visualization and a poster.",
+  "name": "@geekplux/vert",
+  "version": "0.2.0",
+  "description": "3D terrain of a GPX run for a React page: a scene viewer, an elevation profile, and an offline bake that keeps coordinates out of the browser.",
   "license": "MIT",
   "author": "Sean G",
   "homepage": "https://vert.geekplux.org",
@@ -15,14 +14,31 @@
     "gpx",
     "terrain",
     "elevation",
-    "poster",
     "three.js",
-    "webgl",
-    "trail-running",
-    "hiking",
     "react"
   ],
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist-lib/index.d.ts",
+      "import": "./dist-lib/index.js"
+    },
+    "./vert.css": "./dist-lib/vert.css",
+    "./fixtures/*": "./dist-lib/fixtures/*",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "vert-bake": "./dist-lib/bake.js"
+  },
+  "files": [
+    "dist-lib"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@8.6.10",
   "engines": {
     "node": ">=22.18"
@@ -30,7 +46,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:lib": "vite build -c vite.lib.config.ts",
+    "build:lib": "vite build -c vite.lib.config.ts && vite build -c vite.bake.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -45,11 +61,11 @@
     "stories": "ladle serve",
     "stories:build": "ladle build",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",
-    "worker:types": "wrangler types --config worker/wrangler.toml worker/worker-configuration.d.ts"
+    "worker:types": "wrangler types --config worker/wrangler.toml worker/worker-configuration.d.ts",
+    "prepublishOnly": "pnpm build:lib && node -e \"if (/dirty|nogit/.test(require('fs').readFileSync('dist-lib/VERSION', 'utf8'))) { console.error('dist-lib/VERSION: publish from a clean, committed checkout'); process.exit(1); }\""
   },
-  "dependencies": {
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+  "peerDependencies": {
+    "react": "^19.0.0",
     "three": "^0.186.1"
   },
   "devDependencies": {
@@ -69,6 +85,9 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^30.1.2",
     "prettier": "^3.9.10",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^8.3.4",

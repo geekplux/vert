@@ -42,7 +42,9 @@ export const fakeTerrainView = {
 };
 
 export function TerrainView(props: TerrainViewProps) {
-  const { ref, onReady, heightfield, ariaLabel, className } = props;
+  const { ref, onReady, heightfield, scene, ariaLabel, className } = props;
+  // What the real view draws: a heightfield (and track) or a scene.
+  const grid = heightfield ?? scene ?? null;
   fakeTerrainView.props.push(props);
   useImperativeHandle(
     ref,
@@ -57,10 +59,10 @@ export function TerrainView(props: TerrainViewProps) {
     [],
   );
   useEffect(() => {
-    if (fakeTerrainView.ready && heightfield) onReady?.();
-    // Like the real view: once per new heightfield.
+    if (fakeTerrainView.ready && grid) onReady?.();
+    // Like the real view: once per new heightfield or scene.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [heightfield]);
+  }, [grid]);
   if (fakeTerrainView.fail) {
     throw fakeTerrainView.error ?? new Error('Error creating WebGL context.');
   }
@@ -71,7 +73,7 @@ export function TerrainView(props: TerrainViewProps) {
       }}
       className={className}
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- as the real view
-      tabIndex={heightfield ? 0 : -1}
+      tabIndex={grid ? 0 : -1}
     >
       {/* eslint-disable-next-line jsx-a11y/no-interactive-element-to-noninteractive-role -- as the real view */}
       <canvas role="img" aria-label={ariaLabel} />

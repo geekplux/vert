@@ -25,7 +25,7 @@ import {
   TERRAIN_RECOVERED_TEXT,
   TerrainBox,
 } from './TerrainBox';
-import type { TerrainBoxProps } from './TerrainBox';
+import type { TerrainBoxCommonProps, TerrainBoxProps, TerrainBoxRunSource } from './TerrainBox';
 import { PHONE_QUERY } from '../../hooks/useMediaQuery';
 
 // jsdom has no WebGL: the lazy TerrainView module is a fake that records its props.
@@ -62,7 +62,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderBox(overrides: Partial<TerrainBoxProps> = {}) {
+function renderBox(overrides: Partial<TerrainBoxCommonProps & TerrainBoxRunSource> = {}) {
   const props: TerrainBoxProps = {
     terrain: READY,
     onRetry: vi.fn(),

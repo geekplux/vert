@@ -12,11 +12,12 @@ import {
   useRun,
   useRunChooser,
   useRunLoader,
+  useScene,
   useTerrain,
 } from './hooks';
 import type { Run } from './types';
-import type { LoadRun, LoadTerrain, RunProviderProps, Schedule } from './hooks';
-import { hills } from '../terrain/testing';
+import type { LoadRun, LoadScene, LoadTerrain, RunProviderProps, Schedule } from './hooks';
+import { hills, sceneOn } from '../terrain/testing';
 import { SAMPLE_RUN } from './sample';
 import { INITIAL_PAGE_STATE, usePageState } from './state';
 import { resetParseWorker } from '../gpx/client';
@@ -435,5 +436,76 @@ describe('useRunLoader', () => {
       loading = result.current.load({ kind: 'sample' });
     });
     await expect(loading).rejects.toBe(error);
+  });
+});
+
+describe('RunProvider scenes (?scene=)', () => {
+  const SCENE = sceneOn(hills(), [
+    [10, 10],
+    [200, 150],
+  ]);
+  const URL_A = new URL('https://example.org/terrain/a.scene');
+
+  function useBoth() {
+    const { load } = useRunLoader();
+    const { chooseScene } = useRunChooser(() => undefined);
+    return { load, chooseScene, run: useRun(), scene: useScene(), terrain: useTerrain() };
+  }
+
+  it('opens a scene as the current one: no run, no terrain build; a run then replaces it', async () => {
+    const loadScene = vi.fn<LoadScene>(() => Promise.resolve(SCENE));
+    const loadTerrain = vi.fn<LoadTerrain>(pendingLoadTerrain);
+    const { result } = renderHook(useBoth, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <RunProvider schedule={immediateSchedule} loadScene={loadScene} loadTerrain={loadTerrain}>
+          {children}
+        </RunProvider>
+      ),
+    });
+    await act(async () => {
+      result.current.chooseScene(URL_A);
+      await Promise.resolve();
+    });
+    expect(loadScene).toHaveBeenCalledTimes(1);
+    expect(loadScene.mock.calls[0]?.[0].href).toBe(URL_A.href);
+    expect(result.current.scene).toMatchObject({ name: 'a', host: 'example.org', scene: SCENE });
+    expect(result.current.run).toBeNull();
+    expect(result.current.terrain.status).toBe('idle');
+    expect(loadTerrain).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.load({ kind: 'sample' });
+    });
+    expect(result.current.run?.name).toBe(SAMPLE_RUN.name);
+    expect(result.current.scene).toBeNull();
+  });
+
+  it('a scene that is superseded by a file choice never becomes current', async () => {
+    let finish!: (scene: typeof SCENE) => void;
+    const loadScene = vi.fn<LoadScene>(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { result } = renderHook(useBoth, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <RunProvider schedule={immediateSchedule} loadScene={loadScene}>
+          {children}
+        </RunProvider>
+      ),
+    });
+    act(() => {
+      result.current.chooseScene(URL_A);
+    });
+    await act(async () => {
+      await result.current.load({ kind: 'sample' });
+    });
+    await act(async () => {
+      finish(SCENE);
+      await Promise.resolve();
+    });
+    expect(result.current.scene).toBeNull();
+    expect(result.current.run?.name).toBe(SAMPLE_RUN.name);
   });
 });

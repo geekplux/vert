@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { ElevationProfile, Slider, StatGrid, StatTile } from '../../components';
 import { formatDistance, formatDuration, formatElevation, formatKmRange } from '../../lib/format';
 import type { Units } from '../../lib/format';
@@ -7,7 +7,7 @@ import type { ViewCamera } from '../../terrain/camera';
 import { PageShell } from '../PageShell/PageShell';
 import { runDateLine, runPaceAt } from '../runCopy';
 import { EXAGGERATION } from '../state';
-import type { Run, Terrain } from '../types';
+import type { Climb, Run, Terrain } from '../types';
 import { TerrainBox } from './TerrainBox';
 import type { TerrainCameraSource } from './TerrainBox';
 import { PHONE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
@@ -73,13 +73,10 @@ export function ViewState({
   initialCamera,
 }: ViewStateProps) {
   const paceAt: PaceAt = paceAtProp ?? ((d) => runPaceAt(run, d));
-  const climbsId = useId();
-  const elevationId = useId();
   // Local to the View; the page keys this component by run, so a new run starts fresh.
   const [scrub, setScrub] = useState(() => defaultScrub(run));
   const [flat, setFlat] = useState(() => initialCamera?.view === 'flat');
   const phone = useMediaQuery(PHONE_QUERY);
-  const [titleRef, titleFit] = useTitleFit(run.name, headingRef);
 
   const distance = formatDistance(run.distance, units);
   const vert = formatElevation(run.vert, units, { signed: true });
@@ -110,35 +107,7 @@ export function ViewState({
 
   const aside = (
     <>
-      <div className={styles.titleBlock}>
-        {/* Wraps between its parts only, never inside the date or the tag. */}
-        {dateLine || run.isSample ? (
-          <p className={styles.dateLine}>
-            {dateLine ? (
-              <span className={styles.nowrap}>
-                {dateLine}
-                {run.isSample ? ' ·' : null}
-              </span>
-            ) : null}
-            {dateLine && run.isSample ? ' ' : null}
-            {run.isSample ? (
-              <span className={[styles.nowrap, styles.sample].join(' ')}>SAMPLE DATA</span>
-            ) : null}
-          </p>
-        ) : null}
-        {/* A word wider than the column steps the size down (useTitleFit), and only below
-            TITLE_MIN_PX may it hyphenate or break; other titles are set as the canvas draws them. */}
-        <h1
-          ref={titleRef}
-          tabIndex={-1}
-          className={[styles.title, titleFit.breakWords && styles.breakWords]
-            .filter(Boolean)
-            .join(' ')}
-          style={titleFit.size === TITLE_PX ? undefined : { fontSize: titleFit.size }}
-        >
-          {run.name}
-        </h1>
-      </div>
+      <ViewTitle line={dateLine} sample={run.isSample} name={run.name} headingRef={headingRef} />
 
       {sourceNote ? (
         <div className={styles.statsBlock}>
@@ -151,53 +120,9 @@ export function ViewState({
         statGrid
       )}
 
-      <section className={styles.climbs} aria-labelledby={climbsId}>
-        <h2 id={climbsId} className={styles.climbsLabel}>
-          Climbs
-        </h2>
-        {run.climbs.length === 0 ? (
-          <p className={styles.noClimbs}>No sustained climbs.</p>
-        ) : (
-          <ol className={styles.climbList}>
-            {run.climbs.map((climb, index) => (
-              <li
-                key={`${String(climb.start)}-${String(climb.end)}`}
-                className={climb.steepest ? styles.steepest : styles.climb}
-              >
-                <span className={styles.climbIndex}>{index + 1}</span>
-                <span className={styles.climbRange}>
-                  {/* The range breaks only after its arrow ("km 154.6 →" / "168.5"), never
-                      into the gain; "steepest" is a tag that wraps as a whole, under the range
-                      when the column is narrow (never a lone "·"). */}
-                  <ClimbRange text={formatKmRange(climb.start, climb.end, units)} />
-                  {climb.steepest ? (
-                    <>
-                      {' '}
-                      <span className={styles.steepestTag}>
-                        <span className={styles.visuallyHidden}>· </span>steepest
-                      </span>
-                    </>
-                  ) : null}
-                </span>
-                <span className={styles.climbGain}>
-                  {formatElevation(climb.gain, units, { signed: true }).text}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+      <ClimbList climbs={run.climbs} units={units} />
 
-      <Slider
-        label="Vertical exaggeration"
-        min={EXAGGERATION.min}
-        max={EXAGGERATION.max}
-        step={EXAGGERATION.step}
-        value={exaggeration}
-        format={formatExaggeration}
-        valueText={exaggerationValueText}
-        onChange={onExaggerationChange}
-      />
+      <ExaggerationSlider value={exaggeration} onChange={onExaggerationChange} />
 
       <p className={styles.help}>
         Drag the terrain to orbit. Scrub the profile to move the runner along the route. Your file
@@ -226,15 +151,10 @@ export function ViewState({
         cameraRef={cameraRef}
       />
 
-      <section className={styles.elevation} aria-labelledby={elevationId}>
-        <div className={styles.elevationHeader}>
-          <h2 id={elevationId} className={styles.elevationLabel}>
-            <span className={styles.upper}>Elevation</span> · {elevationRangeText(run, units)}
-          </h2>
-          <p className={styles.readout}>
-            {readoutParts(run.profile, scrub, units, paceAt).join(' · ')}
-          </p>
-        </div>
+      <ElevationSection
+        range={elevationRangeText(run, units)}
+        readout={readoutParts(run.profile, scrub, units, paceAt).join(' · ')}
+      >
         <ElevationProfile
           points={run.profile}
           climbs={run.climbs}
@@ -244,8 +164,147 @@ export function ViewState({
           height={phone ? 100 : 140}
           valueText={(d) => readoutParts(run.profile, d, units, paceAt).join(', ')}
         />
-      </section>
+      </ElevationSection>
     </PageShell>
+  );
+}
+
+/**
+ * The aside's title block: the mono line (a date, "SAMPLE DATA", or where a scene came from) and
+ * the h1. A word wider than the column steps the size down (useTitleFit), and only below
+ * TITLE_MIN_PX may it hyphenate or break; other titles are set as the canvas draws them.
+ */
+export function ViewTitle({
+  line,
+  sample = false,
+  name,
+  headingRef,
+}: {
+  /** The mono line above the h1; '' for none. */
+  line: string;
+  /** Adds the SAMPLE DATA tag to the line. */
+  sample?: boolean;
+  name: string;
+  headingRef?: Ref<HTMLHeadingElement>;
+}) {
+  const [titleRef, titleFit] = useTitleFit(name, headingRef);
+  return (
+    <div className={styles.titleBlock}>
+      {/* Wraps between its parts only, never inside the date or the tag. */}
+      {line || sample ? (
+        <p className={styles.dateLine}>
+          {line ? (
+            <span className={styles.nowrap}>
+              {line}
+              {sample ? ' ·' : null}
+            </span>
+          ) : null}
+          {line && sample ? ' ' : null}
+          {sample ? (
+            <span className={[styles.nowrap, styles.sample].join(' ')}>SAMPLE DATA</span>
+          ) : null}
+        </p>
+      ) : null}
+      <h1
+        ref={titleRef}
+        tabIndex={-1}
+        className={[styles.title, titleFit.breakWords && styles.breakWords]
+          .filter(Boolean)
+          .join(' ')}
+        style={titleFit.size === TITLE_PX ? undefined : { fontSize: titleFit.size }}
+      >
+        {name}
+      </h1>
+    </div>
+  );
+}
+
+/** The aside's Climbs list (h2), the steepest row shaded and tagged. */
+export function ClimbList({ climbs, units }: { climbs: readonly Climb[]; units: Units }) {
+  const climbsId = useId();
+  return (
+    <section className={styles.climbs} aria-labelledby={climbsId}>
+      <h2 id={climbsId} className={styles.climbsLabel}>
+        Climbs
+      </h2>
+      {climbs.length === 0 ? (
+        <p className={styles.noClimbs}>No sustained climbs.</p>
+      ) : (
+        <ol className={styles.climbList}>
+          {climbs.map((climb, index) => (
+            <li
+              key={`${String(climb.start)}-${String(climb.end)}`}
+              className={climb.steepest ? styles.steepest : styles.climb}
+            >
+              <span className={styles.climbIndex}>{index + 1}</span>
+              <span className={styles.climbRange}>
+                {/* The range breaks only after its arrow ("km 154.6 →" / "168.5"), never
+                    into the gain; "steepest" is a tag that wraps as a whole, under the range
+                    when the column is narrow (never a lone "·"). */}
+                <ClimbRange text={formatKmRange(climb.start, climb.end, units)} />
+                {climb.steepest ? (
+                  <>
+                    {' '}
+                    <span className={styles.steepestTag}>
+                      <span className={styles.visuallyHidden}>· </span>steepest
+                    </span>
+                  </>
+                ) : null}
+              </span>
+              <span className={styles.climbGain}>
+                {formatElevation(climb.gain, units, { signed: true }).text}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+/** The aside's "Vertical exaggeration" slider, 1–3 in steps of 0.1. */
+export function ExaggerationSlider({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Slider
+      label="Vertical exaggeration"
+      min={EXAGGERATION.min}
+      max={EXAGGERATION.max}
+      step={EXAGGERATION.step}
+      value={value}
+      format={formatExaggeration}
+      valueText={exaggerationValueText}
+      onChange={onChange}
+    />
+  );
+}
+
+/** Main's elevation section: "ELEVATION · 616–1,267 m", the scrub readout, then the profile. */
+export function ElevationSection({
+  range,
+  readout,
+  children,
+}: {
+  range: string;
+  readout: string;
+  children: ReactNode;
+}) {
+  const elevationId = useId();
+  return (
+    <section className={styles.elevation} aria-labelledby={elevationId}>
+      <div className={styles.elevationHeader}>
+        <h2 id={elevationId} className={styles.elevationLabel}>
+          <span className={styles.upper}>Elevation</span> · {range}
+        </h2>
+        <p className={styles.readout}>{readout}</p>
+      </div>
+      {children}
+    </section>
   );
 }
 

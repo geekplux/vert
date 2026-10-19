@@ -11,6 +11,7 @@ import type { ReactNode, Ref, RefObject } from 'react';
 import { Button, Marker } from '../../components';
 import type { ViewCamera } from '../../terrain/camera';
 import type { Heightfield } from '../../terrain/heightfield';
+import type { Scene } from '../../scene/types';
 import type { ScreenRect } from '../../terrain/stage';
 import type { TerrainViewHandle } from '../../terrain/TerrainView';
 import { TERRAIN_TOO_LARGE_ERROR } from '../hooks';
@@ -37,16 +38,37 @@ export const TERRAIN_RECOVERED_TEXT = 'Terrain loaded.';
 /** One Rotate view press: an eighth of a turn. */
 export const ROTATE_STEP = Math.PI / 4;
 
+/** A scene's terrain: nothing to fetch, the box only waits for the view's first frame. */
+const SCENE_TERRAIN: Terrain = { status: 'idle' };
+
 /** Gap the stage keeps between an overlay and the model is its own (12 px); see `TerrainView`. */
 const NO_OVERLAYS: readonly ScreenRect[] = [];
 
-export interface TerrainBoxProps {
+/** A run: its terrain, built from elevation tiles in the browser, and its points. */
+export interface TerrainBoxRunSource {
   /** `useTerrain()`: loading, ready with the height grid, or an error message. */
   terrain: Terrain;
   /** Builds the terrain again (`useRetryTerrain()`), for "Try again". */
   onRetry: () => void;
   /** The run's points, draped on the terrain with ○ start and ▲ summit. */
   track: RunTrack;
+  scene?: never;
+}
+
+/**
+ * A baked scene opened from a link (src/page/sceneLink.ts): its grid, route and markers are all
+ * in it, so there is nothing to load but the view's code, and only that can be retried.
+ */
+export interface TerrainBoxSceneSource {
+  scene: Scene;
+  terrain?: never;
+  onRetry?: never;
+  track?: never;
+}
+
+export type TerrainBoxProps = TerrainBoxCommonProps & (TerrainBoxRunSource | TerrainBoxSceneSource);
+
+export interface TerrainBoxCommonProps {
   /** Scrub position, metres along the route (shared with the elevation profile). */
   scrub: number;
   /** Vertical exaggeration, 1–3 (the slider). */
@@ -97,9 +119,10 @@ export interface TerrainCameraSource {
  * terrain once drawn (with a polite "Terrain loaded."), or Try again if it failed again.
  */
 export function TerrainBox({
-  terrain,
+  terrain: runTerrain,
   onRetry,
   track,
+  scene,
   scrub,
   exaggeration,
   ariaLabel,
@@ -128,12 +151,15 @@ export function TerrainBox({
   const [boundaryKey, setBoundaryKey] = useState(0);
   // The view mounts with the View, before the tiles are in (heightfield null draws nothing), so
   // its chunk and WebGL context load in parallel with the tiles and a ready grid is just a prop.
-  // Which height grid has its first frame on screen: until then the loading text stays up.
-  const [drawn, setDrawn] = useState<Heightfield | null>(null);
+  // Which height grid (or scene) has its first frame on screen: until then the loading text stays.
+  const [drawn, setDrawn] = useState<Heightfield | Scene | null>(null);
 
+  // A scene brings its own grid: no terrain is built, so none can fail or be retried.
+  const terrain: Terrain = runTerrain ?? SCENE_TERRAIN;
   const heightfield = terrain.status === 'ready' ? terrain.heightfield : null;
+  const grid: Heightfield | Scene | null = scene ?? heightfield;
   const error = viewError ?? (terrain.status === 'error' ? terrain.error : null);
-  const loading = !error && (heightfield === null || drawn !== heightfield);
+  const loading = !error && (grid === null || drawn !== grid);
   // A route too large to fetch tiles for fails the same way every time: no Try again.
   const retryable = viewError !== null || error !== TERRAIN_TOO_LARGE_ERROR;
   const ready = !error && !loading;
@@ -166,10 +192,11 @@ export function TerrainBox({
       setLazyTerrainView(() => createLazyTerrainView());
       setBoundaryKey((key) => key + 1);
     }
-    if (terrain.status === 'error') onRetry();
+    if (terrain.status === 'error') onRetry?.();
   };
 
-  const loop = isLoop(track);
+  // A scene stores no finish marker for a loop (the start stands for both).
+  const loop = scene ? scene.markers.finish === null : isLoop(track);
 
   const legend = (
     // The markers are drawn shapes; the words next to them carry the meaning.
@@ -271,18 +298,17 @@ export function TerrainBox({
                 <LazyTerrainView
                   ref={viewRef}
                   className={styles.terrain}
-                  heightfield={heightfield}
+                  {...(scene ? { scene } : { heightfield, track })}
                   exaggeration={exaggeration}
                   view={flat ? 'flat' : 'oblique'}
                   initialCamera={initialCamera}
-                  track={track}
                   scrub={scrub}
                   overlays={overlays}
                   ariaLabel={ariaLabel}
                   onReady={() => {
-                    if (!heightfield) return;
+                    if (!grid) return;
                     perfMark(PERF_MARKS.firstFrame);
-                    setDrawn(heightfield);
+                    setDrawn(grid);
                   }}
                 />
               </Suspense>

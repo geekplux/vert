@@ -9,11 +9,10 @@ import {
 } from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { describe, expect, it, vi } from 'vitest';
-import { haversine } from '../lib/geo';
 import { TRAIL_SIGN_ROUTE_PALETTE } from '../poster/terrainFigure';
 import { blend, contrast } from '../test/contrast';
-import { elevationAt } from './heightfield';
-import { heightfieldToLocal, modelBounds } from './mesh';
+import { gridDistance, gridElevation } from './grid';
+import { gridToLocal, modelBounds } from './mesh';
 import {
   APP_ROUTE_PALETTE,
   CORE_CUT_INSET_PX,
@@ -40,58 +39,66 @@ import {
   type RoutePalette,
   type RouteTrack,
 } from './route';
-import { hills, makeTrack } from './testing';
+import { gridTrackOn, hills, makeGridTrack } from './testing';
 
-/** A straight track across the heightfield, west to east, in `n` points. */
+/** A straight track across the heightfield, west to east, in `n` points, on its grid. */
 function straight(n = 50): RouteTrack {
   const points: [number, number][] = Array.from({ length: n }, (_, k) => [
     34.71,
     -83.995 + (0.03 * k) / (n - 1),
   ]);
-  return makeTrack(points);
+  return gridTrackOn(hills(), points);
 }
 
 describe('pointAtDistance', () => {
-  const track = makeTrack([
-    [34.71, -83.99],
-    [34.71, -83.98],
-    [34.715, -83.98],
+  const hf = hills();
+  // Columns 10 → 30 along row 20, then down to row 40.
+  const track = makeGridTrack(hf, [
+    [10, 20],
+    [30, 20],
+    [30, 40],
   ]);
   const first = track.cumulative[1] ?? 0;
   const total = trackLength(track);
 
   it('interpolates between recorded points and reports the segment', () => {
     const half = pointAtDistance(track, first / 2);
-    expect(half.lon).toBeCloseTo(-83.985, 9);
-    expect(half.lat).toBeCloseTo(34.71, 9);
+    expect(half.col).toBeCloseTo(20, 9);
+    expect(half.row).toBeCloseTo(20, 9);
     expect(half.index).toBe(0);
     const later = pointAtDistance(track, first + (total - first) / 4);
-    expect(later.lon).toBeCloseTo(-83.98, 9);
-    expect(later.lat).toBeCloseTo(34.71125, 6);
+    expect(later.col).toBeCloseTo(30, 9);
+    expect(later.row).toBeCloseTo(25, 9);
     expect(later.index).toBe(1);
   });
 
   it('clamps to the ends', () => {
-    expect(pointAtDistance(track, -100)).toEqual({ lon: -83.99, lat: 34.71, index: 0 });
-    expect(pointAtDistance(track, total + 100)).toEqual({ lon: -83.98, lat: 34.715, index: 2 });
+    expect(pointAtDistance(track, -100)).toEqual({ col: 10, row: 20, index: 0 });
+    expect(pointAtDistance(track, total + 100)).toEqual({ col: 30, row: 40, index: 2 });
     expect(pointAtDistance(track, Number.NaN).index).toBe(0);
   });
 });
 
 describe('resampleTrack', () => {
   it(`samples evenly, at most ${String(ROUTE_STEP_M)} m apart, ends included`, () => {
-    const track = straight(7);
+    const hf = hills();
+    const track = makeGridTrack(
+      hf,
+      Array.from({ length: 7 }, (_, k): [number, number] => [10 + 15 * k, 40 + 2 * k]),
+    );
     const total = trackLength(track);
     const samples = resampleTrack(track);
-    const n = samples.lon.length;
+    const n = samples.col.length;
     expect(n).toBe(Math.ceil(total / ROUTE_STEP_M) + 1);
-    expect(samples.lon[0]).toBeCloseTo(track.lon[0] ?? 0, 12);
-    expect(samples.lon[n - 1]).toBeCloseTo(track.lon[6] ?? 0, 12);
+    expect(samples.col[0]).toBeCloseTo(track.col[0] ?? 0, 12);
+    expect(samples.col[n - 1]).toBeCloseTo(track.col[6] ?? 0, 12);
+    expect(samples.row[n - 1]).toBeCloseTo(track.row[6] ?? 0, 12);
     expect(samples.distance[n - 1]).toBeCloseTo(total, 6);
     for (let k = 1; k < n; k++) {
-      const gap = haversine(
-        { lat: samples.lat[k - 1] ?? 0, lon: samples.lon[k - 1] ?? 0 },
-        { lat: samples.lat[k] ?? 0, lon: samples.lon[k] ?? 0 },
+      const gap = gridDistance(
+        hf,
+        { col: samples.col[k - 1] ?? 0, row: samples.row[k - 1] ?? 0 },
+        { col: samples.col[k] ?? 0, row: samples.row[k] ?? 0 },
       );
       expect(gap).toBeLessThanOrEqual(ROUTE_STEP_M + 1e-6);
       expect(gap).toBeGreaterThan(ROUTE_STEP_M * 0.9);
@@ -99,37 +106,37 @@ describe('resampleTrack', () => {
   });
 
   it(`caps a long route at ${String(MAX_ROUTE_POINTS)} points`, () => {
-    // ~110 km of latitude.
-    const points: [number, number][] = Array.from({ length: 2000 }, (_, k) => [k * 0.0005, 10]);
-    const track = makeTrack(points);
+    // ~112 km: 2,000 steps of 2 rows (56 m) each.
+    const points: [number, number][] = Array.from({ length: 2000 }, (_, k) => [10, k * 2]);
+    const track = makeGridTrack(hills(), points);
     expect(trackLength(track)).toBeGreaterThan(100_000);
     const samples = resampleTrack(track);
-    expect(samples.lon.length).toBe(MAX_ROUTE_POINTS);
-    expect(samples.lat.at(-1)).toBeCloseTo(points.at(-1)?.[0] ?? 0, 9);
-    expect(resampleTrack(track, { maxPoints: 100 }).lat.length).toBe(100);
+    expect(samples.col.length).toBe(MAX_ROUTE_POINTS);
+    expect(samples.row.at(-1)).toBeCloseTo(points.at(-1)?.[1] ?? 0, 9);
+    expect(resampleTrack(track, { maxPoints: 100 }).row.length).toBe(100);
   });
 
   it('follows corners and skips repeated points', () => {
-    const track = makeTrack([
-      [34.71, -83.99],
-      [34.71, -83.99],
-      [34.71, -83.98],
-      [34.72, -83.98],
+    const track = makeGridTrack(hills(), [
+      [10, 20],
+      [10, 20],
+      [20, 20],
+      [20, 30],
     ]);
     const samples = resampleTrack(track);
     const corner = track.cumulative[2] ?? 0;
     samples.distance.forEach((d, k) => {
       const expected = pointAtDistance(track, d);
-      expect(samples.lon[k]).toBeCloseTo(expected.lon, 9);
-      expect(samples.lat[k]).toBeCloseTo(expected.lat, 9);
+      expect(samples.col[k]).toBeCloseTo(expected.col, 9);
+      expect(samples.row[k]).toBeCloseTo(expected.row, 9);
     });
     expect(samples.distance.some((d) => d > corner)).toBe(true);
   });
 
   it('gives two points for a zero-length track and none for an empty one', () => {
-    const still = makeTrack([[34.71, -83.99]]);
-    expect(resampleTrack(still).lon.length).toBe(2);
-    expect(resampleTrack(makeTrack([])).lon.length).toBe(0);
+    const still = makeGridTrack(hills(), [[10, 20]]);
+    expect(resampleTrack(still).col.length).toBe(2);
+    expect(resampleTrack(makeGridTrack(hills(), [])).col.length).toBe(0);
   });
 });
 
@@ -139,12 +146,12 @@ describe('drapeTrack', () => {
     const samples = resampleTrack(straight());
     const positions = drapeTrack(hf, samples, 2);
     const { scale } = modelBounds(hf);
-    for (let k = 0; k < samples.lon.length; k += 17) {
-      const lon = samples.lon[k] ?? 0;
-      const lat = samples.lat[k] ?? 0;
-      const expectedY = (elevationAt(hf, lon, lat) + 2 - hf.min) * scale;
+    for (let k = 0; k < samples.col.length; k += 17) {
+      const col = samples.col[k] ?? 0;
+      const row = samples.row[k] ?? 0;
+      const expectedY = (gridElevation(hf, col, row) + 2 - hf.min) * scale;
       expect(positions[k * 3 + 1]).toBeCloseTo(expectedY, 6);
-      const local = heightfieldToLocal(hf, lon, lat);
+      const local = gridToLocal(hf, col, row);
       expect(positions[k * 3]).toBeCloseTo(local.x, 6);
       expect(positions[k * 3 + 2]).toBeCloseTo(local.z, 6);
     }
@@ -312,7 +319,7 @@ describe('createRouteLayer', () => {
   it('stores positions at exaggeration 1 and scales them with the shared uniform', () => {
     const hf = hills();
     const layer = createRouteLayer(hf, straight(), { exaggeration: 1.6 });
-    const n = layer.samples.lon.length;
+    const n = layer.samples.col.length;
     expect(layer.core.geometry.instanceCount).toBe(n - 1);
     expect(layer.halo.material.uniforms.uExaggeration?.value).toBe(1.6);
     layer.setExaggeration(2.5);
@@ -320,10 +327,10 @@ describe('createRouteLayer', () => {
     expect(layer.core.material.uniforms.uExaggeration?.value).toBe(2.5);
     // The positions themselves are untouched (no rebuild), at the default 2 m lift.
     const k = Math.floor(n / 2);
-    const expected = heightfieldToLocal(
+    const expected = gridToLocal(
       hf,
-      layer.samples.lon[k] ?? 0,
-      layer.samples.lat[k] ?? 0,
+      layer.samples.col[k] ?? 0,
+      layer.samples.row[k] ?? 0,
       1,
       DEFAULT_LIFT_M,
     );
@@ -366,5 +373,10 @@ describe('readRoutePalette', () => {
     const values: Record<string, string> = { '--route': ' #d9480f ', '--ink': '#1b2a3a' };
     const palette = readRoutePalette({ getPropertyValue: (name) => values[name] ?? '' });
     expect(palette).toEqual({ route: '#d9480f', halo: '#FFFFFF', ink: '#1b2a3a' });
+  });
+
+  it('falls back to the app palette for every token a host lacks or leaves blank', () => {
+    expect(readRoutePalette({ getPropertyValue: () => '' })).toEqual(APP_ROUTE_PALETTE);
+    expect(readRoutePalette({ getPropertyValue: () => '  ' })).toEqual(APP_ROUTE_PALETTE);
   });
 });

@@ -111,7 +111,8 @@ Housekeeping (2026-10-18): `upload-entry-v2` gate passed (lint, typecheck, 1,538
 | ---- | ----------------------------------------------- | ------ | ------- | ----- |
 | [ ]  | 1. Scene format (`docs/SCENE.md`, `src/scene/`) |        |         |       |
 | [ ]  | 2. Headless bake (`pnpm bake`)                  |        |         |       |
-| [ ]  | 3. Library build (`pnpm build:lib`)             |        |         |       |
+| [ ]  | 3a. Grid-space terrain internals                |        |         |       |
+| [ ]  | 3b. Library build (`pnpm build:lib`)            |        |         |       |
 | [ ]  | 4. Scrub sync API                               |        |         |       |
 | [ ]  | 5. `docs/INTEGRATION.md`                        |        |         |       |
 

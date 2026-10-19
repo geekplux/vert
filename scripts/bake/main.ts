@@ -12,8 +12,8 @@ import { parseArgs } from 'node:util';
 import { formatNumber } from '../../src/lib/format';
 import { BakeError, UsageError, printableMessage } from './errors';
 import { checkDefaultIdTimestamp, checkExplicitId, idFromFileName } from './id';
-import { readInput } from './input';
-import { DEFAULT_TRIM_M, bakeScene, type BakedScene } from './pipeline';
+import { STDIN_INPUT, readInput, readStdinInput } from './input';
+import { DEFAULT_TRIM_M, MAX_TRIM_M, bakeScene, type BakedScene } from './pipeline';
 import {
   DEFAULT_CACHE_DIR,
   DEFAULT_TILE_TEMPLATE,
@@ -30,21 +30,20 @@ import {
 
 export const USAGE = `Usage: pnpm bake <input> --out <dir> [options]
 
-Bakes one activity (.gpx, or a .json points file) into <dir>/<id>.scene and
-<dir>/<id>.scene.json for a host page (docs/SCENE.md, "Baking a scene").
+Bakes one activity (.gpx, or a .json points file; - reads a points file from
+standard input) into <dir>/<id>.scene and <dir>/<id>.scene.json for a host page
+(docs/SCENE.md, "Baking a scene").
 
 Options:
   --out <dir>       where to write the scene and its sidecar (required)
-  --id <id>         file name base, a-z 0-9 _ - (default: from the input's name)
+  --id <id>         file name base, a-z 0-9 _ - (default: from the input's name;
+                    required with -)
   --trim <metres>   metres hidden at each end of the route (default ${String(DEFAULT_TRIM_M)}; 0 keeps them)
   --tiles <url>     tile URL template with {z} {x} {y}
                     (default ${DEFAULT_TILE_TEMPLATE})
   --cache <dir>     tile cache (default scripts/.cache/terrarium)
   -h, --help        show this help
 `;
-
-/** Largest `--trim`, metres. */
-const MAX_TRIM_M = 10_000;
 
 export interface CliArguments {
   readonly input: string;
@@ -86,6 +85,9 @@ export function parseCli(argv: readonly string[]): CliArguments | null {
   if (positionals.length !== 1) throw new UsageError('Give exactly one input file.');
   const [input = ''] = positionals;
   if (!values.out) throw new UsageError('--out <dir> is required.');
+  if (input === STDIN_INPUT && values.id === undefined) {
+    throw new UsageError('--id <id> is required when the input is - (standard input).');
+  }
   let trim = DEFAULT_TRIM_M;
   if (values.trim !== undefined) {
     trim = /^\d+(\.\d+)?$/.test(values.trim) ? Number(values.trim) : NaN;
@@ -135,7 +137,7 @@ export async function runBake(
   const sidecarPath = join(out, `${id}.scene.json`);
   // A bake killed mid-write may have left the previous files aside: put them back first.
   recoverLeftovers([scenePath, sidecarPath], fileOps);
-  const input = readInput(args.input);
+  const input = args.input === STDIN_INPUT ? await readStdinInput() : readInput(args.input);
   const tiles = createTileSource({ template: args.tiles, cacheDir: args.cache, ...tileOptions });
   const baked = await bakeScene(input, {
     id,
@@ -165,6 +167,7 @@ export async function runBake(
 
 const km = (metres: number) => `${formatNumber(metres / 1000, 2)} km`;
 const m = (metres: number) => `${formatNumber(metres)} m`;
+const signed = (metres: number) => `${formatNumber(metres, 0, true)} m`;
 
 const ELEVATION_SOURCES: Record<string, string> = {
   gpx: 'from the file',
@@ -183,9 +186,16 @@ export function summaryText({ baked, scenePath, sidecarPath, seconds }: BakeOutc
       ? 'ends kept'
       : `${m(summary.trim.start)} hidden at the start, ${m(summary.trim.end)} at the end`;
   const elevation = ELEVATION_SOURCES[baked.elevationSource ?? ''] ?? 'unknown';
+  const offset = baked.elevationOffset;
   const lines = [
     `Baked ${baked.id}`,
     `  run      ${km(summary.distance)}, ${climb}; elevation ${elevation}`,
+    ...(offset
+      ? [
+          `  offset   file − terrain elevation ${signed(offset.mean)} on average, ` +
+            `${signed(offset.min)} to ${signed(offset.max)} along the drawn route`,
+        ]
+      : []),
     `  drawn    ${km(summary.drawnLength)} (${trim})`,
     `  grid     ${String(scene.grid.width)} × ${String(scene.grid.height)} samples, ` +
       `${m(summary.extent.x)} × ${m(summary.extent.y)}, zoom ${String(scene.grid.zoom)}`,

@@ -3,7 +3,7 @@
  * `node scripts/bake.ts` end to end, in a child process (exactly as `pnpm bake` runs it, resolve
  * hook included), against a local tile server.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -93,6 +93,44 @@ function bake(...args: string[]): Promise<Result> {
   });
 }
 
+/**
+ * `bake(...args)` with `input` written to the child's standard input, through a pipe, as a host's
+ * async `spawn` does; a string is written whole, a number is that many megabytes of spaces, written
+ * a megabyte at a time until the child stops reading.
+ */
+function bakeWithStdin(input: string | number, ...args: string[]): Promise<Result> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [ENTRY, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk));
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      resolve({ code: code ?? 1, stdout, stderr });
+    });
+    // The child may stop reading (over the limit): its end of the pipe closes, which is fine.
+    child.stdin.on('error', () => undefined);
+    if (typeof input === 'string') {
+      child.stdin.end(input);
+      return;
+    }
+    const megabyte = Buffer.alloc(2 ** 20, ' ');
+    let left = input;
+    const write = () => {
+      while (left > 0) {
+        left--;
+        if (!child.stdin.write(megabyte)) {
+          child.stdin.once('drain', write);
+          return;
+        }
+      }
+      child.stdin.end();
+    };
+    write();
+  });
+}
+
 /** Printed text gives no coordinate away: Activities' pattern, and no pair or key value in it. */
 function expectNoCoordinates(text: string) {
   expect(scanText(text)).toEqual([]);
@@ -134,6 +172,9 @@ describe('node scripts/bake.ts', () => {
     expect(scene.summary.trim).toEqual({ start: 200, end: 200 });
     expect(result.stdout).toMatch(/^Baked test-run\n/);
     expect(result.stdout).toMatch(/elevation from the file/);
+    expect(result.stdout).toMatch(
+      /^ {2}offset {3}file − terrain elevation [+−]?\d+ m on average, [+−]?\d+ m to [+−]?\d+ m along the drawn route$/m,
+    );
     expect(result.stdout).toMatch(/tiles {4}\d+ fetched, 0 from cache, 0 missing/);
     expect(result.stdout).toMatch(/privacy {2}clean/);
     expectNoCoordinates(result.stdout);
@@ -182,6 +223,77 @@ describe('node scripts/bake.ts', () => {
     expectNoCoordinates(result.stdout);
   });
 
+  it('bakes a points file from standard input (-): the same scene, no file of its own', async () => {
+    const out = join(dir, 'stdin');
+    const result = await bakeWithStdin(
+      pointsJsonOf(route),
+      '-',
+      '--out',
+      out,
+      '--id',
+      'test-run',
+      '--tiles',
+      tiles,
+      '--cache',
+      cache,
+    );
+    expect(result.stderr).toBe('');
+    expect(result.code).toBe(0);
+    expect(readdirSync(out).sort()).toEqual(['test-run.scene', 'test-run.scene.json']);
+    expect(
+      Buffer.from(outputs(out, 'test-run').bytes).equals(
+        Buffer.from(outputs(join(dir, 'gpx'), 'test-run').bytes),
+      ),
+    ).toBe(true);
+    expectNoCoordinates(result.stdout);
+  });
+
+  it('reads standard input larger than a pipe’s buffer: async spawn (2 MB) and spawnSync (20 MB)', async () => {
+    const reference = outputs(join(dir, 'gpx'), 'test-run').bytes;
+    // JSON allows trailing whitespace: the same points, padded past what one pipe buffer holds.
+    const padded = (mb: number) => pointsJsonOf(route) + ' '.repeat(mb * 2 ** 20);
+    const common = ['--id', 'test-run', '--tiles', tiles, '--cache', cache];
+    const out = join(dir, 'stdin-large');
+    const result = await bakeWithStdin(padded(2), '-', '--out', out, ...common);
+    expect(result.stderr).toBe('');
+    expect(result.code).toBe(0);
+    expect(Buffer.from(outputs(out, 'test-run').bytes).equals(Buffer.from(reference))).toBe(true);
+    const outSync = join(dir, 'stdin-sync');
+    const sync = spawnSync(process.execPath, [ENTRY, '-', '--out', outSync, ...common], {
+      input: padded(20),
+      encoding: 'utf8',
+    });
+    expect(sync.stderr).toBe('');
+    expect(sync.status).toBe(0);
+    expect(Buffer.from(outputs(outSync, 'test-run').bytes).equals(Buffer.from(reference))).toBe(
+      true,
+    );
+  });
+
+  it('standard input over 128 MB: exit 1 as the limit passes, nothing written', async () => {
+    const out = join(dir, 'stdin-huge');
+    const result = await bakeWithStdin(130, '-', '--out', out, '--id', 'huge');
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/The input is over the 128 MB limit\.\nNothing was written\./);
+    expect(existsSync(out)).toBe(false);
+  });
+
+  it('broken points on standard input: exit 1, nothing written, no value echoed', async () => {
+    const out = join(dir, 'stdin-broken');
+    const result = await bakeWithStdin(
+      '{"points": [{"lat": 46.583917, "lng": 7.912846}]}',
+      '-',
+      '--out',
+      out,
+      '--id',
+      'broken',
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/needs at least 2 points|unknown key/);
+    expect(result.stderr).not.toContain('46.58');
+    expect(existsSync(out)).toBe(false);
+  });
+
   it('bakes a GPX without <ele>, its elevations from the terrain', async () => {
     const out = join(dir, 'no-ele');
     const result = await bake(
@@ -195,6 +307,7 @@ describe('node scripts/bake.ts', () => {
     );
     expect(result.code).toBe(0);
     expect(result.stdout).toMatch(/elevation from the terrain/);
+    expect(result.stdout).not.toMatch(/offset/);
     const { sidecar } = outputs(out, 'no-ele');
     expect(
       (JSON.parse(sidecar) as { summary: { climb: number | null } }).summary.climb,
@@ -279,6 +392,7 @@ describe('node scripts/bake.ts', () => {
     [['in.gpx', '--out', 'x', '--trim', 'lots'], /--trim must be/],
     [['in.gpx', '--out', 'x', '--id', 'Not OK'], /--id must be/],
     [['in.gpx', '--out', 'x', '--colour', 'red'], /Unknown option '--colour'/],
+    [['-', '--out', 'x'], /--id <id> is required when the input is -/],
   ])('usage error %j: exit 2 with the usage', async (args, message) => {
     const result = await bake(...args);
     expect(result.code).toBe(2);
@@ -331,10 +445,14 @@ describe('node scripts/bake.ts', () => {
     );
     expect(result.code).toBe(0);
     expect(result.stderr).toMatch(
-      /^vert-bake: warning: The run's real start lies .* the drawn route/m,
+      /^vert-bake: warning: The drawn route passes .* the run's real start/m,
     );
-    expect(result.stderr).toMatch(/^vert-bake: warning: The run's real finish/m);
-    expect(result.stderr).not.toMatch(/\d\.\d/);
+    expect(result.stderr).toMatch(/^vert-bake: warning: The drawn route passes .* real finish/m);
+    // Three laps: the start is passed again a lap in; a trim of a little over a lap hides it.
+    expect(result.stderr).toMatch(
+      /passes within 10 m of the run's real start at about km \d+\.\d of \d+\.\d \(a loop or laps pass it again\), so the trim does not hide it; --trim 1\d{3} does\.$/m,
+    );
+    expectNoCoordinates(result.stderr);
   });
 
   it('a sidecar that cannot be written: exit 1, and no scene written either', async () => {

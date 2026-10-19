@@ -338,7 +338,7 @@ describe('ElevationProfile', () => {
         pointerId: 1,
         clientX: 350,
         button: 0,
-        pointerType: 'touch',
+        pointerType: 'mouse',
       });
       expect(capture).toHaveBeenCalledWith(1);
       expect(valueNow()).toBe(10_700);
@@ -355,6 +355,57 @@ describe('ElevationProfile', () => {
       fireEvent.pointerUp(slider, { pointerId: 1, clientX: 225 });
       fireEvent.pointerMove(slider, { pointerId: 1, clientX: 600 });
       expect(valueNow()).toBe(5_350);
+    });
+
+    describe('touch', () => {
+      const touch = { pointerId: 7, pointerType: 'touch' } as const;
+
+      it('a tap sets the position under the finger, on lifting it', () => {
+        render(<Harness scrub={null} />);
+        const slider = screen.getByRole('slider');
+        mockRect(slider);
+        fireEvent.pointerDown(slider, { ...touch, clientX: 350, clientY: 70 });
+        expect(slider.getAttribute('aria-valuetext')).toBe('No position selected');
+        expect(capture).not.toHaveBeenCalled();
+        // Within the slop: still a tap.
+        fireEvent.pointerMove(slider, { ...touch, clientX: 353, clientY: 75 });
+        fireEvent.pointerUp(slider, { ...touch, clientX: 353, clientY: 75 });
+        expect(valueNow()).toBe(Math.round(((353 - 100) / 500) * 21_400));
+      });
+
+      it('a vertical swipe sets nothing (the browser scrolls and cancels it)', () => {
+        render(<Harness scrub={null} />);
+        const slider = screen.getByRole('slider');
+        mockRect(slider);
+        fireEvent.pointerDown(slider, { ...touch, clientX: 350, clientY: 100 });
+        fireEvent.pointerMove(slider, { ...touch, clientX: 352, clientY: 80 });
+        fireEvent.pointerMove(slider, { ...touch, clientX: 400, clientY: 70 });
+        fireEvent.pointerCancel(slider, { ...touch, clientX: 400, clientY: 70 });
+        expect(slider.getAttribute('aria-valuetext')).toBe('No position selected');
+        // Nor does a swipe the browser lets end with a pointerup.
+        fireEvent.pointerDown(slider, { ...touch, clientX: 350, clientY: 100 });
+        fireEvent.pointerMove(slider, { ...touch, clientX: 350, clientY: 60 });
+        fireEvent.pointerUp(slider, { ...touch, clientX: 350, clientY: 60 });
+        expect(slider.getAttribute('aria-valuetext')).toBe('No position selected');
+        expect(capture).not.toHaveBeenCalled();
+      });
+
+      it('a sideways drag past the slop scrubs, and keeps scrubbing whichever way it goes', () => {
+        render(<Harness scrub={0} />);
+        const slider = screen.getByRole('slider');
+        mockRect(slider);
+        fireEvent.pointerDown(slider, { ...touch, clientX: 350, clientY: 70 });
+        fireEvent.pointerMove(slider, { ...touch, clientX: 358, clientY: 71 });
+        expect(valueNow()).toBe(0);
+        fireEvent.pointerMove(slider, { ...touch, clientX: 359, clientY: 72 });
+        // A finger is captured implicitly from its pointerdown.
+        expect(capture).not.toHaveBeenCalled();
+        expect(valueNow()).toBe(Math.round(((359 - 100) / 500) * 21_400));
+        fireEvent.pointerMove(slider, { ...touch, clientX: 600, clientY: 140 });
+        expect(valueNow()).toBe(21_400);
+        fireEvent.pointerUp(slider, { ...touch, clientX: 600, clientY: 140 });
+        expect(valueNow()).toBe(21_400);
+      });
     });
 
     it('ignores other pointers and non-primary mouse buttons', () => {

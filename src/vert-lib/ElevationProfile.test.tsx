@@ -108,7 +108,7 @@ describe('ElevationProfile (library): onScrub', () => {
       pointerId: 1,
       clientX: 350,
       button: 0,
-      pointerType: 'touch',
+      pointerType: 'mouse',
     });
     expect(onScrub).toHaveBeenLastCalledWith(START + LENGTH / 2);
     fireEvent.pointerMove(slider(), { pointerId: 1, clientX: 600 });

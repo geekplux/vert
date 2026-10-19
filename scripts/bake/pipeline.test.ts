@@ -16,7 +16,17 @@ import { buildHeightfield, elevationAt } from '../../src/terrain/heightfield';
 import { decodeScene, scanScene } from '../../src/scene/bake';
 import { BakeError } from './errors';
 import { gpxInput, parsePointsJson, runFromPoints, type BakeInput } from './input';
-import { DEFAULT_TRIM_M, bakeScene, trackBounds } from './pipeline';
+import { trimTrack } from '../../src/gpx/trim';
+import {
+  DEFAULT_TRIM_M,
+  bakeScene,
+  clearingTrim,
+  distanceToTrack,
+  elevationOffset,
+  howNear,
+  nearestOnTrack,
+  trackBounds,
+} from './pipeline';
 import { decodeTerrariumPngBytes } from './png';
 import {
   antimeridianRoute,
@@ -94,6 +104,35 @@ describe('bakeScene', () => {
     const { summary } = baked.sidecar;
     expect(summary.trim).toEqual({ start: 0, end: 0 });
     expect(Math.abs(summary.drawnLength - summary.distance)).toBeLessThanOrEqual(1);
+  });
+
+  it('reports the file’s elevations minus the terrain’s on the drawn route; none for terrain ones', async () => {
+    const baked = await bakeScene(withEle, { id: 'test-run', trim: 200, tiles: tiles().source });
+    // The synthetic file is the synthetic terrain plus a ±4 m wave (testing.ts, syntheticRoute).
+    const offset = baked.elevationOffset;
+    expect(offset).not.toBeNull();
+    expect(Math.abs(offset?.mean ?? NaN)).toBeLessThanOrEqual(2);
+    expect(offset?.min).toBeGreaterThanOrEqual(-8);
+    expect(offset?.min).toBeLessThan(0);
+    expect(offset?.max).toBeGreaterThan(0);
+    expect(offset?.max).toBeLessThanOrEqual(8);
+    const terrain = await bakeScene(withoutEle, { id: 'no-ele', trim: 200, tiles: tiles().source });
+    expect(terrain.elevationOffset).toBeNull();
+  });
+
+  it('elevationOffset: weighted by distance, whole metres', async () => {
+    const grid = await buildHeightfield(withEle.run.bounds, {
+      fetchTile: (coord) => Promise.resolve(decodeTerrariumPngBytes(syntheticTilePng(coord))),
+    });
+    const n = 3;
+    const lat = Float64Array.from({ length: n }, (_, i) => withEle.points.lat[i * 100] ?? 0);
+    const lon = Float64Array.from({ length: n }, (_, i) => withEle.points.lon[i * 100] ?? 0);
+    const terrain = Array.from(lat, (la, i) => elevationAt(grid, lon[i] ?? 0, la));
+    // +10 m, +10 m over the first 100 m, then +40 m over the next 300 m: mean (10·100 + 25·300) / 400.
+    const ele = Float64Array.from([10, 10, 40], (d, i) => (terrain[i] ?? 0) + d);
+    const track = { lat, lon, ele, cumulative: Float64Array.from([0, 100, 400]), time: null };
+    expect(elevationOffset(track, grid)).toEqual({ mean: 21, min: 10, max: 40 });
+    expect(elevationOffset({ ...track, ele: null }, grid)).toBeNull();
   });
 
   it('fills a GPX without <ele> from the terrain, exactly as the app does', async () => {
@@ -264,16 +303,90 @@ describe('warnings', () => {
     expect(baked.warnings).toEqual([]);
   });
 
-  it('laps: the real start and finish lie on the drawn route, in tens of metres', async () => {
-    const loop = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute())), 'laps.gpx');
+  it('laps: the start and finish are passed again mid-run, so no --trim hides them; it says where', async () => {
+    // Four laps: the start is passed again halfway, which no trim can reach.
+    const loop = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute(4))), 'laps.gpx');
     const baked = await bakeScene(loop, { id: 'loop', trim: 200, tiles: tiles().source });
+    const total = (loop.run.distance / 1000).toFixed(1);
+    const half = (loop.run.distance / 2000).toFixed(1);
+    expect(baked.warnings).toEqual(
+      ['start', 'finish'].map(
+        (name) =>
+          `The drawn route passes within 10 m of the run's real ${name} at about km ${half} of ` +
+          `${total}: the route passes its ${name} again, so no --trim hides it.`,
+      ),
+    );
+    // Three laps: a trim of a little over one lap hides both ends.
+    const three = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute(3))), 'laps.gpx');
+    const lap = three.run.distance / 3;
+    const warned = await bakeScene(three, { id: 'loop', trim: 200, tiles: tiles().source });
+    for (const warning of warned.warnings) {
+      const trim = Number(/; --trim (\d+) does\.$/.exec(warning)?.[1]);
+      expect(trim).toBeGreaterThan(lap);
+      expect(trim).toBeLessThan(lap + 200);
+    }
+    // Distances along the route only: every decimal number is a km figure.
+    expect(
+      [...baked.warnings, ...warned.warnings].join(' ').replace(/(km|of) \d+\.\d/g, ''),
+    ).not.toMatch(/\d\.\d/);
+  });
+
+  it('one loop with a short trim: says where, and the smallest --trim that hides each end', async () => {
+    const loop = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute(1))), 'loop.gpx');
+    const baked = await bakeScene(loop, { id: 'loop', trim: 50, tiles: tiles().source });
     expect(baked.warnings).toHaveLength(2);
     expect(baked.warnings[0]).toMatch(
-      /real start lies (within 10 m of|about \d+0 m from) the drawn route/,
+      /^The drawn route passes about \d0 m from the run's real start at about km \d\.\d of \d\.\d \(a loop or laps pass it again\), so the trim does not hide it; --trim \d+ does\.$/,
     );
-    expect(baked.warnings[1]).toMatch(/real finish/);
-    expect(baked.warnings.join(' ')).toMatch(/a larger --trim/);
-    expect(baked.warnings.join(' ')).not.toMatch(/\d\.\d/);
+    expect(baked.warnings[1]).toMatch(
+      /^The drawn route passes .* real finish .*; --trim \d+ does\.$/,
+    );
+    // That trim does hide them, and 10 m less does not.
+    const trims = baked.warnings.map((w) => Number(/--trim (\d+) does/.exec(w)?.[1]));
+    const enough = Math.max(...trims);
+    expect(enough).toBeGreaterThan(50);
+    expect(enough).toBeLessThan(400);
+    const hidden = await bakeScene(loop, { id: 'loop', trim: enough, tiles: tiles().source });
+    expect(hidden.warnings).toEqual([]);
+    const short = await bakeScene(loop, { id: 'loop', trim: enough - 10, tiles: tiles().source });
+    expect(short.warnings).not.toEqual([]);
+  });
+
+  it('clearingTrim: the first trim, in tens of metres, that keeps the drawn route 100 m away', () => {
+    const loop = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute(1))), 'loop.gpx');
+    const start = { lat: loop.points.lat[0] ?? 0, lon: loop.points.lon[0] ?? 0 };
+    const trim = clearingTrim(loop.points, start, 0);
+    expect(trim).not.toBeNull();
+    const at = (metres: number) => {
+      const drawn = trimTrack(loop.points, metres);
+      return drawn ? distanceToTrack(start, drawn) : Infinity;
+    };
+    expect(at(trim ?? 0)).toBeGreaterThanOrEqual(100);
+    expect(at((trim ?? 0) - 10)).toBeLessThan(100);
+    // Four laps pass the start halfway: no trim clears it.
+    const laps = gpxInput(new TextEncoder().encode(gpxOf(lapsRoute(4))), 'laps.gpx');
+    expect(clearingTrim(laps.points, start, 200)).toBeNull();
+  });
+
+  it('howNear: tens of metres, never "about 100 m"', () => {
+    expect(howNear(3)).toBe('within 10 m of');
+    expect(howNear(44)).toBe('about 40 m from');
+    expect(howNear(94.9)).toBe('about 90 m from');
+    expect(howNear(95)).toBe('within 100 m of');
+    expect(howNear(99.9)).toBe('within 100 m of');
+  });
+
+  it('nearestOnTrack: how far and where along, interpolated within the step', () => {
+    const track = {
+      lat: Float64Array.from([46, 46, 46]),
+      lon: Float64Array.from([7, 7.001, 7.002]),
+      cumulative: Float64Array.from([0, 77, 154]),
+    };
+    // Half-way along the second step, 50 m north of it.
+    const point = { lat: 46 + 50 / 111_320, lon: 7.0015 };
+    const near = nearestOnTrack(point, track);
+    expect(near.distance).toBeCloseTo(50, 0);
+    expect(near.along).toBeCloseTo(115.5, 0);
   });
 
   it('none with --trim 0 (the ends are drawn on purpose)', async () => {

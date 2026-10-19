@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react';
+import { TOUCH_SLOP } from '../../lib/touch';
 import styles from './ElevationProfile.module.css';
 import {
   VIEW_H,
@@ -77,7 +78,8 @@ const percent = (viewX: number) => `${String((viewX / VIEW_W) * 100)}%`;
 
 /**
  * The scrubbable elevation chart under the terrain (DESIGN-SPEC §2, DECISIONS.md). The plot is one
- * ARIA slider: arrow keys ±1% (Shift ±10%), PageUp/PageDown ±10%, Home/End, and pointer drag.
+ * ARIA slider: arrow keys ±1% (Shift ±10%), PageUp/PageDown ±10%, Home/End, and pointer drag (on
+ * a touch screen a tap or a sideways drag; a vertical swipe scrolls the page and sets nothing).
  * Climbs are shaded and numbered, and listed in the slider's description, so colour is never the
  * only cue.
  */
@@ -96,7 +98,18 @@ export function ElevationProfile({
 }: ElevationProfileProps) {
   const descriptionId = useId();
   const plotRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ pointerId: number; left: number; width: number } | null>(null);
+  /**
+   * The pointer that sets the position. A mouse or pen sets it from the press; a finger only once
+   * it is a tap or a sideways drag (`scrubbing`), so a vertical swipe scrolls the page.
+   */
+  const drag = useRef<{
+    pointerId: number;
+    left: number;
+    width: number;
+    x: number;
+    y: number;
+    scrubbing: boolean;
+  } | null>(null);
   const [widthPx, setWidthPx] = useState<number | undefined>(undefined);
 
   // The plot works from 0: points and climbs shifted by `origin` (none for a whole run).
@@ -204,9 +217,19 @@ export function ElevationProfile({
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const element = event.currentTarget;
+    const touch = event.pointerType === 'touch';
     // Read layout once per drag; pointermove only does arithmetic.
     const rect = element.getBoundingClientRect();
-    drag.current = { pointerId: event.pointerId, left: rect.left, width: rect.width };
+    drag.current = {
+      pointerId: event.pointerId,
+      left: rect.left,
+      width: rect.width,
+      x: event.clientX,
+      y: event.clientY,
+      scrubbing: !touch,
+    };
+    // A finger waits: a tap or a sideways drag sets the position, a vertical swipe scrolls.
+    if (touch) return;
     if ('setPointerCapture' in element) {
       try {
         element.setPointerCapture(event.pointerId);
@@ -219,8 +242,30 @@ export function ElevationProfile({
   };
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (drag.current?.pointerId !== event.pointerId) return;
+    const current = drag.current;
+    if (current?.pointerId !== event.pointerId) return;
+    if (!current.scrubbing) {
+      const dx = Math.abs(event.clientX - current.x);
+      const dy = Math.abs(event.clientY - current.y);
+      if (dx > TOUCH_SLOP && dx > dy) {
+        // A finger is captured by the plot from its pointerdown already (implicit capture);
+        // capturing it again here makes Chromium fire lostpointercapture, which ends the drag.
+        current.scrubbing = true;
+      } else {
+        // Vertical: the browser scrolls the page and cancels the gesture; nothing is set.
+        if (dy > TOUCH_SLOP) drag.current = null;
+        return;
+      }
+    }
     commitFromPointer(event.clientX);
+  };
+
+  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (current?.pointerId !== event.pointerId) return;
+    // A tap: a finger lifted before it moved past the slop.
+    if (!current.scrubbing) commitFromPointer(event.clientX);
+    drag.current = null;
   };
 
   const endDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -283,7 +328,7 @@ export function ElevationProfile({
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
+        onPointerUp={onPointerUp}
         onPointerCancel={endDrag}
         onLostPointerCapture={endDrag}
       >

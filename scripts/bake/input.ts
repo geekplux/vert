@@ -1,7 +1,8 @@
 /**
  * The bake's input: a `.gpx` file, parsed exactly as the app's parse worker parses it
  * (`handleMessage`: the same decoding, parser and stats), or a `.json` points file, for a host
- * that has its activities as FIT or similar (docs/SCENE.md, "Baking a scene"):
+ * that has its activities as FIT or similar (docs/SCENE.md, "Baking a scene"), given as a path or
+ * as `-`, read from standard input, so that no coordinate file touches the host's disk:
  *
  * ```json
  * { "points": [{ "lat": 46.1, "lon": 7.2, "ele": 1250.5, "t": "2026-10-03T11:10:00Z" }] }
@@ -30,6 +31,12 @@ import { BakeError } from './errors';
 /** Largest points file read, bytes: 500,000 points with times fit. */
 export const MAX_JSON_BYTES = 128 * 1024 * 1024;
 
+/** The input path that means "a points file on standard input". */
+export const STDIN_INPUT = '-';
+
+/** The file name a points file on standard input goes by (it is never used as an id). */
+const STDIN_FILE_NAME = 'stdin.json';
+
 /** Earliest and latest epoch milliseconds accepted for `t`. */
 const MIN_EPOCH_MS = Date.UTC(1990, 0, 1);
 const MAX_EPOCH_MS = Date.UTC(2100, 0, 1);
@@ -44,7 +51,8 @@ export interface BakeInput {
 }
 
 /**
- * Reads and parses `path` by its extension (`.gpx` or `.json`).
+ * Reads and parses `path` by its extension (`.gpx` or `.json`). Standard input (`-`) is
+ * {@link readStdinInput}'s.
  *
  * @throws BakeError when the file cannot be read or used.
  */
@@ -69,6 +77,34 @@ export function readInput(path: string): BakeInput {
   const bytes = readFileSync(path);
   if (extension === '.gpx') return gpxInput(bytes, fileName);
   return { kind: 'json', fileName, ...runFromPoints(parsePointsJson(bytes.toString('utf8'))) };
+}
+
+/**
+ * A points file on standard input (`-`), under the same size limit as one on disk. Read as a
+ * stream, chunk by chunk as the writer sends it: a pipe's reader must wait for data, which a
+ * synchronous read of fd 0 does not (EAGAIN once the input outgrows the pipe's buffer). Stops
+ * as soon as the limit is passed.
+ *
+ * @throws BakeError when standard input cannot be read or used.
+ */
+export async function readStdinInput(): Promise<BakeInput> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    for await (const chunk of process.stdin as AsyncIterable<Buffer>) {
+      size += chunk.byteLength;
+      if (size > MAX_JSON_BYTES) {
+        process.stdin.destroy();
+        throw new BakeError(`The input is over the ${String(MAX_JSON_BYTES / 2 ** 20)} MB limit.`);
+      }
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    if (error instanceof BakeError) throw error;
+    throw new BakeError('Standard input cannot be read (pipe the points file into the bake).');
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
+  return { kind: 'json', fileName: STDIN_FILE_NAME, ...runFromPoints(parsePointsJson(text)) };
 }
 
 /** A GPX file through the parse worker's own handler. */

@@ -19,3 +19,12 @@ export const HomeLink: Story = () => (
   <Wordmark tagline="TRAIL RUNS AS TERRAIN" link={{ href: '/', label: 'Vert, home' }} />
 );
 HomeLink.storyName = 'Name as a home link';
+
+// During an export: inert (aria-disabled), greyed like the disabled Back to the run, focusable.
+export const HomeLinkInert: Story = () => (
+  <Wordmark
+    tagline="POSTER · COOSA BACKCOUNTRY TRAIL"
+    link={{ href: '/', label: 'Vert, home', disabled: true }}
+  />
+);
+HomeLinkInert.storyName = 'Name as a home link, inert (exporting)';

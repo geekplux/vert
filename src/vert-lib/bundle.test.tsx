@@ -209,7 +209,7 @@ describe('the built library', () => {
 
   it('exports its version and the elevation credit', () => {
     // `.dirty` when built from a checkout with uncommitted changes (as while developing).
-    expect(lib.VERT_LIB_VERSION).toMatch(/^0\.2\.0\+([0-9a-f]{7,}(\.dirty)?|nogit)$/);
+    expect(lib.VERT_LIB_VERSION).toMatch(/^\d+\.\d+\.\d+\+([0-9a-f]{7,}(\.dirty)?|nogit)$/);
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
       version: string;
     };

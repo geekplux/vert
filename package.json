@@ -31,7 +31,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "vert-bake": "./dist-lib/bake.js"
+    "vert-bake": "dist-lib/bake.js"
   },
   "files": [
     "dist-lib"

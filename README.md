@@ -166,7 +166,12 @@ function RunTerrain() {
   return (
     <>
       <div style={{ aspectRatio: '16 / 9' }}>
-        <TerrainView scene={scene} scrub={scrub} ariaLabel="3D terrain of my morning run" />
+        <TerrainView
+          scene={scene}
+          exaggeration={1.6}
+          scrub={scrub}
+          ariaLabel="3D terrain of my morning run"
+        />
       </div>
       <ElevationProfile scene={scene} scrub={scrub} onScrub={setScrub} />
     </>

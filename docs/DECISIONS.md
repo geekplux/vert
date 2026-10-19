@@ -634,12 +634,36 @@ installs `three` from npm.
   `failedTiles` (`docs/SCENE.md`). TerrainView's `scene` path never converts a coordinate.
 - **Grid-local frame**: metres from the grid's north-west corner, x east, y south; the grid's
   samples are evenly spaced, `metresPerSample` at the grid's centre (as `Heightfield` measures it).
-- **No latitude from the grid's spacing.** A grid sampled at native resolution gives cos(latitude)
-  as `metresPerSample` ÷ the tile pixel size at `zoom`. The bake therefore always resamples to the
-  scene's fixed long side (never the native pixel count), so the ratio between them is unknown;
-  `zoom` is kept (it narrows the latitude only to the band where that zoom was chosen, a factor of 2
-  in cos(latitude), and to nothing for routes small enough to sample z14). No value is stored at a
-  precision finer than it is useful (each field's step is in SCENE.md).
+- **No latitude from the grid.** The tiles' native pixel size is 156,543 m × cos(latitude) /
+  2^zoom, so any way of reading it off the grid, with `zoom`, gives the latitude. Three ways are
+  known and closed: the spacing of a grid sampled at native resolution (scene grids always have the
+  fixed long side, 320); the pixel pitch bilinear interpolation leaves in any grid (a kink at every
+  pixel line; it gave Coosa's latitude to 0.02° from a decoded scene), closed by `buildHeightfield`'s
+  `sampling: 'smooth'`, a knot-free Gaussian low-pass; and the width of that low-pass, which a fit
+  of the grid's spectrum recovers (tied to the real pixel, it gave the latitude to 0.2–2° on half
+  of 14 real stretches), closed by setting it from published values only: σ = max(1.5 × the
+  equatorial pixel size at the zoom, 2π · 6,378,137 m / (256 · 2^zoom), 0.5 × the grid spacing).
+  That is at least 1.5 real pixels everywhere (enough that no pixel-pitch ripple shows) at
+  1 / cos(latitude) more smoothing (×1.22 at Coosa, ×1.45 at Lavaredo). `buildScene` refuses any
+  other grid; the app's own grids stay bilinear (byte-identical to before). What is tested
+  (`src/scene/pitch.test.ts`, `kernel.test.ts`, SCENE.md has the numbers), not proven: neither the
+  pitch nor the kernel width gives the latitude, on synthetic pixel-noise tiles at several pitches
+  and latitudes (0°, 35°, 46°, 60°) and on real Coosa, Lavaredo, Eiger and CCC grids at z11–z14
+  (fitted widths follow the published rule; read with the old rule they miss the latitude by a
+  median 34.8°, worse than the zoom band's middle). What remains: `zoom` narrows the latitude to
+  the band where that zoom was chosen (a factor of 2 in cos(latitude), nothing for routes small
+  enough to sample z14); the terrain fingerprint (below); the route-step-length residual (the grid
+  is even in Web Mercator, so route steps vary in length by cos(latitude), about 0.5% across 30 km
+  at 45°); and the tiles' own smoothing, in real pixels, which shows in no fit measured. No value is
+  stored at a precision finer than it is useful (each field's step is in SCENE.md).
+- **Scene terrain is softer, accepted.** The smooth sampler costs fidelity at coarse zooms
+  (smooth vs bilinear on the same 320 grid): Coosa max 8.7 m / mean 1.7 m, Lavaredo 31 / 0.75 m,
+  Eiger 63 / 3.0 m, the CCC 93 / 9.2 m (highest point 4,786 → 4,744 m, slope p99 53° → 50°).
+  Rendered alone the CCC reads as natural, slightly mellower terrain and Coosa is
+  indistinguishable; only side by side are the CCC's far crests visibly rounder. A scene is an
+  embed beside a host's own stats, not a survey, so privacy wins. The scene path drapes the route
+  and markers on the grid (as the View does), never at the recorded elevations, which would float
+  up to ~55 m above a smoothed CCC summit.
 - **Ends trimmed by default** (`pnpm bake --trim <m>`, default 200, the poster's "Hide start and
   end" default): the drawn route and its markers skip the first and last 200 m, and the grid is
   framed on the trimmed route (as posters frame on it), so a start at home is neither drawn nor at

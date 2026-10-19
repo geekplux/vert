@@ -36,6 +36,7 @@
  * blended, and each pixel once (one constant fragment depth nearer than the terrain, depth test
  * `less`), so its round joints never darken where they overlap.
  */
+import { MAX_ROUTE_POINTS, ROUTE_STEP_M } from './routeRules';
 import {
   Color,
   CustomBlending,
@@ -93,10 +94,7 @@ export function readRoutePalette(
   };
 }
 
-/** Target spacing of the resampled route, metres. */
-export const ROUTE_STEP_M = 10;
-/** Most points in the drawn route; longer routes are resampled more coarsely. */
-export const MAX_ROUTE_POINTS = 4000;
+export { MAX_ROUTE_POINTS, ROUTE_STEP_M } from './routeRules';
 /** How far the route floats above the surface, true metres (exaggerated with the terrain). */
 export const DEFAULT_LIFT_M = 2;
 /** Route core and halo widths, CSS px (DESIGN-SPEC §4, style A). */

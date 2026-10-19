@@ -101,7 +101,7 @@ import '@geekplux/vert/vert.css';
 | `@geekplux/vert`                                                      | the library (`dist-lib/index.js`) and its declarations                                         |
 | `@geekplux/vert/vert.css`                                             | the stylesheet                                                                                 |
 | `@geekplux/vert/fixtures/coosa-backcountry.scene` (and `.scene.json`) | the sample scene (public, no coordinates), for your tests ([Testing](#10-testing-in-the-host)) |
-| `pnpm exec vert-bake` (`npx vert-bake`)                               | the bake, for the machine that has the activities ([Baking](#4-baking))                        |
+| `pnpm exec vert-bake`                                                 | the bake, for the machine that has the activities ([Baking](#4-baking))                        |
 
 The package is `dist-lib/` as `pnpm build:lib` writes it, with Vert's `LICENSE` and README.
 `package.json` and your lockfile pin the version: `^0.2.0` takes 0.2.x and never 0.3, and before
@@ -392,7 +392,8 @@ pnpm exec vert-bake <input> --out <dir> [--id <id>] [--trim <metres>] [--tiles <
 ```
 
 `vert-bake` is the package's command (`dist-lib/bake.js`, the bake bundled into one Node module
-that imports only Node's built-ins); `npx vert-bake` works too. In Vert's checkout the same command
+that imports only Node's built-ins); without installing, `npx -p @geekplux/vert vert-bake` (never
+`npx vert-bake`: that names another, unrelated package). In Vert's checkout the same command
 line is `pnpm bake` (`node scripts/bake.ts`, Vert's TypeScript run directly, no `pnpm install`
 needed). Both need Node 22.18 or later. It runs on the machine that has the activity, never in a
 host's build.

@@ -1,6 +1,7 @@
-import { useEffect, useId, useImperativeHandle, useRef, type Ref } from 'react';
+import { useEffect, useId, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import type { RunTrack } from '../page/types';
 import type { ViewCamera } from './camera';
+import { gridTrackFromRun } from './gridTrack';
 import type { Heightfield } from './heightfield';
 import { readPalette, type TerrainPalette } from './mesh';
 import { readRoutePalette, type RoutePalette } from './route';
@@ -110,6 +111,14 @@ export function TerrainView({
   const stageRef = useRef<TerrainStage | null>(null);
   const hintId = useId();
 
+  // The track on this heightfield's grid: the one lon/lat → grid conversion, once per heightfield
+  // and track (the stage and everything under it work in grid space). Memoised, so the route is
+  // still built once per new heightfield or track: show() and setTrack() below get the same object.
+  const gridTrack = useMemo(
+    () => (heightfield && track ? gridTrackFromRun(heightfield, track) : null),
+    [heightfield, track],
+  );
+
   // Latest values for callbacks and for the heightfield effect, without re-running effects.
   const latest = useRef({
     exaggeration,
@@ -117,7 +126,7 @@ export function TerrainView({
     initialCamera,
     onReady,
     onRenderFrame,
-    track,
+    gridTrack,
     ariaLabel,
   });
   useEffect(() => {
@@ -127,7 +136,7 @@ export function TerrainView({
       initialCamera,
       onReady,
       onRenderFrame,
-      track,
+      gridTrack,
       ariaLabel,
     };
   });
@@ -204,7 +213,7 @@ export function TerrainView({
       reducedMotion,
       // The current track, so a track that changed in the same render (terrain elevations for a
       // GPX without <ele>) builds the route once, here, and setTrack below finds nothing to do.
-      track: latest.current.track,
+      track: latest.current.gridTrack,
       onFirstFrame: () => {
         canvas.dataset.visible = 'true';
         latest.current.onReady?.();
@@ -219,8 +228,8 @@ export function TerrainView({
   // After the heightfield effect, so a new heightfield and track build the route once each (and a
   // track that arrived with the heightfield was already taken by show()).
   useEffect(() => {
-    stageRef.current?.setTrack(track);
-  }, [track, createRenderer]);
+    stageRef.current?.setTrack(gridTrack);
+  }, [gridTrack, createRenderer]);
 
   useEffect(() => {
     stageRef.current?.setScrub(scrub);

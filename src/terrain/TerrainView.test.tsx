@@ -2,7 +2,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
+import type { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import type { GridTrack } from './grid';
 import type { Heightfield } from './heightfield';
+import type { TerrainMesh } from './mesh';
 import type { StageRenderer } from './stage';
 import { createRouteLayer } from './route';
 import { makeTrack } from './testing';
@@ -254,6 +257,57 @@ describe('TerrainView', () => {
     vi.restoreAllMocks();
   });
 
+  it('draws style A’s colours on a host without Vert’s tokens, and the host’s own where it sets them', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const root = document.documentElement;
+    const colours = async () => {
+      const { factory } = fakeRenderer();
+      const ref = { current: null as TerrainViewHandle | null };
+      const track = makeTrack([
+        [46.002, 10.002],
+        [46.008, 10.004],
+      ]);
+      const view = render(
+        <TerrainView
+          ref={ref}
+          heightfield={heightfield()}
+          track={track}
+          exaggeration={1}
+          ariaLabel="Terrain"
+          createRenderer={factory}
+        />,
+      );
+      await flushFrames();
+      const scene = ref.current?.stage?.scene;
+      const mesh = scene?.getObjectByName('terrain') as TerrainMesh | undefined;
+      const hex = (name: string) =>
+        `#${(scene?.getObjectByName(name) as Line2 | undefined)?.material.color.getHexString() ?? ''}`;
+      const result = {
+        surface: `#${mesh?.material.uniforms.uSurface.value.getHexString() ?? ''}`,
+        ink: `#${mesh?.material.uniforms.uInk.value.getHexString() ?? ''}`,
+        route: hex('route'),
+        halo: hex('route-halo'),
+      };
+      view.unmount();
+      return result;
+    };
+    // No tokens at all (jsdom loads no stylesheet), then an empty and a blank one.
+    root.style.setProperty('--surface', '');
+    root.style.setProperty('--white', '   ');
+    expect(await colours()).toEqual({
+      surface: '#e6eaee',
+      ink: '#1b2a3a',
+      route: '#d9480f',
+      halo: '#ffffff',
+    });
+    root.style.setProperty('--route', '#0b7285');
+    root.style.setProperty('--ink', '#222222');
+    expect(await colours()).toMatchObject({ surface: '#e6eaee', ink: '#222222', route: '#0b7285' });
+    for (const name of ['--surface', '--white', '--route', '--ink'])
+      root.style.removeProperty(name);
+    vi.restoreAllMocks();
+  });
+
   it('builds the route once when the track changes in the render that brings the heightfield', async () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     const builds = vi.mocked(createRouteLayer);
@@ -274,7 +328,10 @@ describe('TerrainView', () => {
     rerender(<TerrainView {...props} heightfield={heightfield()} track={filled} />);
     await flushFrames();
     expect(builds).toHaveBeenCalledTimes(1);
-    expect(builds.mock.calls[0]?.[1]).toBe(filled);
+    // Built from the filled track (put on the grid once: its own distance and elevation arrays).
+    const built = builds.mock.calls[0]?.[1] as GridTrack | undefined;
+    expect(built?.cumulative).toBe(filled.cumulative);
+    expect(built?.ele).toBe(filled.ele);
     vi.restoreAllMocks();
   });
 });

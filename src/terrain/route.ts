@@ -4,9 +4,11 @@
  *
  * Geometry: the track is resampled evenly by distance (about every {@link ROUTE_STEP_M} m, at most
  * {@link MAX_ROUTE_POINTS} points) and each sample takes the terrain's own height
- * (`elevationAt`, not the GPX elevation, which is offset from the DEM by GPS and barometer error)
- * plus a small lift. Positions are stored at exaggeration 1; the vertex shader multiplies y by the
- * shared `uExaggeration`, so the slider never rebuilds the line.
+ * (`gridElevation`, not the GPX elevation, which is offset from the DEM by GPS and barometer error)
+ * plus a small lift. The track is in grid space ({@link GridTrack}: fractional columns and rows of
+ * the grid), so nothing here knows a latitude or longitude. Positions are stored at exaggeration
+ * 1; the vertex shader multiplies y by the shared `uExaggeration`, so the slider never rebuilds the
+ * line.
  *
  * Three `Line2` objects share one `LineGeometry`: the halo (9 px) and the core (4 px) where the
  * route is in sight, and a thinner line (2 px, no halo; the route colour a shade darker, at 85%)
@@ -50,9 +52,8 @@ import {
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import type { RunTrack } from '../page/types';
-import type { Heightfield } from './heightfield';
-import { heightfieldToLocal } from './mesh';
+import type { GridTrack, TerrainGrid } from './grid';
+import { gridToLocal } from './mesh';
 import {
   VISIBILITY_ROW,
   createRouteVisibility,
@@ -159,12 +160,12 @@ export function routeLineWidths(scale: number): RouteLineWidths {
 }
 
 /** The parts of a track the route needs. */
-export type RouteTrack = Pick<RunTrack, 'lat' | 'lon' | 'cumulative'>;
+export type RouteTrack = Pick<GridTrack, 'col' | 'row' | 'cumulative'>;
 
-/** A lon/lat at a distance along the track, and the index of the segment it falls in. */
+/** A grid position at a distance along the track, and the index of the segment it falls in. */
 export interface TrackPoint {
-  readonly lon: number;
-  readonly lat: number;
+  readonly col: number;
+  readonly row: number;
   /** Index `i` of the segment from point `i` to `i + 1` (the last point for d ≥ the total). */
   readonly index: number;
 }
@@ -175,17 +176,17 @@ export function trackLength(track: RouteTrack): number {
 }
 
 /**
- * The lon/lat `d` metres along the track, interpolated linearly between the recorded points
+ * The grid position `d` metres along the track, interpolated linearly between the recorded points
  * (binary search, so it is cheap enough for every scrub event). `d` is clamped to the track.
  */
 export function pointAtDistance(track: RouteTrack, d: number): TrackPoint {
-  const { cumulative, lon, lat } = track;
+  const { cumulative, col, row } = track;
   const n = cumulative.length;
   if (n === 0) throw new RangeError('The track has no points');
   const last = n - 1;
-  if (!(d > (cumulative[0] ?? 0))) return { lon: lon[0] ?? 0, lat: lat[0] ?? 0, index: 0 };
+  if (!(d > (cumulative[0] ?? 0))) return { col: col[0] ?? 0, row: row[0] ?? 0, index: 0 };
   if (d >= (cumulative[last] ?? 0))
-    return { lon: lon[last] ?? 0, lat: lat[last] ?? 0, index: last };
+    return { col: col[last] ?? 0, row: row[last] ?? 0, index: last };
   // Largest i with cumulative[i] <= d.
   let lo = 0;
   let hi = last;
@@ -198,13 +199,13 @@ export function pointAtDistance(track: RouteTrack, d: number): TrackPoint {
   const d1 = cumulative[hi] ?? d0;
   const t = d1 > d0 ? (d - d0) / (d1 - d0) : 0;
   const mix = (a: Float64Array) => (a[lo] ?? 0) + ((a[hi] ?? 0) - (a[lo] ?? 0)) * t;
-  return { lon: mix(lon), lat: mix(lat), index: lo };
+  return { col: mix(col), row: mix(row), index: lo };
 }
 
-/** The track resampled evenly by distance. */
+/** The track resampled evenly by distance, in grid space. */
 export interface ResampledTrack {
-  readonly lon: Float64Array;
-  readonly lat: Float64Array;
+  readonly col: Float64Array;
+  readonly row: Float64Array;
   /** Distance of each sample from the start, metres. */
   readonly distance: Float64Array;
 }
@@ -221,12 +222,12 @@ export function resampleTrack(
 ): ResampledTrack {
   const n = track.cumulative.length;
   if (n === 0) {
-    return { lon: new Float64Array(0), lat: new Float64Array(0), distance: new Float64Array(0) };
+    return { col: new Float64Array(0), row: new Float64Array(0), distance: new Float64Array(0) };
   }
   const total = trackLength(track);
   const count = Math.max(2, Math.min(Math.max(2, maxPoints), Math.ceil(total / step) + 1));
-  const lon = new Float64Array(count);
-  const lat = new Float64Array(count);
+  const col = new Float64Array(count);
+  const row = new Float64Array(count);
   const distance = new Float64Array(count);
   const { cumulative } = track;
   // One forward walk over the recorded points: the samples are in order.
@@ -238,26 +239,26 @@ export function resampleTrack(
     const d1 = cumulative[Math.min(i + 1, n - 1)] ?? d0;
     const t = d1 > d0 ? Math.min(1, Math.max(0, (d - d0) / (d1 - d0))) : 0;
     const j = Math.min(i + 1, n - 1);
-    lon[k] = (track.lon[i] ?? 0) + ((track.lon[j] ?? 0) - (track.lon[i] ?? 0)) * t;
-    lat[k] = (track.lat[i] ?? 0) + ((track.lat[j] ?? 0) - (track.lat[i] ?? 0)) * t;
+    col[k] = (track.col[i] ?? 0) + ((track.col[j] ?? 0) - (track.col[i] ?? 0)) * t;
+    row[k] = (track.row[i] ?? 0) + ((track.row[j] ?? 0) - (track.row[i] ?? 0)) * t;
     distance[k] = d;
   }
-  return { lon, lat, distance };
+  return { col, row, distance };
 }
 
 /**
  * Local-frame positions (x, y, z per point; y at exaggeration 1) of the resampled track draped on
- * the heightfield: y is the terrain's elevation there plus `lift` metres.
+ * the grid: y is the terrain's elevation there plus `lift` metres.
  */
 export function drapeTrack(
-  heightfield: Heightfield,
+  grid: TerrainGrid,
   samples: ResampledTrack,
   lift = DEFAULT_LIFT_M,
 ): Float32Array {
-  const count = samples.lon.length;
+  const count = samples.col.length;
   const positions = new Float32Array(count * 3);
   for (let k = 0; k < count; k++) {
-    const p = heightfieldToLocal(heightfield, samples.lon[k] ?? 0, samples.lat[k] ?? 0, 1, lift);
+    const p = gridToLocal(grid, samples.col[k] ?? 0, samples.row[k] ?? 0, 1, lift);
     positions[k * 3] = p.x;
     positions[k * 3 + 1] = p.y;
     positions[k * 3 + 2] = p.z;
@@ -506,11 +507,11 @@ export const HALO_RENDER_ORDER = 1;
 export const CORE_RENDER_ORDER = 2;
 
 /**
- * The route on `heightfield`: halo and core lines over the draped, resampled track, and the hidden
- * line where it is hidden.
+ * The route on `grid`: halo and core lines over the draped, resampled track (in `grid`'s sample
+ * coordinates), and the hidden line where it is hidden.
  */
 export function createRouteLayer(
-  heightfield: Heightfield,
+  grid: TerrainGrid,
   track: RouteTrack,
   {
     palette = APP_ROUTE_PALETTE,
@@ -521,7 +522,7 @@ export function createRouteLayer(
   }: RouteLayerOptions = {},
 ): RouteLayer {
   const samples = resampleTrack(track, { step, maxPoints });
-  const positions = drapeTrack(heightfield, samples, lift);
+  const positions = drapeTrack(grid, samples, lift);
   const geometry = new LineGeometry();
   if (positions.length >= 6) geometry.setPositions(positions);
   const uniforms: RouteUniforms = {

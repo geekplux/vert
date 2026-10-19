@@ -12,7 +12,7 @@ import {
   summitText,
   terrainLabel,
 } from './viewCopy';
-import { LOOP_DISTANCE_M as MARKERS_LOOP_DISTANCE_M } from '../../terrain/markers';
+import { isLoop as sharedIsLoop } from '../../lib/loop';
 import { makeTrack } from '../../terrain/testing';
 
 const ramp = [
@@ -63,7 +63,9 @@ describe('viewCopy', () => {
   });
 
   it('calls a track a loop when it ends within 50 m of its start, like the terrain markers', () => {
-    expect(LOOP_DISTANCE_M).toBe(MARKERS_LOOP_DISTANCE_M);
+    // One rule, shared with the terrain (gridTrackFromRun sets the grid track's `loop` with it).
+    expect(isLoop).toBe(sharedIsLoop);
+    expect(LOOP_DISTANCE_M).toBe(50);
     // 0.0004° of latitude ≈ 44 m; 0.0005° ≈ 56 m.
     expect(
       isLoop(

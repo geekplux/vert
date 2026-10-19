@@ -30,6 +30,9 @@ import { ViewState } from './ViewState/ViewState';
 import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import styles from './Page.module.css';
 
+/** The screen as the page shows it: exporting is Poster mode with an overlay, not a new screen. */
+type ScreenKey = 'upload' | 'view' | 'poster';
+
 export interface PageProps extends Omit<RunProviderProps, 'children'> {
   /** Start in a given state (stories and tests); the app starts on Upload with default prefs. */
   initialState?: PageState;
@@ -77,7 +80,7 @@ function PageContent({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const cameraRef = useRef<TerrainCameraSource>(null);
   // Exporting is an overlay on poster mode, not a new screen: PosterState moves focus for it.
-  const screenKey = isPosterMode(screen) ? 'poster' : screen.name;
+  const screenKey: ScreenKey = isPosterMode(screen) ? 'poster' : screen.name;
   useFocusOnScreenChange(screenKey, headingRef);
 
   // A file dropped anywhere, on any screen (README "Dropping a file"). On Upload it goes straight
@@ -85,13 +88,14 @@ function PageContent({
   // on screen and says why under the header; a GPX leaves the run (New file) and Upload's Dropzone
   // takes it once mounted, so every file is loaded (and a broken one reported) the same way.
   const dropzoneRef = useRef<DropzoneHandle>(null);
-  const pendingFiles = useRef<File[] | null>(null);
+  // A GPX dropped on a run, waiting for Upload's Dropzone, and the screen it was dropped on.
+  const pendingFiles = useRef<{ files: File[]; from: ScreenKey } | null>(null);
   // Why the last drop on a run was not opened, for the screen it was dropped on (`screenKey`):
   // the alert goes when the screen changes. A new `id` per message remounts (re-announces) it.
   const [dropError, setDropError] = useState<{
     message: string;
     id: number;
-    screenKey: string;
+    screenKey: ScreenKey;
   } | null>(null);
   const { dragOver } = useWindowFileDrop({
     disabled:
@@ -114,16 +118,22 @@ function PageContent({
       setDropError(null);
       // Kept only if New file really leaves the screen (it is a no-op while a load is in
       // flight), so files never wait for some later, unrelated screen change.
-      pendingFiles.current = [picked.file];
+      pendingFiles.current = { files: [picked.file], from: screenKey };
       if (!newFile()) pendingFiles.current = null;
     },
   });
   useEffect(() => {
-    const files = pendingFiles.current;
-    // Whatever the new screen, files waiting from before are used once or dropped.
+    const pending = pendingFiles.current;
+    // A run that loads is an update no user event started, so React runs the View commit's
+    // effects after paint, or first thing in the next update: here New file's. A drop right then
+    // reaches this effect for the screen the files were dropped on. That is not a later screen:
+    // leave them for Upload. (An export that finishes is such an update too, but exporting and
+    // poster share a key, so no effect runs then: keying on `screenKey`, not `screen.name`.)
+    if (!pending || pending.from === screenKey) return;
+    // Any other screen: used once (Upload) or dropped.
     pendingFiles.current = null;
-    if (screen.name === 'upload' && files) dropzoneRef.current?.takeFiles(files);
-  }, [screen.name]);
+    if (screenKey === 'upload') dropzoneRef.current?.takeFiles(pending.files);
+  }, [screenKey]);
 
   return (
     <div
@@ -252,7 +262,7 @@ function PageContent({
  * and screen-reader users start at the top of the new content. Not on first render: the app opens
  * at the top of the document already.
  */
-function useFocusOnScreenChange(screenKey: string, headingRef: RefObject<HTMLElement | null>) {
+function useFocusOnScreenChange(screenKey: ScreenKey, headingRef: RefObject<HTMLElement | null>) {
   const previous = useRef(screenKey);
   useEffect(() => {
     if (previous.current === screenKey) return;

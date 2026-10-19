@@ -1,10 +1,11 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { expectNoAxeViolations } from '../test/axe';
 import { installDialogPolyfill } from '../test/dialog';
-import { RunLoadError, immediateSchedule } from './hooks';
+import { RunLoadError, immediateSchedule, pendingLoadTerrain } from './hooks';
 import type { LoadRun } from './hooks';
 import { Page } from './Page';
+import type { ExportResult, Exporter } from './PosterState/exporter';
 import { SAMPLE_RUN } from './sample';
 import { INITIAL_PREFS } from './state';
 import type { Run } from './types';
@@ -14,19 +15,18 @@ vi.mock('../terrain/TerrainView', () => import('../test/fakeTerrainView'));
 
 const h1 = (name: string) => screen.getByRole('heading', { level: 1, name });
 
-// Under the full suite's load a run's first render can outlast Testing Library's 1 s default (seen
-// failing): wait up to 10 s for it, and give these tests 30 s. What they assert is unchanged.
-const FIND = { timeout: 10_000 };
-const SLOW = { timeout: 30_000 };
-
-describe('Page', SLOW, () => {
-  it('walks Upload → View → Poster → View → Upload with one main throughout', async () => {
+describe('Page', () => {
+  // The one test that renders every screen, and the file's first: it pays the one-time cost of
+  // importing and first rendering View and Poster mode, several times what the others take, which
+  // on a saturated machine alone can pass the 5 s default. Its waits keep Testing Library's.
+  const WALK = { timeout: 15_000 };
+  it('walks Upload → View → Poster → View → Upload with one main throughout', WALK, async () => {
     render(<Page schedule={immediateSchedule} />);
     expect(screen.getByRole('button', { name: 'About' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
     ).toBeDefined();
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getByRole('banner').textContent).toContain('TRAIL RUNS AS TERRAIN');
@@ -63,7 +63,7 @@ describe('Page', SLOW, () => {
       await Promise.resolve();
     });
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
     ).toBeDefined();
   });
 
@@ -91,7 +91,7 @@ describe('Page', SLOW, () => {
   it('keeps the units preference: switched in View, shown on the sample chip after New file', async () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND);
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
     fireEvent.click(screen.getByRole('radio', { name: 'mi' }));
     fireEvent.click(screen.getByRole('button', { name: 'New file' }));
     expect(
@@ -102,7 +102,7 @@ describe('Page', SLOW, () => {
   it('has no axe violations in the View', async () => {
     const { container } = render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND);
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
     await expectNoAxeViolations(container);
   });
 });
@@ -119,6 +119,43 @@ function dropFiles(target: Element, files: File[]) {
 
 const gpxFile = (name: string) => new File(['<gpx/>'], name, { type: 'application/gpx+xml' });
 
+/**
+ * Calls `action` as soon as `rendered()` finds something, from a MutationObserver: a microtask
+ * right after the DOM change, so in the same task as the commit that made it and before React runs
+ * that commit's passive effects (a separate task for a render that no user event started). Like a
+ * user acting the instant a screen appears. Updates made while waiting run outside `act`, as in
+ * Testing Library's own `waitFor`. Rejects if `action` throws, or if nothing is rendered within
+ * `timeout` ms (Testing Library's default wait).
+ */
+function whenRendered(rendered: () => unknown, action: () => void, timeout = 1000): Promise<void> {
+  const environment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const previous = environment.IS_REACT_ACT_ENVIRONMENT;
+  environment.IS_REACT_ACT_ENVIRONMENT = false;
+  let observer: MutationObserver | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return new Promise<void>((resolve, reject) => {
+    observer = new MutationObserver(() => {
+      if (!rendered()) return;
+      observer?.disconnect();
+      environment.IS_REACT_ACT_ENVIRONMENT = previous;
+      try {
+        action();
+        resolve();
+      } catch (error: unknown) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    timer = setTimeout(() => {
+      reject(new Error(`whenRendered: nothing rendered within ${String(timeout)} ms`));
+    }, timeout);
+  }).finally(() => {
+    observer?.disconnect();
+    clearTimeout(timer);
+    environment.IS_REACT_ACT_ENVIRONMENT = previous;
+  });
+}
+
 /** A loader that records what it was asked for and loads the placeholder run for any file. */
 function recordingLoader() {
   const sources: string[] = [];
@@ -133,7 +170,7 @@ function recordingLoader() {
   return { sources, loadRun };
 }
 
-describe('Page: dropping a file on View and Poster mode', SLOW, () => {
+describe('Page: dropping a file on View and Poster mode', () => {
   let uninstall: () => void;
   beforeEach(() => {
     uninstall = installDialogPolyfill();
@@ -145,7 +182,7 @@ describe('Page: dropping a file on View and Poster mode', SLOW, () => {
   async function openSample(loadRun: LoadRun) {
     const view = render(<Page loadRun={loadRun} />);
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND);
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
     return view;
   }
 
@@ -179,9 +216,7 @@ describe('Page: dropping a file on View and Poster mode', SLOW, () => {
     expect(cancelled).toBe(true);
     expect(screen.queryByTestId('drop-frame')).toBeNull();
 
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND),
-    ).toBeDefined();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
     expect(sources).toEqual(['sample', 'harbour.gpx']);
   });
 
@@ -193,17 +228,94 @@ describe('Page: dropping a file on View and Poster mode', SLOW, () => {
     dragFiles(document.body);
     expect(screen.getByText('Drop to open a new run')).toBeDefined();
     dropFiles(document.body, [gpxFile('harbour.gpx')]);
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND),
-    ).toBeDefined();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
     expect(sources).toEqual(['sample', 'harbour.gpx']);
+  });
+
+  it('opens a GPX dropped the instant the View appears, before React has run its effects', async () => {
+    // React commits the View, then runs that commit's effects in a later task (or first thing when
+    // the next update starts). A drop in between used to lose its file: the View's own pending
+    // screen-change effect ran first and threw the files away. Act on the commit, not after it.
+    const { sources, loadRun } = recordingLoader();
+    render(<Page loadRun={loadRun} />);
+    const dropped = whenRendered(
+      () => screen.queryByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+      () => {
+        dropFiles(screen.getByRole('main'), [gpxFile('harbour.gpx')]);
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
+    await dropped;
+    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
+    expect(sources).toEqual(['sample', 'harbour.gpx']);
+  });
+
+  it('shows the error of a GPX that fails to read, dropped the instant the View appears', async () => {
+    const loadRun: LoadRun = (source) =>
+      source.kind === 'sample'
+        ? Promise.resolve(SAMPLE_RUN)
+        : Promise.reject(new RunLoadError('This file has no track points.'));
+    render(<Page loadRun={loadRun} />);
+    const dropped = whenRendered(
+      () => screen.queryByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+      () => {
+        dropFiles(screen.getByRole('main'), [gpxFile('empty.gpx')]);
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
+    await dropped;
+    expect(h1('Your run, as terrain.')).toBeDefined();
+    const dropzone = screen.getByRole('group', { name: 'Upload a GPX file' });
+    expect((await within(dropzone).findByRole('alert')).textContent).toBe(
+      'This file has no track points.',
+    );
+  });
+
+  it('opens a GPX dropped the instant Poster mode comes back after an export', async () => {
+    // An export ends in a promise, as a load does: Poster mode's "Saved …" commit runs its effects
+    // late too, and a drop then used to lose its file the same way. Two safeguards cover it (the
+    // effect keyed on the screen key, and the `from` check); this fails only if both go.
+    const { sources, loadRun } = recordingLoader();
+    let finish: ((result: ExportResult) => void) | undefined;
+    const exporter: Exporter = () =>
+      new Promise<ExportResult>((resolve) => {
+        finish = resolve;
+      });
+    render(
+      <Page
+        loadRun={loadRun}
+        loadTerrain={pendingLoadTerrain}
+        exporter={exporter}
+        initialRun={SAMPLE_RUN}
+        initialState={{
+          screen: { name: 'poster', runId: SAMPLE_RUN.id, notice: null },
+          prefs: INITIAL_PREFS,
+        }}
+      />,
+    );
+    const [download] = screen.getAllByRole('button', { name: /^Download PNG/ });
+    if (!download) throw new Error('no Download button');
+    fireEvent.click(download);
+    await waitFor(() => {
+      expect(finish).toBeDefined();
+    });
+    const dropped = whenRendered(
+      () => screen.queryByText('Saved coosa.png'),
+      () => {
+        dropFiles(document.body, [gpxFile('harbour.gpx')]);
+      },
+    );
+    finish?.({ fileName: 'coosa.png' });
+    await dropped;
+    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
+    expect(sources).toEqual(['harbour.gpx']);
   });
 
   it('uses dropped files exactly once: New file afterwards opens an idle Upload', async () => {
     const { sources, loadRun } = recordingLoader();
     await openSample(loadRun);
     dropFiles(screen.getByRole('main'), [gpxFile('harbour.gpx')]);
-    await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND);
+    await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' });
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
     expect(h1('Your run, as terrain.')).toBeDefined();
@@ -257,9 +369,7 @@ describe('Page: dropping a file on View and Poster mode', SLOW, () => {
     expect(alerts[0]?.textContent).toBe("That's a .tcx file. Vert reads .gpx files in v1.");
 
     dropFiles(screen.getByRole('main'), [gpxFile('harbour.gpx')]);
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND),
-    ).toBeDefined();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(sources).toEqual(['sample', 'harbour.gpx']);
   });
@@ -290,15 +400,10 @@ describe('Page: dropping a file on View and Poster mode', SLOW, () => {
     await openSample(loadRun);
     dropFiles(screen.getByRole('main'), [gpxFile('empty.gpx')]);
     expect(h1('Your run, as terrain.')).toBeDefined();
-    expect(
-      (
-        await within(screen.getByRole('group', { name: 'Upload a GPX file' })).findByRole(
-          'alert',
-          {},
-          FIND,
-        )
-      ).textContent,
-    ).toBe('This file has no track points.');
+    const dropzone = screen.getByRole('group', { name: 'Upload a GPX file' });
+    expect((await within(dropzone).findByRole('alert')).textContent).toBe(
+      'This file has no track points.',
+    );
   });
 
   it('while exporting: cancels the drop, shows no overlay and ignores the files', () => {

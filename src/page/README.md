@@ -33,7 +33,7 @@ This is the only place that owns application state and composes `components`, `t
   View and Poster mode it goes to Upload through `newFile`, exactly as New file (a no-op while a
   load is in flight); on Upload it changes nothing but scrolls to the top (instantly with reduced
   motion) and focuses the h1. During an export it does nothing, as Back to the run is disabled
-  then: the link stays focusable, `aria-disabled`. Cmd/Ctrl/Shift/Alt and middle clicks are the
+  then: the link stays focusable, `aria-disabled`, drawn `--muted`. Cmd/Ctrl/Shift/Alt and middle clicks are the
   browser's (open `/` in a new tab or window).
 - `UploadState/`: the Upload state (h1, intro, Dropzone, note, and the sample preview: a button
   named by its chip). It takes `dragOver` and `dropzoneRef` from the page (see "Dropping a file").

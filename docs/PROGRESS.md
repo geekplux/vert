@@ -3,12 +3,13 @@
 Phases from `docs/PLAN.md`. The main agent of each phase keeps this file current: tick a box only
 when its "done when" is verified, and add the task list for the phase under its heading.
 
-| Done | Phase        | Builds                                                                                                                                                        | Done when                                                                                |
-| ---- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [x]  | 0 Setup      | Repo, tooling, CLAUDE.md, design tokens as CSS variables, Worker skeleton                                                                                     | `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm build` all pass on an empty app              |
-| [x]  | 1 Components | Every UI piece in isolation with stories and tests: buttons, stat tile, dropzone, elevation profile, style picker, size picker, text fields, sliders, markers | Each component renders in Ladle, matches DESIGN-SPEC, passes a11y checks, has unit tests |
-| [x]  | 2 Layout     | The one page in its four states (Upload, View, Poster mode, Exporting) with placeholder data and a placeholder terrain box                                    | Screenshots match the canvas frames at 1440 and 390 widths; keyboard navigation works    |
-| [ ]  | 3 Features   | GPX parsing, elevation fetch, terrain mesh, route, scrub, poster rendering in 3 styles, tiled export, Worker + R2                                             | The five v1 acceptance checks in the brief pass with Sean's real GPX files               |
+| Done | Phase        | Builds                                                                                                                                                        | Done when                                                                                                                                                                                                                         |
+| ---- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x]  | 0 Setup      | Repo, tooling, CLAUDE.md, design tokens as CSS variables, Worker skeleton                                                                                     | `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm build` all pass on an empty app                                                                                                                                                       |
+| [x]  | 1 Components | Every UI piece in isolation with stories and tests: buttons, stat tile, dropzone, elevation profile, style picker, size picker, text fields, sliders, markers | Each component renders in Ladle, matches DESIGN-SPEC, passes a11y checks, has unit tests                                                                                                                                          |
+| [x]  | 2 Layout     | The one page in its four states (Upload, View, Poster mode, Exporting) with placeholder data and a placeholder terrain box                                    | Screenshots match the canvas frames at 1440 and 390 widths; keyboard navigation works                                                                                                                                             |
+| [ ]  | 3 Features   | GPX parsing, elevation fetch, terrain mesh, route, scrub, poster rendering in 3 styles, tiled export, Worker + R2                                             | The five v1 acceptance checks in the brief pass with Sean's real GPX files                                                                                                                                                        |
+| [ ]  | 4 Library    | Vert as a library for Activities: scene format, headless bake, `dist-lib/` bundle, scrub sync API, integration guide                                          | `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:lib && pnpm test:e2e` pass; Coosa and a Hong Kong file bake to scenes that the story and the bundle render with 0 axe violations; scene privacy test passes |
 
 Phase 3 order: parser → terrain → route and scrub → poster style A → export → styles B and E →
 Worker deploy.
@@ -95,6 +96,24 @@ Each batch: implementation sub-agent → independent verification sub-agent → 
 | 3   | 18×24 exports on desktop without crashing                                        | **Pass.** 45 of 45 18×24 exports (A/B/E, PNG and PDF, CCC and the 18.8 MB track): PNG median 658 ms, PDF median 714 ms; peak Chromium RSS 2.2 GB. Probed canvas limit 16384 × 16384 (268 Mpx), longest side 65535; WebGL max 16384. |
 | 4   | The GPX never leaves the browser                                                 | **Pass.** Full-session HAR: 39 requests, all same-origin static assets or `/tiles/z/x/y.png`; no query strings or bodies; 0 of 1,015 track coordinates found; no analytics; fonts self-hosted.                                      |
 | 5   | Never colour alone; keyboard operable                                            | **Pass.** axe 0 violations in 22 state × width cases; keyboard walk at 1440 and 390; markers, climbs and hidden stretches distinct in greyscale; reduced motion fades.                                                              |
+
+## 4 Library
+
+Branch `lib`, PR to `main` (Sean merges). Each task: implementation sub-agent (own worktree) →
+independent verification sub-agent → fix → verify, merge into `lib` on PASS only. Opus 5.5, high
+effort. Rulings in DECISIONS.md "Library for Activities".
+
+Housekeeping (2026-10-18): `upload-entry-v2` gate passed (lint, typecheck, 1,538 unit tests, build,
+30 e2e + 8 intended skips); it had already been merged to `main` as PR #1, so `lib` branches from
+`63ab3f8`. Stale `worktree-agent-*` branches (all merged) and their worktree removed.
+
+| Done | Task                                            | Rounds | Verdict | Notes |
+| ---- | ----------------------------------------------- | ------ | ------- | ----- |
+| [ ]  | 1. Scene format (`docs/SCENE.md`, `src/scene/`) |        |         |       |
+| [ ]  | 2. Headless bake (`pnpm bake`)                  |        |         |       |
+| [ ]  | 3. Library build (`pnpm build:lib`)             |        |         |       |
+| [ ]  | 4. Scrub sync API                               |        |         |       |
+| [ ]  | 5. `docs/INTEGRATION.md`                        |        |         |       |
 
 ## Needs Sean
 

@@ -139,6 +139,92 @@
   }
 }
 
+/*
+ * The poster styles band (DESIGN-SPEC §3 "01 Upload"). UploadLayout draws its rule and spacing;
+ * this is its content: label, h2, one line, then the three posters.
+ */
+.styles {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The Label style: 12 mono uppercase --muted, letter-spacing 0.08em. */
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Display face at the Stat size: 34/700/75%. */
+.stylesTitle {
+  margin: var(--space-2) 0 0;
+  font-size: 34px;
+  font-weight: 700;
+  font-stretch: 75%;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.stylesLede {
+  margin: var(--space-3) 0 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+/* Three columns at every width; the gap closes up on phones. */
+.posters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+.poster {
+  margin: 0;
+  min-width: 0;
+}
+
+/* 3:4 from its width and height attributes, so nothing shifts as it loads. Poster mode's shadow. */
+.posterImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-poster);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 18%, transparent),
+    0 12px 32px color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+}
+
+.posterName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.posterDescription {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 599.98px) {
+  .posters {
+    gap: var(--space-3);
+  }
+}
+
 .visuallyHidden {
   position: absolute;
   width: 1px;

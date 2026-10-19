@@ -646,6 +646,10 @@ installs `three` from npm.
   the frame's centre. The route keeps its true distances and time offsets from the real start, so
   a host's time ↔ distance mapping stays exact; the summary gives the whole run's length and climb
   (the host publishes those already). `--trim 0` keeps the ends.
+- **Everything positional covers only the drawn stretch.** Route, elevation profile, climbs and
+  markers hold the trimmed route only (climbs clipped to it): a profile of the whole run would give
+  the start's elevation, which on the published grid narrows home to one contour line. Only the
+  summary's totals (length, climb) describe the whole run.
 - **Accepted residual risk: the terrain is a fingerprint.** A height grid of a route's area could
   in principle be matched against a global elevation model to find where it is. No encoding of a
   real terrain avoids that; publishing a scene publishes the shape of the ground. The bake is per

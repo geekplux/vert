@@ -27,8 +27,10 @@
  * (`rotateLeft`, `dollyIn`, pointer handlers) move the camera and call `update()` straight away,
  * which leaves it unframed until the stage follows; nothing is drawn in between.
  *
- * The route and its markers (route.ts, markers.ts) are built once both a heightfield and a track
- * are present, and follow the exaggeration, the palette and the viewport.
+ * The route and its markers (route.ts, markers.ts) are built once both a grid and a track are
+ * present, and follow the exaggeration, the palette and the viewport. The stage works in grid
+ * space only (grid.ts: a {@link TerrainGrid} and a {@link GridTrack} in its sample coordinates);
+ * it never sees a latitude or longitude.
  */
 import {
   DepthTexture,
@@ -43,7 +45,6 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
-import type { RunTrack } from '../page/types';
 import {
   DEFAULT_AZIMUTH,
   DEFAULT_POLAR,
@@ -54,7 +55,7 @@ import {
   normalizeAzimuth,
   type ViewCamera,
 } from './camera';
-import { groundExtent, type Heightfield } from './heightfield';
+import { groundExtent, type GridTrack, type TerrainGrid } from './grid';
 import { createMarkerLayer, markerExtent, markerTextureScale, type MarkerLayer } from './markers';
 import { APP_ROUTE_PALETTE, createRouteLayer, type RouteLayer, type RoutePalette } from './route';
 import {
@@ -1120,14 +1121,15 @@ export interface ShowOptions {
    * user's angle). Its `view` wins over `view`.
    */
   camera?: ViewCamera;
-  /** Called after the first frame with this heightfield has been drawn. */
+  /** Called after the first frame with this grid has been drawn. */
   onFirstFrame?: () => void;
   /**
-   * The route to drape, when it changes together with the heightfield (a GPX without `<ele>` gets
-   * its elevations from this very grid): taken before the route is built, so it is built once.
-   * Omitted: the track from `setTrack` stays.
+   * The route to drape, in this grid's sample coordinates. A grid track belongs to its grid, so a
+   * new grid normally brings one; it also changes together with the grid when a GPX without
+   * `<ele>` gets its elevations from this very grid. Taken before the route is built, so it is
+   * built once. Omitted: the track from `setTrack` stays (only right for a grid in the same frame).
    */
-  track?: RunTrack | null;
+  track?: GridTrack | null;
 }
 
 const raf = (callback: FrameRequestCallback): number =>
@@ -1153,8 +1155,8 @@ export class TerrainStage {
   private routePalette: RoutePalette;
   private readonly onFrame?: (renderMs: number) => void;
   private mesh: TerrainMesh | null = null;
-  private heightfield: Heightfield | null = null;
-  private track: RunTrack | null = null;
+  private grid: TerrainGrid | null = null;
+  private track: GridTrack | null = null;
   private route: RouteLayer | null = null;
   private markers: MarkerLayer | null = null;
   private scrub: number | null = null;
@@ -1164,14 +1166,14 @@ export class TerrainStage {
   private obstacles: NdcRect[] = [];
   private exaggeration = 1;
   private view: TerrainViewMode = 'oblique';
-  /** The default oblique polar angle for the current heightfield (more top-down for a long route). */
+  /** The default oblique polar angle for the current grid (more top-down for a long route). */
   private defaultPolar = DEFAULT_POLAR;
   /** The oblique pose Flat map left from, so turning it off goes back there (not the default). */
   private obliqueReturn: ViewPose | null = null;
   private readonly target = new Vector3();
   /** The model's box (for the line fade's depth range). */
   private box = { width: 1, depth: 1, bottom: 0, top: 0 };
-  /** Exaggeration-1 outline and edge levels of the current heightfield. */
+  /** Exaggeration-1 outline and edge levels of the current grid. */
   private hull: RadialPoint[] = [];
   private edges: EdgeLevels = { north: 0, south: 0, east: 0, west: 0 };
   /** The revolved surface outline at the current exaggeration (for the controls' limits). */
@@ -1188,7 +1190,7 @@ export class TerrainStage {
    * point; the flat base's corners are added per azimuth ({@link TerrainStage.framePoints}).
    */
   private hulls: {
-    heightfield: Heightfield;
+    grid: TerrainGrid;
     exaggeration: number;
     fit: Vector3[];
     centre: Vector3[];
@@ -1412,10 +1414,10 @@ export class TerrainStage {
 
   /** The convex hulls of the model's points to fit and to centre, at the current exaggeration. */
   private modelHulls() {
-    const { heightfield, exaggeration } = this;
-    if (!heightfield) return { fit: [], centre: [] };
+    const { grid, exaggeration } = this;
+    if (!grid) return { fit: [], centre: [] };
     const cached = this.hulls;
-    if (cached?.heightfield === heightfield && cached.exaggeration === exaggeration) return cached;
+    if (cached?.grid === grid && cached.exaggeration === exaggeration) return cached;
     const lift = ({ x, y, z }: EdgePoint) => new Vector3(x, y * exaggeration, z);
     // Under each edge point, one base depth down: where the walls' bottom is when the edge dips
     // under the flat base (above the base, the point lies on the wall, inside the model anyway).
@@ -1423,7 +1425,7 @@ export class TerrainStage {
       ({ x, y, z }) => new Vector3(x, y * exaggeration - DEFAULT_BASE_DEPTH, z),
     );
     this.hulls = {
-      heightfield,
+      grid,
       exaggeration,
       fit: hullVertices([...this.envelopeSamples.map(lift), ...dips]),
       centre: hullVertices([...this.surfaceSamples.map(lift), ...dips]),
@@ -1668,8 +1670,8 @@ export class TerrainStage {
 
   /** Refits after the model's shape, the exaggeration or the viewport changed. */
   private updateFit() {
-    if (!this.heightfield) return;
-    const bounds = modelBounds(this.heightfield, this.exaggeration);
+    if (!this.grid) return;
+    const bounds = modelBounds(this.grid, this.exaggeration);
     const bottom = this.bottomFor(this.pose().theta);
     this.box = { width: bounds.width, depth: bounds.depth, bottom, top: bounds.height };
     this.pivotY = bounds.height / 2;
@@ -1707,17 +1709,17 @@ export class TerrainStage {
     return this.placement({ phi, theta, zoom: 1 });
   }
 
-  /** Builds (or drops) the route and markers for the current heightfield and track. */
+  /** Builds (or drops) the route and markers for the current grid and track. */
   private rebuildRoute() {
     this.route?.dispose();
     this.markers?.dispose();
     this.route = null;
     this.markers = null;
-    const { heightfield, track } = this;
-    if (!heightfield || !track || track.cumulative.length === 0) return;
+    const { grid, track } = this;
+    if (!grid || !track || track.cumulative.length === 0) return;
     const options = { palette: this.routePalette, exaggeration: this.exaggeration };
-    this.route = createRouteLayer(heightfield, track, options);
-    this.markers = createMarkerLayer(heightfield, track, options);
+    this.route = createRouteLayer(grid, track, options);
+    this.markers = createMarkerLayer(grid, track, options);
     this.route.setResolution(this.size.width, this.size.height);
     if (this.figureScale !== null) this.route.setLineScale(this.figureScale);
     this.markers.setViewport(this.size.height, this.camera.fov);
@@ -1725,8 +1727,11 @@ export class TerrainStage {
     this.scene.add(this.route.group, this.markers.group);
   }
 
-  /** The route to drape on the terrain (or none). Rebuilds the route and markers. */
-  setTrack(track: RunTrack | null): void {
+  /**
+   * The route to drape on the terrain (or none), in the current grid's sample coordinates. Rebuilds
+   * the route and markers.
+   */
+  setTrack(track: GridTrack | null): void {
     if (track === this.track) return;
     this.track = track;
     this.rebuildRoute();
@@ -1806,22 +1811,22 @@ export class TerrainStage {
   }
 
   /**
-   * Shows a heightfield (or nothing). A new heightfield plays the intro unless reduced motion, or
-   * starts at `options.camera`.
+   * Shows a grid (or nothing). A new grid plays the intro unless reduced motion, or starts at
+   * `options.camera`.
    */
-  show(heightfield: Heightfield | null, options: ShowOptions): void {
+  show(grid: TerrainGrid | null, options: ShowOptions): void {
     if (this.mesh) {
       this.scene.remove(this.mesh);
       disposeTerrainMesh(this.mesh);
       this.mesh = null;
     }
-    this.heightfield = heightfield;
+    this.grid = grid;
     if (options.track !== undefined) this.track = options.track;
     this.tween = null;
     this.obliqueReturn = null;
     this.controls.enabled = true;
     stopControlsMotion(this.controls);
-    if (!heightfield) {
+    if (!grid) {
       this.rebuildRoute();
       this.requestRender();
       return;
@@ -1830,7 +1835,7 @@ export class TerrainStage {
     this.view = options.camera?.view ?? options.view;
     this.reducedMotion = options.reducedMotion;
     this.firstFrame = options.onFirstFrame ?? null;
-    this.mesh = createTerrainMesh(heightfield, {
+    this.mesh = createTerrainMesh(grid, {
       palette: this.palette,
       exaggeration: options.exaggeration,
       baseDepth: DEFAULT_BASE_DEPTH,
@@ -1838,12 +1843,12 @@ export class TerrainStage {
     });
     this.scene.add(this.mesh);
     this.rebuildRoute();
-    this.hull = radialHull(heightfield);
-    this.edges = edgeLevels(heightfield);
-    this.edgeSamples = edgePoints(heightfield);
-    this.surfaceSamples = surfaceSamples(heightfield);
-    this.envelopeSamples = surfaceEnvelope(heightfield);
-    this.defaultPolar = defaultPolarFor(groundExtent(heightfield));
+    this.hull = radialHull(grid);
+    this.edges = edgeLevels(grid);
+    this.edgeSamples = edgePoints(grid);
+    this.surfaceSamples = surfaceSamples(grid);
+    this.envelopeSamples = surfaceEnvelope(grid);
+    this.defaultPolar = defaultPolarFor(groundExtent(grid));
     this.updateFit();
     this.zoom = 1;
 

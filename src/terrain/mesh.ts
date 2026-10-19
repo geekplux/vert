@@ -1,5 +1,5 @@
 /**
- * The terrain mesh: one BufferGeometry built from a {@link Heightfield} and a ShaderMaterial that
+ * The terrain mesh: one BufferGeometry built from a {@link TerrainGrid} and a ShaderMaterial that
  * draws the style A look (DECISIONS.md "Terrain look"): a flat `--surface` fill, lightly shaded so
  * slopes read, with 1px ink ridge lines along every Nth row of the grid. Rows nearer the camera
  * are darker and slightly thicker. The depth buffer hides the rows behind each ridge, which gives
@@ -23,7 +23,7 @@ import {
   Vector3,
   type Camera,
 } from 'three';
-import { elevationAt, gridPosition, type Heightfield } from './heightfield';
+import { gridElevation, type TerrainGrid } from './grid';
 
 /** Colours of the terrain figure, as CSS colour strings. */
 export interface TerrainPalette {
@@ -86,7 +86,7 @@ export interface TerrainMeshOptions {
   pixelRatio?: number;
 }
 
-/** The local frame of a heightfield: extents and the metres → model units scale. */
+/** The local frame of a grid: extents and the metres → model units scale. */
 export interface ModelBounds {
   /** Model units per metre (horizontal and vertical). */
   readonly scale: number;
@@ -116,9 +116,9 @@ export interface EdgeLevels {
   readonly west: number;
 }
 
-export function edgeLevels(heightfield: Heightfield): EdgeLevels {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const scale = frame(heightfield).scale;
+export function edgeLevels(grid: TerrainGrid): EdgeLevels {
+  const { width: w, height: h, elevations, min } = grid;
+  const scale = frame(grid).scale;
   const lowest = (count: number, index: (k: number) => number) => {
     let low = Infinity;
     for (let k = 0; k < count; k++) low = Math.min(low, elevations[index(k)] ?? min);
@@ -133,8 +133,8 @@ export function edgeLevels(heightfield: Heightfield): EdgeLevels {
 }
 
 /** Lowest point of the whole edge (model units, exaggeration 1). */
-export function edgeLevel(heightfield: Heightfield): number {
-  const { north, south, east, west } = edgeLevels(heightfield);
+export function edgeLevel(grid: TerrainGrid): number {
+  const { north, south, east, west } = edgeLevels(grid);
   return Math.min(north, south, east, west);
 }
 
@@ -184,9 +184,9 @@ export interface EdgePoint {
  * included), in the local frame at exaggeration 1: a light stand-in for the surface when centring
  * the model on screen.
  */
-export function surfaceSamples(heightfield: Heightfield, perSide = 48): EdgePoint[] {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const { spanX, spanZ, scale } = frame(heightfield);
+export function surfaceSamples(grid: TerrainGrid, perSide = 48): EdgePoint[] {
+  const { width: w, height: h, elevations, min } = grid;
+  const { spanX, spanZ, scale } = frame(grid);
   const point = (i: number, j: number): EdgePoint => ({
     x: (i / (w - 1) - 0.5) * spanX * scale,
     z: (j / (h - 1) - 0.5) * spanZ * scale,
@@ -217,9 +217,9 @@ export function surfaceSamples(heightfield: Heightfield, perSide = 48): EdgePoin
  * and no peak between lattice nodes is missed. For fitting the camera to the model as it is seen
  * from one azimuth.
  */
-export function surfaceEnvelope(heightfield: Heightfield, perSide = 24): EdgePoint[] {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const { spanX, spanZ, scale } = frame(heightfield);
+export function surfaceEnvelope(grid: TerrainGrid, perSide = 24): EdgePoint[] {
+  const { width: w, height: h, elevations, min } = grid;
+  const { spanX, spanZ, scale } = frame(grid);
   const lattice = (n: number) => {
     const stride = Math.max(1, Math.ceil((n - 1) / perSide));
     const at: number[] = [];
@@ -271,9 +271,9 @@ export function surfaceEnvelope(heightfield: Heightfield, perSide = 24): EdgePoi
  * About `count` points along the grid's edge (every corner included), for fitting the camera to
  * the bottom of the walls: a wall-bottom point sits at `min(base, y · exaggeration − baseDepth)`.
  */
-export function edgePoints(heightfield: Heightfield, count = 256): EdgePoint[] {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const { spanX, spanZ, scale } = frame(heightfield);
+export function edgePoints(grid: TerrainGrid, count = 256): EdgePoint[] {
+  const { width: w, height: h, elevations, min } = grid;
+  const { spanX, spanZ, scale } = frame(grid);
   const step = Math.max(1, Math.floor((2 * (w + h)) / count));
   const points: EdgePoint[] = [];
   const add = (i: number, j: number) => {
@@ -307,9 +307,9 @@ export interface RadialPoint {
  * by distance (`bins` bins, each bin's highest node counted at both edges of the bin, so the hull
  * still encloses every node), which keeps this linear in the grid size.
  */
-export function radialHull(heightfield: Heightfield, bins = 96): RadialPoint[] {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const { spanX, spanZ, scale } = frame(heightfield);
+export function radialHull(grid: TerrainGrid, bins = 96): RadialPoint[] {
+  const { width: w, height: h, elevations, min } = grid;
+  const { spanX, spanZ, scale } = frame(grid);
   const halfX = (spanX * scale) / 2;
   const halfZ = (spanZ * scale) / 2;
   const outer = Math.hypot(halfX, halfZ);
@@ -346,12 +346,12 @@ export function radialHull(heightfield: Heightfield, bins = 96): RadialPoint[] {
   return hull;
 }
 
-/** Extents of the model built from `heightfield` at `exaggeration`. */
-export function modelBounds(heightfield: Heightfield, exaggeration = 1): ModelBounds {
-  const { spanX, spanZ, scale } = frame(heightfield);
+/** Extents of the model built from `grid` at `exaggeration`. */
+export function modelBounds(grid: TerrainGrid, exaggeration = 1): ModelBounds {
+  const { spanX, spanZ, scale } = frame(grid);
   const width = spanX * scale;
   const depth = spanZ * scale;
-  const height = (heightfield.max - heightfield.min) * scale * exaggeration;
+  const height = (grid.max - grid.min) * scale * exaggeration;
   return {
     scale,
     width,
@@ -363,33 +363,32 @@ export function modelBounds(heightfield: Heightfield, exaggeration = 1): ModelBo
 }
 
 /** Ground spans of the grid in metres and the scale that makes the longer one 1 unit. */
-function frame(heightfield: Heightfield) {
-  const { width, height, metresPerSample } = heightfield;
+function frame(grid: TerrainGrid) {
+  const { width, height, metresPerSample } = grid;
   const spanX = Math.max((width - 1) * metresPerSample.x, Number.EPSILON);
   const spanZ = Math.max((height - 1) * metresPerSample.y, Number.EPSILON);
   return { spanX, spanZ, scale: 1 / Math.max(spanX, spanZ) };
 }
 
 /**
- * A lon/lat on the terrain in the mesh's local frame, at `exaggeration`, raised `liftMetres` (true
- * metres, also exaggerated) above the surface. Matches the mesh exactly at grid nodes and
- * bilinearly between them. Positions outside the grid extrapolate horizontally and take the
- * edge elevation.
+ * A grid position (fractional column and row) on the terrain in the mesh's local frame, at
+ * `exaggeration`, raised `liftMetres` (true metres, also exaggerated) above the surface. Matches
+ * the mesh exactly at grid nodes and bilinearly between them. Positions outside the grid
+ * extrapolate horizontally and take the edge elevation.
  */
-export function heightfieldToLocal(
-  heightfield: Heightfield,
-  lon: number,
-  lat: number,
+export function gridToLocal(
+  grid: TerrainGrid,
+  col: number,
+  row: number,
   exaggeration = 1,
   liftMetres = 0,
 ): Vector3 {
-  const { spanX, spanZ, scale } = frame(heightfield);
-  const grid = gridPosition(heightfield, lon, lat);
-  const elevation = elevationAt(heightfield, lon, lat);
+  const { spanX, spanZ, scale } = frame(grid);
+  const elevation = gridElevation(grid, col, row);
   return new Vector3(
-    (grid.x / (heightfield.width - 1) - 0.5) * spanX * scale,
-    (elevation - heightfield.min + liftMetres) * scale * exaggeration,
-    (grid.y / (heightfield.height - 1) - 0.5) * spanZ * scale,
+    (col / (grid.width - 1) - 0.5) * spanX * scale,
+    (elevation - grid.min + liftMetres) * scale * exaggeration,
+    (row / (grid.height - 1) - 0.5) * spanZ * scale,
   );
 }
 
@@ -521,14 +520,14 @@ export type TerrainMaterial = ShaderMaterial & { uniforms: TerrainUniforms };
 export type TerrainMesh = Mesh<BufferGeometry, TerrainMaterial>;
 
 /** Row step N so that about `lines` ridge lines span the grid's longer side. */
-export function rowStepFor(heightfield: Heightfield, lines = DEFAULT_ROW_LINES): number {
-  const longest = Math.max(heightfield.width, heightfield.height) - 1;
+export function rowStepFor(grid: TerrainGrid, lines = DEFAULT_ROW_LINES): number {
+  const longest = Math.max(grid.width, grid.height) - 1;
   return Math.max(1, Math.round(longest / Math.max(1, lines)));
 }
 
 /** The style A material; exported for tests and for figures that share uniforms. */
 export function createTerrainMaterial(
-  heightfield: Heightfield,
+  grid: TerrainGrid,
   {
     palette = STYLE_A_PALETTE,
     exaggeration = 1,
@@ -543,8 +542,8 @@ export function createTerrainMaterial(
     uBaseDepth: { value: baseDepth },
     uSurface: { value: new Color(palette.surface) },
     uInk: { value: new Color(palette.ink) },
-    uRowStep: { value: rowStepFor(heightfield, rowLines) },
-    uFrontRow: { value: heightfield.height - 1 },
+    uRowStep: { value: rowStepFor(grid, rowLines) },
+    uFrontRow: { value: grid.height - 1 },
     uLineWidth: { value: lineWidth },
     uPixelRatio: { value: pixelRatio },
     uDepthRange: { value: new Vector2(0, 1) },
@@ -552,7 +551,7 @@ export function createTerrainMaterial(
     // camera keep the flat --surface fill and only slopes turned away darken.
     uLightDirection: { value: new Vector3(-0.3, 0.35, 0.89).normalize() },
     uShade: { value: 0.14 },
-    uEdgeLevel: { value: visibleEdgeLevel(edgeLevels(heightfield), 0) },
+    uEdgeLevel: { value: visibleEdgeLevel(edgeLevels(grid), 0) },
     uWallShade: { value: palette.wallShade ?? DEFAULT_WALL_SHADE },
     uWallLine: { value: 0.6 },
   };
@@ -564,9 +563,9 @@ export function createTerrainMaterial(
 }
 
 /** Positions (y at exaggeration 1), row index, base flag and wall kind for the grid and skirt. */
-function buildGeometry(heightfield: Heightfield, skirt: boolean): BufferGeometry {
-  const { width: w, height: h, elevations, min } = heightfield;
-  const { spanX, spanZ, scale } = frame(heightfield);
+function buildGeometry(grid: TerrainGrid, skirt: boolean): BufferGeometry {
+  const { width: w, height: h, elevations, min } = grid;
+  const { spanX, spanZ, scale } = frame(grid);
   const xAt = (i: number) => (i / (w - 1) - 0.5) * spanX * scale;
   const zAt = (j: number) => (j / (h - 1) - 0.5) * spanZ * scale;
   const yAt = (i: number, j: number) => ((elevations[j * w + i] ?? min) - min) * scale;
@@ -644,19 +643,19 @@ function buildGeometry(heightfield: Heightfield, skirt: boolean): BufferGeometry
 }
 
 /**
- * The terrain mesh for `heightfield`: `width × height` surface vertices in the local frame (plus
+ * The terrain mesh for `grid`: `width × height` surface vertices in the local frame (plus
  * the skirt), drawn with {@link createTerrainMaterial}. The vertex shader applies the exaggeration,
  * so the geometry's bounding volume is at exaggeration 1; the mesh opts out of frustum culling.
  */
 export function createTerrainMesh(
-  heightfield: Heightfield,
+  grid: TerrainGrid,
   options: TerrainMeshOptions = {},
 ): TerrainMesh {
-  if (heightfield.width < 2 || heightfield.height < 2) {
+  if (grid.width < 2 || grid.height < 2) {
     throw new RangeError('A terrain mesh needs at least 2 × 2 samples');
   }
-  const geometry = buildGeometry(heightfield, options.skirt ?? true);
-  const mesh = new Mesh(geometry, createTerrainMaterial(heightfield, options));
+  const geometry = buildGeometry(grid, options.skirt ?? true);
+  const mesh = new Mesh(geometry, createTerrainMaterial(grid, options));
   mesh.frustumCulled = false;
   mesh.name = 'terrain';
   return mesh;

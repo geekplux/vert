@@ -1,6 +1,8 @@
 /** Test fixtures for the terrain modules (a synthetic heightfield and tracks). Not app code. */
 import { cumulativeDistances } from '../lib/geo';
 import type { RunTrack } from '../page/types';
+import { gridDistance, type GridTrack, type TerrainGrid } from './grid';
+import { gridTrackFromRun } from './gridTrack';
 import type { Heightfield } from './heightfield';
 
 /** 120 × 80 samples, a hill and a valley, over ~3.6 × 2.2 km. */
@@ -48,4 +50,35 @@ export function makeTrack(points: [number, number][], ele?: number[]): RunTrack 
     ele: ele ? Float64Array.from(ele) : null,
     time: null,
   };
+}
+
+/**
+ * A grid track through `points` (column, row on `grid`), with cumulative distances measured with
+ * the grid's spacing, optional elevations and the loop flag as given (default: not a loop): a
+ * route as a baked scene carries it, no lat/lon.
+ */
+export function makeGridTrack(
+  grid: TerrainGrid,
+  points: [number, number][],
+  ele?: number[],
+  loop = false,
+): GridTrack {
+  const col = Float64Array.from(points.map(([c]) => c));
+  const row = Float64Array.from(points.map(([, r]) => r));
+  const cumulative = new Float64Array(points.length);
+  for (let i = 1; i < points.length; i++) {
+    const a = { col: col[i - 1] ?? 0, row: row[i - 1] ?? 0 };
+    const b = { col: col[i] ?? 0, row: row[i] ?? 0 };
+    cumulative[i] = (cumulative[i - 1] ?? 0) + gridDistance(grid, a, b);
+  }
+  return { col, row, cumulative, ele: ele ? Float64Array.from(ele) : null, loop };
+}
+
+/** A track through `points` (lat, lon) put on `heightfield`'s grid, as TerrainView does. */
+export function gridTrackOn(
+  heightfield: Heightfield,
+  points: [number, number][],
+  ele?: number[],
+): GridTrack {
+  return gridTrackFromRun(heightfield, makeTrack(points, ele));
 }

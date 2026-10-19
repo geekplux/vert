@@ -7,6 +7,7 @@
 import { useEffect, useId, useImperativeHandle, useRef, type Ref } from 'react';
 import type { ViewCamera } from './camera';
 import type { GridTrack, TerrainGrid } from './grid';
+import { holdVerticalTouch } from './holdTouch';
 import { readPalette, type TerrainPalette } from './mesh';
 import { readRoutePalette, type RoutePalette } from './route';
 import {
@@ -107,7 +108,8 @@ const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * The 3D terrain (style A) of a grid and a grid track. Drag to orbit, wheel or pinch to zoom.
+ * The 3D terrain (style A) of a grid and a grid track. Drag to orbit, wheel or pinch to zoom; on
+ * a touch screen a vertical one-finger swipe scrolls the page and a sideways drag orbits.
  * Keyboard: focus the view (Tab), then arrow keys orbit (Shift for bigger steps) and + / − zoom;
  * the page's Rotate and Flat map buttons do the rest. With `prefers-reduced-motion` the intro
  * camera move becomes a fade.
@@ -188,6 +190,11 @@ export function GridTerrainView({
     });
     stageRef.current = stage;
     stage.resize(container.clientWidth, container.clientHeight);
+    // Touch: a vertical one-finger swipe scrolls the page; a sideways drag orbits, two fingers
+    // zoom. OrbitControls has just set `touch-action: none` inline on the canvas: put the CSS
+    // value back, and hold a swipe's first moves back from the controls until it is sideways.
+    canvas.style.touchAction = 'pan-y';
+    const releaseTouch = holdVerticalTouch(container);
 
     let observer: ResizeObserver | undefined;
     if (typeof ResizeObserver === 'function') {
@@ -205,6 +212,7 @@ export function GridTerrainView({
     container.addEventListener('keydown', onKeyDown);
 
     return () => {
+      releaseTouch();
       container.removeEventListener('keydown', onKeyDown);
       observer?.disconnect();
       stage.dispose();

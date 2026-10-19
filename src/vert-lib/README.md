@@ -78,10 +78,12 @@ Flat is the `view` prop, not a method: `'flat'` is top-down and north up, with n
   tab order as soon as it has a scene (before the first frame). Arrow keys orbit (← → around,
   ↑ ↓ up and down; Shift for steps three times as big; not in the flat view), `+` and `-` (or `=`
   and `_`) zoom. A visually hidden hint says so to screen readers. Pointer: drag orbits, wheel or
-  pinch zooms.
+  pinch zooms. Touch: a vertical one-finger swipe scrolls the page (`touch-action: pan-y`), a
+  sideways drag orbits (and tilts once it has started sideways), two fingers zoom.
 - **The profile**: one ARIA slider (`role="slider"`). Arrow keys move ±1% of the drawn route
   (Shift ±10%), PageUp / PageDown ±10%, Home / End to the drawn ends, Escape clears the position.
-  Pointer: press or drag anywhere on the plot.
+  Pointer: press or drag anywhere on the plot. Touch: a tap, or a sideways drag past 8 px, sets the
+  position; a vertical swipe scrolls the page and sets nothing.
 
 Both show a 2px `--route` focus ring, offset 2px.
 

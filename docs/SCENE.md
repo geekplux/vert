@@ -485,14 +485,14 @@ with Node's type stripping and a small resolve hook for `src/`'s extensionless i
 Node refuses the `.ts` entry before it can say so). No dependency, DOM or WebGL.
 Integrating the files into a host page is `docs/INTEGRATION.md`'s subject.
 
-| option    | default                                              | meaning                                                                       |
-| --------- | ---------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `<input>` | (required)                                           | a `.gpx`, or a `.json` points file (below)                                    |
-| `--out`   | (required)                                           | the directory to write to (created if needed)                                 |
-| `--id`    | the input's file name, lower-cased, other runs → `-` | the files' base name: `a-z`, `0-9`, `_`, `-`, at most 64, given ids as typed  |
-| `--trim`  | 200                                                  | metres hidden at each end of the route (the poster's default); `0` keeps them |
-| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`    | elevation tile URL template (the tile Worker, or anything with its answers)   |
-| `--cache` | `scripts/.cache/terrarium` (git-ignored)             | the tile cache, `{z}/{x}/{y}.png`                                             |
+| option    | default                                              | meaning                                                                                         |
+| --------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `<input>` | (required)                                           | a `.gpx`, a `.json` points file (below), or `-`: a points file on stdin                         |
+| `--out`   | (required)                                           | the directory to write to (created if needed)                                                   |
+| `--id`    | the input's file name, lower-cased, other runs → `-` | the files' base name: `a-z`, `0-9`, `_`, `-`, at most 64, given ids as typed; required with `-` |
+| `--trim`  | 200                                                  | metres hidden at each end of the route (the poster's default); `0` keeps them                   |
+| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`    | elevation tile URL template (the tile Worker, or anything with its answers)                     |
+| `--cache` | `scripts/.cache/terrarium` (git-ignored)             | the tile cache, `{z}/{x}/{y}.png`                                                               |
 
 **What is checked in an id** (`scripts/bake/id.ts`). The id becomes a published file name, so:
 
@@ -539,7 +539,9 @@ Local bakes of your own tracks belong in `fixtures/scenes/` (git-ignored).
 `t` is optional and is either an ISO 8601 date-time **with a zone** or **epoch milliseconds**
 (1990–2100; seconds are refused). At least 2 points, at most 500,000; present times must not go
 backwards; no other keys (a typo such as `lng` would otherwise drop data). Errors name the point and
-field, never the value.
+field, never the value. With `-` as the input the points file is read from standard input (same
+limit, 128 MB), so a host can pipe the coordinates in and never write them to disk:
+`spawnSync(process.execPath, ['../vert/scripts/bake.ts', '-', '--id', id, '--out', dir], { input: json })`.
 
 **What it does.** The run is built exactly as the app builds it: a GPX goes through the parse
 worker's own handler, a points file through the same `buildRun`; a file with no usable elevations
@@ -564,9 +566,13 @@ antimeridian works as in the app (its longitudes stay unwrapped, and the grid is
 
 **Loops and laps.** The trim hides the first and last metres along the route, but a loop or a lap
 session passes its start again: when the real start or finish lies within 100 m of the drawn route,
-the bake says so on stderr (the distance in tens of metres, never a coordinate) and suggests a
-larger `--trim`. It still writes the scene: the start is then one point among many of the route,
-but you decide whether that is enough.
+the bake says so on stderr (exit 0): how near, in tens of metres; where along the route it passes,
+`km X of Y` (one decimal, distances along the route only, never a coordinate); and the smallest
+`--trim` (tens of metres) whose drawn route stays 100 m clear of it, or that no `--trim` does (the
+route passes it again too far from both ends, as laps do). A larger trim draws a sub-stretch of a
+smaller one's, so the bake finds that trim by binary search on the warning's own test. It still
+writes the scene: the start is then one point among many of the route, but you decide whether
+that is enough.
 
 **Tiles.** At most 4 requests in flight, `User-Agent: vert-bake/<version> (offline scene bake)`,
 20 s per request, only z/x/y in the path (as from the app). Answers, as the Worker gives them
@@ -592,7 +598,13 @@ and in memory, and the cache only saves a later download.
 **Output.** The summary gives the id, the whole run's length and climb and where its elevations
 came from, the drawn length, the grid's samples, extent in metres and zoom, the bytes and hash, the
 tiles fetched, read from the cache and missing upstream (across both grids, and how many of those
-lie under the scene), and the privacy result; warnings go to stderr. Nothing printed, errors
+lie under the scene), and the privacy result; warnings go to stderr. When every elevation is the
+file's own, an `offset` line gives the file's elevations minus the terrain's (sampled from the
+scene grid) along the drawn route: the mean, weighted by distance, and the range, whole metres.
+
+Distances (the route's, the sidecar's `distance` and `drawnLength`) are the 2D haversine sum over
+the input's raw points (`src/gpx/stats.ts`: no smoothing, no elevation), so they can differ from a
+device's recorded distance by a percent or two. Nothing printed, errors
 included, holds a coordinate, a bound, a tile x/y or a tile URL. Exit codes: 0 written, 1 the bake
 failed (nothing written), 2 a usage error.
 

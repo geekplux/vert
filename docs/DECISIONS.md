@@ -796,3 +796,54 @@ project's presentation to be redone without changing what Vert does.
 - **Sharing metadata.** `index.html` carries Open Graph and Twitter card tags and a canonical URL,
   with a 1280 × 640 card (`public/og-image.png`) that can also serve as GitHub's social preview
   (uploaded by hand in the repository settings). The page makes no extra request for them.
+
+## Library 7: host feedback (2026-10-19)
+
+Activities, the first host, embedded the library and reported what it had to work around. Sean's
+rule for the changes: simple and easy to use, better defaults over new options, no new flag or
+prop unless two real uses genuinely differ. Version 0.1.1; no breaking change.
+
+- **Touch scrolls the page, everywhere; no prop.** The view (`touch-action: none`, and
+  OrbitControls' inline `none` on the canvas) and the profile (`none`, a position set on the first
+  touch) swallowed a vertical swipe on a phone: the page did not scroll, the terrain tilted, the
+  profile moved. Both now take `pan-y`. The view sets the canvas back to `pan-y` after OrbitControls
+  connects and installs a capture-phase filter (`src/terrain/holdTouch.ts`, ported from
+  Activities) that holds a single finger's moves until the gesture is more sideways than vertical
+  and past 8 px, because Chromium delivers about 21–25 px of moves before its `pointercancel`.
+  Down, up, cancel, two fingers, mouse and pen pass. Vert's own page scrolls at 390 px too (the
+  aside sits under the terrain), so it wants the same default: no `touch` prop. Lost on touch:
+  tilting with a finger that starts vertically (a drag that starts sideways still tilts; the
+  arrow keys, Rotate and the flat view remain).
+- **The profile on touch** sets the position on a tap (lifted within 8 px) or once a drag is past
+  8 px and more sideways than vertical; a vertical swipe sets nothing. Mouse and pen unchanged.
+  A finger is not captured again when the drag starts: touch pointers are captured implicitly at
+  pointerdown, and a second `setPointerCapture` made Chromium fire `lostpointercapture`, which
+  ended the drag (seen in the e2e).
+- **`--vert-focus`, not three variables.** Both focus rings read `var(--vert-focus,
+var(--route))`; width (2 px) and offset (2 px) stay fixed. It is not defined in `tokens.css`:
+  the lib build's fallback check only fires on a `var()` without a fallback, so it passes, and a
+  definition `--vert-focus: var(--route)` on `:root` would resolve there and stop following a
+  wrapper's `--route`.
+- **`dist-lib/` is one folder**: `LICENSE`, `VERSION` (`VERT_LIB_VERSION` and a newline) and
+  `fixtures/coosa-backcountry.scene` with its sidecar. `VERT_LIB_VERSION` gains `.dirty` when
+  `git status --porcelain` is not empty, so a build of local edits never passes for a commit's.
+  A plain text file (not JSON with peers): the version is the one fact a host pins; the `three`
+  version stays in the changelog.
+- **`pnpm bake -`** reads the points from standard input, `--id` required; no new flag. A host no
+  longer writes coordinates to a temporary file it must own and clean up on signals.
+- **Near-end warning, informative.** It now says where the route passes the end (km X of Y) and the
+  smallest `--trim` (tens of metres, up to 10,000) that hides it, found by binary search on the
+  warning's own test (a larger trim draws a sub-stretch, so "clear" is monotone), or that none does.
+  "Where" is the pass farthest from both ends among the recorded points within 100 m: the one a
+  trim must reach. No per-end trims and no acknowledgement flag: the message makes the decision
+  possible, and a host that accepts a public start can treat that warning as it likes.
+- **Elevation offset line, no flag.** When every elevation is the file's own, the summary prints the
+  file's elevations minus the terrain's along the drawn route (mean by distance, range; whole
+  metres). A host that prefers the terrain leaves `ele` out of the points: the input already is
+  the switch.
+- **Docs**: the scrub offset rule (`seconds − offset` in, `+ offset` out), the `.scene`
+  Content-Type rule and the `no-cache` policy, how scene distances are measured, what Activities'
+  importer and guards actually do, what reduced motion does. Not done, on purpose: per-end trims,
+  `--accept-near-end`, `--elevation`, `--json`, a light entry, exported sidecar helpers,
+  `--vert-*` colour aliases, a `start` field in the points file, a new heart-rate example, a tile
+  cache default outside the checkout.

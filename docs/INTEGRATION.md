@@ -19,11 +19,11 @@ Contents: [What you get](#1-what-you-get) · [Vendoring](#2-vendoring-dist-lib) 
 
 ## 1. What you get
 
-| piece                                | what it is                                                                                                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `<id>.scene` and `<id>.scene.json`   | One activity's terrain: a height grid and the drawn route in grid-local metres, with markers, climbs and times; its sidecar holds the size, a hash and whole-metre totals.           |
-| `pnpm bake` (`node scripts/bake.ts`) | The command that makes them, offline, from a `.gpx` or a `.json` points file, on the machine that has the activity.                                                                  |
-| `dist-lib/` (`pnpm build:lib`)       | The library a host vendors: `TerrainView`, `ElevationProfile`, `decodeScene`, time ↔ distance helpers, the credit text. One ES module (96 KB, 30 KB gzipped) plus `vert.css` (2 KB). |
+| piece                                | what it is                                                                                                                                                                                                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<id>.scene` and `<id>.scene.json`   | One activity's terrain: a height grid and the drawn route in grid-local metres, with markers, climbs and times; its sidecar holds the size, a hash and whole-metre totals.                                                    |
+| `pnpm bake` (`node scripts/bake.ts`) | The command that makes them, offline, from a `.gpx` or a `.json` points file, on the machine that has the activity.                                                                                                           |
+| `dist-lib/` (`pnpm build:lib`)       | The library a host vendors: `TerrainView`, `ElevationProfile`, `decodeScene`, time ↔ distance helpers, the credit text. One ES module (98 KB, 31 KB gzipped) plus `vert.css` (2 KB), `LICENSE`, `VERSION` and a sample scene. |
 
 **Privacy model.** Everything georeferenced happens offline, in the bake on the owner's machine:
 it reads the coordinates, fetches elevation tiles by tile number, and writes a scene that holds no
@@ -47,7 +47,7 @@ in `docs/DECISIONS.md` ("Library for Activities") and `docs/SCENE.md` ("Forbidde
   still covers them.
 
 **Vendoring into a public repository.** Vert's repository is public (since 2026-10-19, MIT), so a
-public host such as `geekplux/activities` may commit `dist-lib/`; keep Vert's `LICENSE` with it.
+public host such as `geekplux/activities` may commit `dist-lib/`; its `LICENSE` (Vert's) travels with it.
 
 **For Activities, the whole change**, each item explained below:
 
@@ -88,7 +88,7 @@ public host such as `geekplux/activities` may commit `dist-lib/`; keep Vert's `L
 > **Vert is public.** Vendoring publishes Vert's bundle, declarations and README wherever the
 > host's repository is visible; since Vert's own repository is public (2026-10-19, MIT), a public
 > host such as `geekplux/activities` may vendor it. The MIT licence asks that its notice travel
-> with copies: vendor Vert's `LICENSE` next to the files.
+> with copies: `dist-lib/LICENSE` is Vert's, so copy the folder whole.
 
 A host whose build cannot see Vert's repository (Activities' Cloudflare build clones only its own)
 copies the built files into its own repository and commits them.
@@ -101,8 +101,18 @@ pnpm build:lib
 rm -rf vendor/vert && mkdir -p vendor && cp -R ../vert/dist-lib vendor/vert
 ```
 
-`dist-lib/` holds `index.js`, `vert.css`, `index.d.ts`, `types/` and `README.md`. Keep the folder
-as it is built: `vendor/vert/` at the host's root (outside `src/`) works, and keep it out of the
+`dist-lib/` holds everything a host copies:
+
+| file                                                 | what                                                                                                     |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `index.js`, `vert.css`                               | the library and its stylesheet                                                                           |
+| `index.d.ts`, `types/`                               | the declarations                                                                                         |
+| `README.md`                                          | the library's own reference                                                                              |
+| `LICENSE`                                            | Vert's MIT licence, which travels with copies                                                            |
+| `VERSION`                                            | `VERT_LIB_VERSION` and a newline ([Version](#version))                                                   |
+| `fixtures/coosa-backcountry.scene` and `.scene.json` | the committed sample scene (public, no coordinates), for your tests ([Testing](#10-testing-in-the-host)) |
+
+Keep the folder as it is built: `vendor/vert/` at the host's root (outside `src/`) works, and keep it out of the
 host's lint and format checks, since `index.js` is minified. For Activities:
 
 - `eslint.config.js`: add `'vendor'` to `globalIgnores([...])`.
@@ -111,12 +121,10 @@ host's lint and format checks, since `index.js` is minified. For Activities:
 ### Version
 
 `VERT_LIB_VERSION` is `package.json`'s version plus the short git sha the library was built from,
-for example `0.1.0+1face09` (`0.1.0+nogit` outside a git checkout). It is a string literal in the
-bundle, so you can read what is vendored without running it:
-
-```sh
-grep -o '"0\.[0-9]*\.[0-9]*+[0-9a-z]*"' vendor/vert/index.js
-```
+for example `0.1.1+1face09`; `.dirty` is appended when the checkout had uncommitted changes
+(`0.1.1+1face09.dirty`: not that commit's build, so do not vendor it), and it is `0.1.1+nogit`
+outside a git checkout. `dist-lib/VERSION` holds the same string and a newline, so you can read
+what is vendored without running or searching the bundle.
 
 Pin it with a test, so a re-vendor changes one line on purpose. In Activities it goes under
 `scripts/` (say `scripts/vendor.test.ts`): `tsconfig.node.json` covers `scripts/` with Node's
@@ -129,13 +137,12 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /** The Vert build in vendor/vert/, pinned: a re-vendor must change this line on purpose. */
-const PINNED = '0.1.0+1face09';
+const PINNED = '0.1.1+1face09';
 
 describe('vendored Vert', () => {
   it('is the pinned build', () => {
-    // VERT_LIB_VERSION is a string literal in the bundle; reading it needs no three.js.
-    const bundle = readFileSync('vendor/vert/index.js', 'utf8');
-    expect(/"(\d+\.\d+\.\d+\+[0-9a-z]+)"/.exec(bundle)?.[1]).toBe(PINNED);
+    // dist-lib/VERSION is VERT_LIB_VERSION; reading it needs no three.js.
+    expect(readFileSync('vendor/vert/VERSION', 'utf8')).toBe(`${PINNED}\n`);
   });
 });
 ```
@@ -199,8 +206,9 @@ it).
 1. In Vert: read the changelog entries since your version ([below](#11-changelog)); breaking
    changes come first.
 2. `pnpm build:lib` from a clean checkout of the version you want.
-3. In the host: replace `vendor/vert/` as above, bump `PINNED`, install the `three` version the
-   entry names, run your tests, and commit the folder in one commit ("Vendor Vert 0.2.0+abc1234").
+3. In the host: replace `vendor/vert/` as above (check `VERSION` has no `.dirty`), bump `PINNED`,
+   install the `three` version the entry names, run your tests, and commit the folder in one
+   commit ("Vendor Vert 0.2.0+abc1234").
 4. A new **scene format version** needs a re-bake of every scene before the new library ships:
    a library that knows only version 2 refuses version-1 files (`SceneError` reason `version`), and
    the other way round.
@@ -211,10 +219,9 @@ The format is specified in [`docs/SCENE.md`](SCENE.md); a host needs only `decod
 
 ### Where to keep them
 
-Bake into `public/scenes/` and commit both files of each pair: `public/scenes/<id>.scene` and
-`public/scenes/<id>.scene.json`. Vite copies `public/` into `dist/` as it is, so they are served at
-`/scenes/<id>.scene`. Not `public/data/`: Activities' deploy guard allows only `activities.json` and
-`meta.json` there.
+Bake into a folder of its own under `public/` and commit both files of each pair. The examples
+here use `public/scenes/`, served at `/scenes/<id>.scene`; Activities uses `public/terrain/`. Not
+`public/data/`: Activities' deploy guard allows only `activities.json` and `meta.json` there.
 
 A page needs to know which activities have a scene before it asks for one. On a host with
 single-page-app fallback (Activities: `not_found_handling: "single-page-application"`, no Worker
@@ -280,7 +287,7 @@ import { decodeScene, SceneError, type Scene } from '../../vendor/vert/index.js'
 
 /**
  * The scene `<id>.scene` from `public/scenes/`, or null when it is not there or not a scene.
- * `hash` is the sidecar's: a new bake gets a new URL, so the file can be cached for good.
+ * `hash` is the sidecar's: a new bake gets a new URL, so no cache serves an old one.
  */
 export async function loadScene(
   id: string,
@@ -306,20 +313,42 @@ version-1 scene; it checks every size before allocating, so untrusted bytes are 
 about 3 ms for a 20 km route. Decode once per scene and pass the same `Scene` object to both
 components (the view rebuilds when the object changes).
 
-### Caching and compression
+### Serving: type, caching, compression
 
-The URL carries the sidecar's hash (FNV-1a of the file's bytes), so `/scenes/*` can be cached for a
-year. In Activities' `public/_headers`:
+**Content-Type.** Workers static assets (and many static hosts) know no `.scene` type and send the
+file with no `Content-Type`. Add a rule for the scene alone; the pattern does not match the
+`.scene.json` sidecar, which keeps `application/json`. `fetch` + `arrayBuffer()` works either way,
+and with `nosniff` the browser guesses nothing. In `public/_headers`:
 
 ```text
-# Baked Vert scenes, fetched with ?v=<sidecar hash>: a re-bake is a new URL.
-/scenes/*
-  Cache-Control: public, max-age=31536000, immutable
+/scenes/*.scene
+  Content-Type: application/octet-stream
 ```
 
-(Its `deploy.test.ts` checks every path has exactly one `Cache-Control` rule; add `/scenes/a.scene`
-to that list.) Compression does not matter: a scene is already entropy-coded (brotli saves 2% on
-the Coosa sample, gzip 1.5%), and the sidecar is under 300 bytes.
+**Caching.** The page fetches `/scenes/<id>.scene?v=<sidecar hash>` (FNV-1a of the bytes), so a
+re-bake is a new URL. Two policies work:
+
+- `no-cache` (what Activities does, `/terrain/*`): the file names are not hashed and a re-bake
+  rewrites them in place, so every load revalidates (a 304 when unchanged).
+- `public, max-age=31536000, immutable`: only if every URL that reaches the file carries `?v=`.
+
+```text
+/scenes/*
+  Cache-Control: no-cache
+```
+
+(Activities' `deploy.test.ts` checks every path has exactly one `Cache-Control` rule; the
+`Content-Type` rule adds none.) Compression does not matter: a scene is already entropy-coded
+(brotli saves 2% on the Coosa sample, gzip 1.5%; Cloudflare does not compress
+`application/octet-stream` anyway), and the sidecar is under 300 bytes.
+
+### Distances
+
+A scene's distances (the scrub, the profile's km, the sidecar's `distance` and `drawnLength`) are
+Vert's own: the 2D haversine sum over the input's raw points (`src/gpx/stats.ts`: no smoothing, no
+elevation). GPS jitter makes them a percent or two longer than a watch's recorded distance
+(Activities measured +1.0 to +2.6%). Show the activity's own distance as its distance, and sync
+by time ([Scrub sync](#scrub-sync-with-a-time-chart)), not by km.
 
 ### Sizes
 
@@ -337,26 +366,20 @@ too (the examples here do).
 
 ### Activities' privacy and deploy guards
 
-Checked against `scripts/import/privacy.ts`, `privacy.test.ts` and `scripts/deploy/checks.ts`
-(`pnpm run deploy` runs `dist.ts` first):
+What Activities built (its `scripts/import/sceneGuard.ts`, `scripts/deploy/checks.ts`):
 
-- **The privacy test** reads only `public/data/activities.json` and `meta.json`. Scenes are not
-  scanned, and nothing there fails.
-- **The deploy guard** walks all of `dist/`, but scans text only in `data/activities.json` and
-  `data/meta.json`; it fails on extra files under `data/` and on file names matching
-  `.(fit|gpx|tcx|csv|zip|gz)` or `export_*` / `inbox` folders. `scenes/<id>.scene` and
-  `scenes/<id>.scene.json` match none of these, so **committing them passes both guards as they
-  are**.
-- That also means the guards **do not look at scenes at all**. Recommended (not required): extend
-  `checkDist` so `dist/scenes/` may hold only `<id>.scene` / `<id>.scene.json` pairs, and run
-  `COORDINATE_RE` over every sidecar. Both pass: sidecar numbers are whole by construction, and the
-  bake already ran Vert's own scanners on the bytes, the decoded scene and the sidecar text. Even
-  the binary passes the regex (read as Latin-1, the Coosa scene has no match; a random match in
-  50 KB of coded data has a probability around 10⁻⁶, and the bake's scanner looks for decimal text
-  in it).
-- **Why the guards have nothing to catch**: a scene holds no coordinates, bounds, tile numbers or
-  clock times ([Forbidden content](SCENE.md#forbidden-content)), and the bake refuses to write one
-  its scanners flag. The file names are ids, checked for coordinates and timestamps (below).
+- **A scene guard**, run by the importer on each pair it bakes, by the privacy test on the
+  committed files and by the deploy guard on `dist/terrain/`: only `<id>.scene` /
+  `<id>.scene.json` pairs whose id is a Strava id or a bare file's hash, each listed in its
+  `meta.json` and the reverse; the sidecar exactly what Vert writes for those bytes; the scene
+  decoded with the vendored `decodeScene`, no forbidden key, every number on its format step (so
+  a coordinate has nowhere to hide), no (lat, lon)-shaped adjacent pair; size budgets.
+- **The deploy guard** also refuses a `.scene` file anywhere outside `dist/terrain/`.
+- **Why they find nothing**: a scene holds no coordinates, bounds, tile numbers or clock times
+  ([Forbidden content](SCENE.md#forbidden-content)), and the bake refuses to write one its own
+  scanners flag, with the run's true coordinates in hand. The guard is the host's second look,
+  without them. Decoded floats printed in full would match a `\d{2}\.\d{4,}` coordinate check:
+  [round them](#never-publish-decoded-values-as-they-are).
 - **CSP**: unchanged. The scene is a same-origin `fetch` (`connect-src 'self'`); the library and
   three.js need no `eval`, no inline script or `<style>`, no `blob:` or worker. The example page
   below ran under Activities' policy (`default-src`, `script-src`, `connect-src` and `img-src` as
@@ -374,9 +397,9 @@ machine that has the activity, never in a host's build.
 
 | option    | default                                           | meaning                                                                                                                                                  |
 | --------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<input>` | (required)                                        | one `.gpx`, or one `.json` points file (below); relative to the current directory                                                                        |
+| `<input>` | (required)                                        | one `.gpx`, or one `.json` points file (below); relative to the current directory; `-` reads a points file from standard input (needs `--id`)            |
 | `--out`   | (required)                                        | the directory to write `<id>.scene` and `<id>.scene.json` to; created if needed; relative to the current directory                                       |
-| `--id`    | from the input's file name                        | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                                     |
+| `--id`    | from the input's file name (required with `-`)    | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                                     |
 | `--trim`  | `200`                                             | metres hidden at each end of the route, 0–10,000; `0` keeps the ends                                                                                     |
 | `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png` | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                                         |
 | `--cache` | Vert's `scripts/.cache/terrarium/`                | the tile cache, `{z}/{x}/{y}.png`; the default sits beside the script, whatever the current directory. It holds tile numbers: never commit or publish it |
@@ -385,8 +408,8 @@ machine that has the activity, never in a host's build.
 **Exit codes**: `0` both files written; `1` the bake failed and nothing was written (unreadable or
 invalid input, an id that reads as a coordinate of the run, a route too short for the trim, a tile
 problem, a privacy finding, a write error); `2` a usage error (arguments, `--trim` out of range, a
-malformed `--id`, a default id that looks like a timestamp). An older Node refuses the `.ts`
-entry before the bake starts.
+malformed `--id`, a default id that looks like a timestamp, `-` without `--id`). An older Node
+refuses the `.ts` entry before the bake starts. Warnings go to stderr with exit 0.
 
 ### Input: GPX or points
 
@@ -416,11 +439,12 @@ elevation today; add FIT `enhancedAltitude` (or `altitude`), in metres as the FI
 know:
 
 - **Time 0** of a scene is the points file's first point. If the importer drops leading records
-  without a position (GPS lock), the HR chart's 0 is earlier by that gap. Start both at the same
-  record, or keep the gap (whole seconds, not a coordinate) next to the scene id and add it when
-  mapping.
-- **The points file is as private as the FIT**: write it outside the repository (or into the
-  git-ignored `inbox/`) and delete it after the bake.
+  without a position (GPS lock), the host's time axis starts earlier by that gap: keep the gap
+  (whole seconds, not a coordinate) next to the scene id and apply it as in
+  [Scrub sync](#scrub-sync-with-a-time-chart).
+- **The points are as private as the FIT**: pipe them to `-` on standard input, so no coordinate
+  file touches disk (below). A points file on disk must stay outside the repository and be
+  deleted after the bake.
 
 ### Ids
 
@@ -450,11 +474,14 @@ route starts at 200 m) and times stay offsets from the real start, so time ↔ d
 no correction. The sidecar's totals (length, climb) are the whole run's.
 
 A loop or a lap session passes its start again after the trim. When the real start or finish lies
-within 100 m of the drawn route, the bake warns on stderr and still writes the scene; decide whether
-a larger `--trim` is needed:
+within 100 m of the drawn route, the bake warns on stderr and still writes the scene. The warning
+says where along the route it passes (km, never a coordinate) and the smallest `--trim` that hides
+it, or that none does because the route passes it again far from both ends (laps, or a course
+through its own start): then hide it some other way or accept it (a public race start).
 
 ```text
-vert-bake: warning: The run's real start lies within 10 m of the drawn route (a loop or laps pass it again), so the trim does not hide it; a larger --trim hides more.
+vert-bake: warning: The run's real start lies within 10 m of the drawn route at km 3.1 of 4.8 (a loop or laps pass it again), so the trim does not hide it; a --trim of 1,700 m does.
+vert-bake: warning: The run's real finish lies within 10 m of the drawn route at km 3.2 of 6.4: the route passes its finish again, so no --trim hides it.
 ```
 
 ### What it does and prints
@@ -465,6 +492,11 @@ and any finding refuses the scene. Both files are written together (temporary na
 swap; a crashed bake is settled by the next one), so a pair is never half old, half new. The same
 input and tiles always give byte-identical files. Tiles are cached in `--cache`; a second bake of
 the same area makes no request.
+
+When every elevation is the file's own, the summary has an `offset` line: the file's elevations
+minus the terrain's along the drawn route, the mean (by distance) and the range, whole metres. A
+recorder that reads tens of metres off the terrain (a barometer not calibrated, or a sea-level
+mistake) shows there; to draw the route on the terrain instead, leave `ele` out of the points.
 
 ### A worked example
 
@@ -477,6 +509,7 @@ pnpm bake public/samples/coosa-backcountry.gpx --out ../host/public/scenes --id 
 ```text
 Baked coosa-sample
   run      21.48 km, +1,102 m; elevation from the file
+  offset   file − terrain elevation +1 m on average, −8 m to +9 m along the drawn route
   drawn    21.08 km (200 m hidden at the start, 200 m at the end)
   grid     207 × 320 samples, 4,361 m × 6,747 m, zoom 13
   scene    43,115 bytes, hash c787f362
@@ -492,28 +525,45 @@ Nothing printed, errors included, holds a coordinate, a bound, a tile x/y or a t
 ### From Activities' importer
 
 The bake lives in Vert's repository and Activities' Cloudflare build cannot see it, so scenes are
-baked on Sean's machine and committed; the deployed build only copies them. A sketch of how
-Activities could wire it (not implemented):
+baked on Sean's machine and committed; the deployed build only copies them. What Activities does
+(`scripts/import/scenes.ts`), with Vert checked out next to it:
 
-1. A script in Activities (say `pnpm run scenes <id…>`), run after `pnpm run import`, takes the
-   activities Sean chose (scenes are opt-in, per activity).
-2. For each, it reads the original FIT/GPX from the archive or `inbox/`, writes a points file to a
-   temporary directory, and runs, from Activities' root, with Vert checked out next to it:
+1. `pnpm run import` bakes the activities its config lists (scenes are opt-in, per activity, each
+   with its own `--trim`), from the original FIT/GPX, and removes pairs no longer listed.
+2. For each, it pipes the points to the bake and never writes them to disk:
 
-   ```sh
-   tmp=$(mktemp -d) # the script writes the points file to "$tmp/8071241781.json"
-   node ../vert/scripts/bake.ts "$tmp/8071241781.json" --id 8071241781 \
-     --out public/scenes --cache "$HOME/.cache/vert-tiles"
+   ```ts
+   const result = spawnSync(
+     process.execPath,
+     [
+       '../vert/scripts/bake.ts',
+       '-',
+       '--id',
+       id,
+       '--out',
+       'public/terrain',
+       '--trim',
+       trim,
+       '--cache',
+       cacheDir,
+     ],
+     {
+       input: JSON.stringify({ points }),
+       encoding: 'utf8',
+       env: { ...process.env, NODE_NO_WARNINGS: '1' },
+     },
+   );
    ```
 
-   Always pass `--cache`: without it the tiles land in `../vert/scripts/.cache/terrarium/`, inside
-   Vert's checkout, and Activities never writes into a sibling repository. The cache's paths are
-   tile numbers, that is locations, so it lives outside both repositories (or in an ignored folder)
-   and is never committed or published. A GPX can be passed directly; a `.gz` must be unpacked
-   first, since the bake reads only `.gpx` and `.json`. Only the exit code and stderr matter to the
-   script: 0 written, 1 refused or failed, 2 a usage error.
+   `NODE_NO_WARNINGS=1` keeps Node's own warnings off stderr, so stderr holds only the bake's.
 
-3. It deletes the points file, and Sean reviews and commits `public/scenes/`.
+3. It refuses the pair on a non-zero exit, and on **any** stderr line at exit 0 (a warning: a near
+   end, a tile cache it could not write), printing the bake's words; then it runs its scene guard
+   on the pair, and records the scene's hash and time offset in its `meta.json`.
+
+Always pass `--cache`: without it the tiles land in `../vert/scripts/.cache/terrarium/`, inside
+Vert's checkout. The cache's paths are tile numbers, that is locations: keep it outside both
+repositories (or in an ignored folder), never committed or published.
 
 ## 5. Tile proxy policy for offline bakes
 
@@ -654,7 +704,19 @@ than parked where the runner was not), and for a non-finite input. Between point
 linearly; a stop is one long step. Use `sceneTimeRange` to shade or mute the parts of your chart
 the terrain cannot show.
 
-The time axis's 0 must be the scene's 0, the run's first point ([Time 0](#input-gpx-or-points)).
+**The offset rule.** The helpers' seconds count from the scene's first point. A host whose time
+axis starts earlier (Activities' session clock starts at the session's start, 36–45 s before the
+first GPS fix on two of its races) keeps that gap, `offset` in whole seconds, next to the scene id,
+passes `seconds − offset` in and adds `offset` back out:
+
+```ts
+const scrub = seconds === null ? null : metresAtTime(scene, seconds - offset);
+const time = timeAtMetres(scene, metres); // on the profile's onScrub
+onSeconds(time === null ? null : time + offset);
+```
+
+`sceneTimeRange(scene)` shifted by `offset` is the stretch of your axis to shade. Without the
+offset, the terrain runs 36–45 s ahead of the chart (tens of metres at a run's pace).
 Activities' heart-rate series `w` is 48 buckets of the HR samples drawn across the elapsed time
 `min`: with regular recording, x ∝ seconds, which is what the example assumes.
 
@@ -927,7 +989,8 @@ components and nothing else on the page ([CSS custom properties](#8-css-custom-p
 
 **The lazy chunk**, the only module that imports Vert. It fills the card's box and row; the credit
 sits in the box, in room the view keeps free with `insets`. The host's buttons keep Activities'
-own focus ring (2 px ink, `base.css`); only Vert's two widgets ring in `--route`.
+own focus ring (2 px ink, `base.css`); only Vert's two widgets ring in `--route` (or in
+`--vert-focus`, when the card sets it).
 
 ```tsx
 // src/vert/VertTerrain.tsx
@@ -953,10 +1016,15 @@ export interface VertTerrainProps {
   hash: string;
   /** The activity's name, for the canvas's accessible name. */
   title: string;
-  /** The page's time position: seconds since the run's first point, or null for none. */
+  /** The page's time position: seconds on the page's own axis, or null for none. */
   seconds: number | null;
   /** The user scrubbed the profile: the time there, or null (cleared, or a scene without times). */
   onSeconds: (seconds: number | null) => void;
+  /**
+   * Seconds from the page's time 0 to the scene's first point (the gap before the first GPS fix),
+   * kept with the scene id; 0 when they coincide ([the offset rule](#scrub-sync-with-a-time-chart)).
+   */
+  offset?: number;
 }
 
 /** Room the model keeps free at the bottom of the box for the credit's 44 px link. */
@@ -989,6 +1057,7 @@ export default function VertTerrain({
   title,
   seconds,
   onSeconds,
+  offset = 0,
 }: VertTerrainProps) {
   const [scene, setScene] = useState<Scene | null>(null);
   const [missing, setMissing] = useState(false);
@@ -1013,14 +1082,19 @@ export default function VertTerrain({
     };
   }, [sceneId, hash]);
 
-  // A scene with times follows the page's clock; null off the drawn stretch (the trimmed ends).
+  // A scene with times follows the page's clock, `offset` seconds behind the page's 0; null off
+  // the drawn stretch (the trimmed ends).
   const timed = scene?.route.time != null;
   let scrub = ownScrub;
-  if (scene && timed) scrub = seconds === null ? null : metresAtTime(scene, seconds);
+  if (scene && timed) scrub = seconds === null ? null : metresAtTime(scene, seconds - offset);
   const onScrub = (metres: number | null) => {
     if (scene === null) return;
-    if (timed) onSeconds(metres === null ? null : timeAtMetres(scene, metres));
-    else setOwnScrub(metres);
+    if (!timed) {
+      setOwnScrub(metres);
+      return;
+    }
+    const time = metres === null ? null : timeAtMetres(scene, metres);
+    onSeconds(time === null ? null : time + offset);
   };
 
   const message = missing ? 'The terrain could not be loaded.' : 'Loading the terrain…';
@@ -1405,6 +1479,7 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
 | `--ink`            | `#1b2a3a`                     | terrain ridge lines, start ring and summit fill (view); profile line and fill (12%); the steepest climb's number |
 | `--muted`          | `#5b6b7a`                     | distance ticks and climb numbers in the profile                                                                  |
 | `--route`          | `#d9480f`                     | the route and scrub marker (view); the profile's scrub line and dot; the focus ring of both                      |
+| `--vert-focus`     | `var(--route)`                | the focus ring of the view and the profile: set it to your page's own focus colour                               |
 | `--white`          | `#ffffff`                     | the route's halo, start fill, summit edge, scrub ring (view); the profile dot's ring                             |
 | `--font-mono`      | IBM Plex Mono, …, `monospace` | ticks and climb numbers (Vert loads no fonts)                                                                    |
 | `--space-1`        | `4px`                         | climb numbers' inset                                                                                             |
@@ -1433,9 +1508,11 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
 - **`palette` and `routePalette`** props override the view's colours (`palette` is read once, at
   mount); the profile has no such props and follows the properties only. Prefer the properties, so
   the two stay in step.
-- **Focus ring**: Vert's is `2px solid var(--route)`, offset 2px, on the view's wrapper and the
-  profile's slider, and only there (its CSS scopes it to those two). Your own controls keep your
-  page's ring: in the example, Activities' 2 px ink outline from `base.css`.
+- **Focus ring**: Vert's is `2px solid var(--vert-focus, var(--route))`, offset 2px, on the view's
+  wrapper and the profile's slider, and only there (its CSS scopes it to those two). Set
+  `--vert-focus` on the wrapper to give them your page's ring colour: in Activities,
+  `--vert-focus: var(--ink-primary)` matches its 2 px ink outline from `base.css`, which its own
+  controls keep. Width and offset are fixed.
 
 ## 9. Accessibility
 
@@ -1456,10 +1533,16 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
   route (Shift ±10%), PageUp / PageDown ±10%, Home / End to the drawn ends, Escape clears the
   position ([Escape](#escape-and-your-own-key-handlers) says when it is left to your page).
   Pointer: drag orbits, wheel or pinch zooms; press or drag on the profile scrubs.
+- **Touch**: both take `touch-action: pan-y`, so a vertical swipe that starts on them scrolls the
+  page, as anywhere else. On the view a sideways drag orbits and two fingers zoom (one-finger tilt
+  starts only from a sideways drag; the arrow keys, Rotate and Reset remain); on the profile a tap
+  or a sideways drag sets the position, and a vertical swipe sets nothing.
 - **No position**: with `scrub={null}` the slider's `aria-valuetext` is "No position selected"
   (its `aria-valuenow` is the drawn start, where the first key moves from).
-- **Reduced motion**: with `prefers-reduced-motion: reduce` the intro camera move is a fade, and
-  `rotateBy`, Flat and Reset cut instead of easing.
+- **Reduced motion**: with `prefers-reduced-motion: reduce` there is no camera move: the intro is a
+  600 ms CSS opacity fade of the canvas, and `rotateBy`, Flat and Reset cut instead of easing. A
+  host may suppress the fade (a global `transition: none` makes it a cut); nothing else depends
+  on it.
 - **Your side**: buttons at least 44 × 44 px with text labels and a visible focus ring; the credit
   link and any text you add at 4.5:1 on its background; the view's box background is yours (the
   canvas is transparent).
@@ -1543,12 +1626,13 @@ it('renders the terrain and drives the scrub from the profile', async () => {
   expect(onScrub).toHaveBeenLastCalledWith(scene.route.distance[scene.route.distance.length - 1]);
   fireEvent.keyDown(slider, { key: 'Escape' });
   expect(onScrub).toHaveBeenLastCalledWith(null);
-  expect(VERT_LIB_VERSION).toMatch(/^0\.1\.0\+/);
+  expect(VERT_LIB_VERSION).toMatch(/^0\.1\.1\+/);
 });
 ```
 
 A committed scene is fine as a fixture (it holds no coordinates). Building one needs Vert's
-repository, so tests use a baked file.
+repository, so tests use a baked file: `dist-lib/fixtures/coosa-backcountry.scene` (and its
+sidecar) comes with the library for that.
 
 **axe.** Run it in a real browser, where the canvas draws and colours resolve: Activities'
 Playwright suite (`@axe-core/playwright`, 0 violations at 1440, 768 and 390) covers the Activity
@@ -1567,6 +1651,29 @@ Newest first. Each entry: the version, the date, then **breaking changes first**
 change: a new scene format version and the re-bake it needs, a new `three` version, a changed prop
 or handle method), then additions, then fixes. A host updating across several versions reads every
 entry in between.
+
+### 0.1.1 (2026-10-19)
+
+Feedback from the first host (Activities). No breaking change: same scene format (version 1), same
+props and handle, same `three` 0.186.1; a host can delete code (below).
+
+- **Touch scrolls the page**: a vertical one-finger swipe over the terrain view or the profile
+  scrolls the page (`touch-action: pan-y`; the view holds the swipe's first moves back from the
+  camera controls). On the view a sideways drag orbits and two fingers zoom; on the profile a tap
+  or a sideways drag sets the position, and a swipe sets nothing (it used to set one on the first
+  touch). A host's own `pan-y` override and swipe filter can go.
+- **`--vert-focus`**: the colour of both focus rings, falling back to `--route`.
+- **`dist-lib/`** also holds `LICENSE`, `VERSION` (`VERT_LIB_VERSION`, `.dirty` when built from
+  a checkout with uncommitted changes) and `fixtures/coosa-backcountry.scene` with its sidecar: a
+  vendoring script copies one folder and reads one file.
+- **`pnpm bake -`** reads the points from standard input (`--id` required), so a host never
+  writes coordinates to disk.
+- **Bake output**: the near-end warning says where (km X of Y) and the smallest `--trim` that
+  hides the end, or that none does; when the elevations are the file's own, an `offset` line gives
+  the file's elevations minus the terrain's along the drawn route.
+- **Docs**: the scrub offset rule (§7), serving `.scene` as `application/octet-stream` and the
+  `no-cache` policy (§3), how scene distances are measured (§3), what Activities' importer and
+  guards do (§3, §4), what reduced motion does (§9).
 
 ### 0.1.0 (2026-10-19)
 

@@ -11,7 +11,7 @@ describe('VERT_LIB_VERSION', () => {
     ) as {
       version: string;
     };
-    expect(pkg.version).toBe('0.1.1');
+    expect(pkg.version).toBe('0.2.0');
     expect(DEV_VERSION).toBe(`${pkg.version}+dev`);
     expect(VERT_LIB_VERSION).toBe(DEV_VERSION);
   });

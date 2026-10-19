@@ -27,7 +27,8 @@ and PNG renders).
 - The GPX is parsed, rendered and exported in the browser. It never leaves the client.
 - No network request carries GPX data or coordinates, except elevation tile requests, which carry
   tile z/x/y only. No analytics, no CDN at runtime (fonts are self-hosted in `public/fonts`).
-- Keep the repo private until the public launch.
+- The repository is public (since 2026-10-19) and the site is live at https://vert.geekplux.org:
+  write code, docs and commits for outside readers, and never commit personal GPX files or paths.
 
 ## Dependencies
 
@@ -63,6 +64,8 @@ pnpm build:lib      # the library for host pages to dist-lib/ (docs/INTEGRATION.
 pnpm bake <in> --out <dir>  # one .gpx or points .json → <id>.scene + sidecar (docs/SCENE.md)
 pnpm worker:dev     # run the tile Worker locally
 pnpm worker:types   # regenerate worker/worker-configuration.d.ts after editing wrangler.toml
+pnpm posters        # regenerate poster examples, README shots, og-image (needs `pnpm preview
+                    # --port 4173` running, macOS sips and cwebp; header of scripts/capture-posters.mjs)
 ```
 
 Before reporting work as done: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.

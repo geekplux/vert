@@ -448,3 +448,95 @@ describe('Page: dropping a file on View and Poster mode', () => {
     await expectNoAxeViolations(container);
   });
 });
+
+describe('Page: the wordmark goes home', () => {
+  const home = () => screen.getByRole('link', { name: 'Vert, home' });
+  /** A click on the wordmark; true when the page kept the browser from following "/". */
+  const clickHome = (init: MouseEventInit = {}) => !fireEvent.click(home(), { button: 0, ...init });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  async function openSample() {
+    render(<Page schedule={immediateSchedule} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
+  }
+
+  it('goes from the View to Upload, as New file does, and focuses its h1', async () => {
+    await openSample();
+    expect(home().getAttribute('href')).toBe('/');
+    expect(clickHome()).toBe(true);
+    expect(document.activeElement).toBe(h1('Your run, as terrain.'));
+    // New file forgot the run: Upload is idle, the sample can be opened again.
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Try the sample run' }).disabled,
+    ).toBe(false);
+  });
+
+  it('goes from Poster mode to Upload', async () => {
+    await openSample();
+    fireEvent.click(screen.getByRole('button', { name: 'Make a poster' }));
+    expect(h1('Make a poster')).toBeDefined();
+    expect(clickHome()).toBe(true);
+    expect(h1('Your run, as terrain.')).toBeDefined();
+  });
+
+  it('leaves Cmd-, Ctrl-, Shift-click and the middle button to the browser: no state change', async () => {
+    await openSample();
+    expect(clickHome({ metaKey: true })).toBe(false);
+    expect(clickHome({ ctrlKey: true })).toBe(false);
+    expect(clickHome({ shiftKey: true })).toBe(false);
+    expect(clickHome({ button: 1 })).toBe(false);
+    expect(h1('Coosa Backcountry Trail')).toBeDefined();
+  });
+
+  it('on Upload: stays, scrolls to the top and focuses the h1 (instantly with reduced motion)', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    render(<Page schedule={immediateSchedule} />);
+    screen.getByRole('button', { name: 'About' }).focus();
+    expect(clickHome()).toBe(true);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' });
+    expect(document.activeElement).toBe(h1('Your run, as terrain.'));
+
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    screen.getByRole('button', { name: 'About' }).focus();
+    expect(clickHome()).toBe(true);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'instant' });
+    expect(document.activeElement).toBe(h1('Your run, as terrain.'));
+  });
+
+  it('while exporting: stays a focusable link but does not leave, like Back to the run', () => {
+    render(
+      <Page
+        schedule={immediateSchedule}
+        initialRun={SAMPLE_RUN}
+        initialState={{
+          screen: {
+            name: 'exporting',
+            runId: SAMPLE_RUN.id,
+            fileName: 'coosa-backcountry-loop-18x24.png',
+            progress: { done: 1, total: 12 },
+          },
+          prefs: INITIAL_PREFS,
+        }}
+      />,
+    );
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Back to the run' }).disabled,
+    ).toBe(true);
+    const link = home();
+    expect(link.getAttribute('aria-disabled')).toBe('true');
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    expect(clickHome()).toBe(true);
+    expect(h1('Make a poster')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDefined();
+  });
+});

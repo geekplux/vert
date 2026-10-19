@@ -4,6 +4,24 @@
   "private": true,
   "description": "Turn one GPX file into a 3D terrain visualization and a poster.",
   "license": "MIT",
+  "author": "Sean G",
+  "homepage": "https://vert.geekplux.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geekplux/vert.git"
+  },
+  "bugs": "https://github.com/geekplux/vert/issues",
+  "keywords": [
+    "gpx",
+    "terrain",
+    "elevation",
+    "poster",
+    "three.js",
+    "webgl",
+    "trail-running",
+    "hiking",
+    "react"
+  ],
   "type": "module",
   "packageManager": "pnpm@8.6.10",
   "engines": {
@@ -23,6 +41,7 @@
     "sample": "node scripts/make-sample.mjs",
     "bake": "node scripts/bake.ts",
     "fixtures": "node scripts/fetch-courses.mjs",
+    "posters": "node scripts/capture-posters.mjs",
     "stories": "ladle serve",
     "stories:build": "ladle build",
     "worker:dev": "wrangler dev --config worker/wrangler.toml",

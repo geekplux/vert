@@ -3,9 +3,8 @@
 Vert's 3D terrain view and elevation profile for a page that shows a baked `.scene` file (the
 format is in Vert's `docs/SCENE.md`). The full guide for a host (vendoring, baking scenes, caching,
 scrub sync with a time chart, a worked example, testing, the changelog) is
-[docs/INTEGRATION.md](https://github.com/geekplux/vert/blob/main/docs/INTEGRATION.md) (a 404
-for outside readers until Vert's repository is public); this file is the reference that travels
-with the build.
+[docs/INTEGRATION.md](https://github.com/geekplux/vert/blob/main/docs/INTEGRATION.md); this
+file is the reference that travels with the build.
 
 These are the files `pnpm build:lib` writes to `dist-lib/`:
 

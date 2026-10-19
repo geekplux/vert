@@ -1,0 +1,142 @@
+<!doctype html>
+<!--
+  Vert's social card (public/og-image.png, 1280 × 640), drawn by `pnpm posters`
+  (scripts/capture-posters.mjs). Fonts are the app's own (public/fonts) and the posters are the
+  Upload page's (src/page/UploadState/posters); both are loaded by relative URL, served by the
+  script from the working tree. Colours are src/styles/tokens.css's.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Vert social card</title>
+    <style>
+      @font-face {
+        font-family: 'Archivo';
+        font-style: normal;
+        font-weight: 400 800;
+        font-stretch: 62% 125%;
+        src: url('../public/fonts/archivo-latin.woff2') format('woff2');
+      }
+
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        font-style: normal;
+        font-weight: 400;
+        src: url('../public/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+      }
+
+      :root {
+        --bg: #f4f6f8;
+        --ink: #1b2a3a;
+        --muted: #5b6b7a;
+        --rule: #c9d1d9;
+        --route: #d9480f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 640px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: 'Archivo', sans-serif;
+      }
+
+      .card {
+        position: relative;
+        display: grid;
+        grid-template-columns: 520px 1fr;
+        width: 1280px;
+        height: 640px;
+      }
+
+      .text {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 28px;
+        padding: 0 0 0 80px;
+      }
+
+      .wordmark {
+        margin: 0;
+        font-size: 64px;
+        font-weight: 800;
+        font-stretch: 62%;
+        letter-spacing: 0.04em;
+        line-height: 1;
+      }
+
+      .tagline {
+        margin: 0;
+        font-size: 84px;
+        font-weight: 800;
+        font-stretch: 75%;
+        letter-spacing: -0.01em;
+        line-height: 0.95;
+      }
+
+      .url {
+        margin: 0;
+        padding-top: 20px;
+        border-top: 2px solid var(--route);
+        width: max-content;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 20px;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .posters {
+        position: relative;
+        margin-right: 40px;
+      }
+
+      /* The posters fanned, the middle one in front. Poster mode's preview shadow. */
+      .posters img {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 276px;
+        height: 368px;
+        box-shadow:
+          0 1px 2px rgb(27 42 58 / 18%),
+          0 12px 32px rgb(27 42 58 / 18%);
+      }
+
+      .left {
+        transform: translate(-50%, -50%) translate(-180px, 20px) rotate(-7deg);
+      }
+
+      .right {
+        transform: translate(-50%, -50%) translate(180px, 20px) rotate(7deg);
+      }
+
+      .posters .middle {
+        width: 318px;
+        height: 424px;
+        transform: translate(-50%, -50%);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="text">
+        <p class="wordmark">VERT</p>
+        <p class="tagline">Drop a GPX.<br />Get a poster.</p>
+        <p class="url">VERT.GEEKPLUX.ORG</p>
+      </div>
+      <div class="posters">
+        <img class="left" src="../src/page/UploadState/posters/night-ridge.webp" alt="" />
+        <img class="right" src="../src/page/UploadState/posters/survey-quad.webp" alt="" />
+        <img class="middle" src="../src/page/UploadState/posters/trail-sign.webp" alt="" />
+      </div>
+    </div>
+  </body>
+</html>

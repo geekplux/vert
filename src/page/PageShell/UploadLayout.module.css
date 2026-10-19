@@ -1,5 +1,6 @@
 /* Upload frame: main { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; padding: 48px 40px; align-items: center }. */
 .layout {
+  position: relative; /* holds the band below at ≥ 900px */
   display: grid;
   flex: 1 1 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -12,6 +13,28 @@
   min-width: 0;
 }
 
+/*
+ * The band after the hero (DESIGN-SPEC §3 "01 Upload": poster styles): 1px --rule on top, 40px
+ * above and below its content. At ≥ 900px it is out of flow, hung from main's bottom edge, so the
+ * hero keeps exactly the place it had without it: main still fills the first screen and centres
+ * the two columns. Its top sits 8px into main's 48px bottom padding, so the rule is 40px under
+ * the hero when the hero fills the screen, and main's 40px side padding is kept.
+ */
+.below {
+  min-width: 0;
+  padding-block: var(--space-10);
+  border-top: 1px solid var(--rule);
+}
+
+@media (min-width: 900px) {
+  .below {
+    position: absolute;
+    top: calc(100% - 8px); /* 48px bottom padding less 8: 40 above the rule */
+    right: var(--space-10);
+    left: var(--space-10);
+  }
+}
+
 @media (max-width: 899.98px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
@@ -19,12 +42,22 @@
     gap: var(--space-10);
     padding-block: var(--space-10);
   }
+
+  /* In flow, a row of its own: main's 40px gap above, its 40px bottom padding below. */
+  .below {
+    padding-bottom: 0;
+  }
 }
 
 @media (max-width: 599.98px) {
   .layout {
     gap: var(--space-8);
     padding: var(--space-8) var(--space-4);
+  }
+
+  /* Main's 32px gap and padding here, so 8px more on each side keeps 40. */
+  .below {
+    margin-block: var(--space-2);
   }
 }
 

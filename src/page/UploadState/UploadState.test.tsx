@@ -80,7 +80,51 @@ describe('UploadState', () => {
     const image = preview.querySelector('img');
     expect(image?.getAttribute('alt')).toBe('');
     expect(image?.getAttribute('src')).toMatch(/sample-terrain/);
-    expect(within(main).queryByRole('img')).toBeNull();
+    expect(within(preview).queryByRole('img')).toBeNull();
+  });
+
+  it('shows the poster styles band after the hero: label, h2, line and three static posters', () => {
+    render(<Page schedule={immediateSchedule} />);
+    const main = screen.getByRole('main');
+    const band = within(main).getByRole('region', { name: 'Three posters from one run.' });
+    // After the hero in the document.
+    const preview = within(main).getByRole('button', { name: PREVIEW_NAME });
+    expect(preview.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    expect(within(band).getByText('Poster styles')).toBeDefined();
+    expect(within(band).getByRole('heading', { level: 2 }).textContent).toBe(
+      'Three posters from one run.',
+    );
+    expect(
+      within(band).getByText(
+        'Made from the sample run. Yours render in your browser, up to 18 × 24 in at 300 dpi.',
+      ),
+    ).toBeDefined();
+
+    const figures = within(band).getAllByRole('figure');
+    expect(figures.map((figure) => figure.querySelector('figcaption')?.textContent)).toEqual([
+      'A · Trail SignOblique 3D terrain',
+      'B · Night RidgeRidge lines at night',
+      'E · Survey QuadTopographic contours',
+    ]);
+    const images = within(band).getAllByRole<HTMLImageElement>('img');
+    expect(images.map((image) => image.getAttribute('src'))).toEqual([
+      expect.stringMatching(/trail-sign.*\.webp$/),
+      expect.stringMatching(/night-ridge.*\.webp$/),
+      expect.stringMatching(/survey-quad.*\.webp$/),
+    ]);
+    for (const image of images) {
+      expect(image.alt).toMatch(
+        /^The sample run as a (Trail Sign|Night Ridge|Survey Quad) poster: /,
+      );
+      expect(image.getAttribute('width')).toBe('600');
+      expect(image.getAttribute('height')).toBe('800');
+      expect(image.getAttribute('loading')).toBe('lazy');
+      expect(image.getAttribute('decoding')).toBe('async');
+    }
+    // Static: nothing in the band can be pressed or followed.
+    expect(within(band).queryAllByRole('button')).toEqual([]);
+    expect(within(band).queryAllByRole('link')).toEqual([]);
   });
 
   it('shows the sample chip from the sample run’s data, in the chosen units', () => {

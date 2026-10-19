@@ -54,12 +54,14 @@ export function makeTrack(points: [number, number][], ele?: number[]): RunTrack 
 
 /**
  * A grid track through `points` (column, row on `grid`), with cumulative distances measured with
- * the grid's spacing and optional elevations: a route as a baked scene carries it, no lat/lon.
+ * the grid's spacing, optional elevations and the loop flag as given (default: not a loop): a
+ * route as a baked scene carries it, no lat/lon.
  */
 export function makeGridTrack(
   grid: TerrainGrid,
   points: [number, number][],
   ele?: number[],
+  loop = false,
 ): GridTrack {
   const col = Float64Array.from(points.map(([c]) => c));
   const row = Float64Array.from(points.map(([, r]) => r));
@@ -69,7 +71,7 @@ export function makeGridTrack(
     const b = { col: col[i] ?? 0, row: row[i] ?? 0 };
     cumulative[i] = (cumulative[i - 1] ?? 0) + gridDistance(grid, a, b);
   }
-  return { col, row, cumulative, ele: ele ? Float64Array.from(ele) : null };
+  return { col, row, cumulative, ele: ele ? Float64Array.from(ele) : null, loop };
 }
 
 /** A track through `points` (lat, lon) put on `heightfield`'s grid, as TerrainView does. */

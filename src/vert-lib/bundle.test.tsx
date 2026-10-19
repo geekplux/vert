@@ -184,6 +184,9 @@ describe('the built library', () => {
     for (const name of classes) expect(name).toMatch(/^vert-/);
     // Focus ring: 2px --route outline, offset 2.
     expect(css).toMatch(/outline:2px solid var\(--route,#d9480f\);outline-offset:2px/);
+    // Touch: the view, its canvas and the profile's plot let a vertical swipe scroll the page.
+    expect(css.match(/touch-action:pan-y/g)).toHaveLength(3);
+    expect(css).not.toMatch(/touch-action:none/);
     // No fonts or other files.
     expect(css).not.toMatch(/@font-face|url\(/);
   });

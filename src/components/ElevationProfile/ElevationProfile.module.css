@@ -12,8 +12,11 @@
 
 .plot {
   position: relative;
-  /* Only the plot swallows touch gestures; the page still scrolls everywhere else. */
-  touch-action: none;
+  /*
+   * A vertical swipe scrolls the page (and sets nothing); a tap or a sideways drag sets the
+   * position (ElevationProfile.tsx, onPointerMove).
+   */
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   cursor: ew-resize;

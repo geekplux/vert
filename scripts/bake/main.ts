@@ -12,7 +12,7 @@ import { parseArgs } from 'node:util';
 import { formatNumber } from '../../src/lib/format';
 import { BakeError, UsageError, printableMessage } from './errors';
 import { checkDefaultIdTimestamp, checkExplicitId, idFromFileName } from './id';
-import { STDIN_INPUT, readInput } from './input';
+import { STDIN_INPUT, readInput, readStdinInput } from './input';
 import { DEFAULT_TRIM_M, MAX_TRIM_M, bakeScene, type BakedScene } from './pipeline';
 import {
   DEFAULT_CACHE_DIR,
@@ -137,7 +137,7 @@ export async function runBake(
   const sidecarPath = join(out, `${id}.scene.json`);
   // A bake killed mid-write may have left the previous files aside: put them back first.
   recoverLeftovers([scenePath, sidecarPath], fileOps);
-  const input = readInput(args.input);
+  const input = args.input === STDIN_INPUT ? await readStdinInput() : readInput(args.input);
   const tiles = createTileSource({ template: args.tiles, cacheDir: args.cache, ...tileOptions });
   const baked = await bakeScene(input, {
     id,

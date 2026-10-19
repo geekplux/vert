@@ -46,7 +46,7 @@ import { PngError, decodeTerrariumPngBytes } from './png';
 import { writeFileAtomic } from './write';
 
 /** The tile Worker's public endpoint. */
-export const DEFAULT_TILE_TEMPLATE = 'https://vert.fum.workers.dev/tiles/{z}/{x}/{y}.png';
+export const DEFAULT_TILE_TEMPLATE = 'https://vert.geekplux.org/tiles/{z}/{x}/{y}.png';
 
 /** The on-disk cache: `{z}/{x}/{y}.png` under it (git-ignored; `pnpm sample` fills it too). */
 export const DEFAULT_CACHE_DIR = fileURLToPath(new URL('../.cache/terrarium/', import.meta.url));

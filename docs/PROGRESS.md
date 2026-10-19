@@ -99,7 +99,9 @@ Each batch: implementation sub-agent → independent verification sub-agent → 
 
 ## 4 Library
 
-Branch `lib`, PR to `main` (Sean merges). Each task: implementation sub-agent (own worktree) →
+A GitHub PR stack (stack #4), one PR per verified task, bottom to top: #2 grid space (3a), #3 scene
+format (1), then the bake, the library, scrub sync and the integration guide as they pass. Sean
+merges; local `lib` is the stack's tip. Each task: implementation sub-agent (own worktree) →
 independent verification sub-agent → fix → verify, merge into `lib` on PASS only. Opus 5.5, high
 effort. Rulings in DECISIONS.md "Library for Activities".
 

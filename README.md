@@ -7,6 +7,9 @@
 Vert turns one GPX file into a 3D terrain view of your run, ride or hike, then into a print-ready
 poster. Everything happens in your browser: your track never leaves your device.
 
+### [**Open Vert → vert.geekplux.org**](https://vert.geekplux.org)
+
+[![Website](https://img.shields.io/badge/website-vert.geekplux.org-D9480F.svg)](https://vert.geekplux.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1B2A3A.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-1B2A3A.svg?logo=typescript&logoColor=white)](tsconfig.json)
 [![React 19](https://img.shields.io/badge/React-19-1B2A3A.svg?logo=react&logoColor=white)](package.json)
@@ -55,6 +58,12 @@ much of the start and end to hide (0 to 500 m).
 
 ## Try it
 
+The quickest way is the website: open **[vert.geekplux.org](https://vert.geekplux.org)**, click
+**Try the sample run** or drop a `.gpx` file onto the page. Nothing is uploaded, so it works the same
+as running it yourself.
+
+To run it locally:
+
 ```sh
 git clone https://github.com/geekplux/vert.git
 cd vert
@@ -72,7 +81,7 @@ locally.
 <details>
 <summary><b>On a phone</b></summary>
 <br>
-<img src="docs/images/view-phone.png" alt="Vert on a 390 px wide phone: the terrain on top, then the legend and controls, the elevation profile with the scrub at km 14.8, and the route name underneath." width="300">
+<img src="docs/images/view-phone.png" alt="Vert on a 390 px wide phone: the terrain on top, then the legend and controls, the elevation profile with the scrub marker, and the route name underneath." width="300">
 
 The page works down to 390 px wide. Every control is at least 44 px tall, and the terrain and
 profile stack into one column.
@@ -182,6 +191,7 @@ the scrub with a time chart, and testing) is in [`docs/INTEGRATION.md`](docs/INT
 | `pnpm build:lib`             | The embeddable library to `dist-lib/`                           |
 | `pnpm bake <in> --out <dir>` | Bake a `.gpx` or points `.json` into a `.scene` and its sidecar |
 | `pnpm worker:dev`            | Run the tile Worker locally                                     |
+| `pnpm posters`               | Regenerate the poster examples, screenshots and social card     |
 
 Before opening a pull request, run `pnpm lint && pnpm typecheck && pnpm test && pnpm build`.
 

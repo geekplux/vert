@@ -741,5 +741,10 @@ installs `three` from npm.
 - **No version bump for the `onScrub` type** (`(metres: number | null) => void`; a
   `useState<number>` setter no longer fits): nothing has been vendored yet, so 0.1.0 is the whole
   phase.
+- **Attribution.** tilezen/joerd's `attribution.md` (the licence the AWS registry gives for Terrain
+  Tiles) heads its per-source list "Required attribution" and asks that it appear "in a place that is
+  reasonable to the medium". Vert's reading: the short credit `TERRAIN_ATTRIBUTION` ("AWS Terrain
+  Tiles / Mapzen (various sources)") linked to that list (`TERRAIN_ATTRIBUTION_LINK`) satisfies it.
+  A host must show it, linked, wherever a scene is shown; Vert's About dialog links it the same way.
 - **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
   pin and report what it vendored.

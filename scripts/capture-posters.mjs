@@ -8,7 +8,6 @@
 //   docs/images/poster-{trail-sign,night-ridge,survey-quad}.png    README posters, 750 × 1000
 //   docs/images/view.png          the View at 1440 × 900, 1800 wide
 //   docs/images/view-phone.png    the View at 390 × 844 (touch), 1200 tall
-//   docs/images/upload.png        the whole Upload page at 1440 wide, 1800 wide
 //   public/og-image.png           the social card, 1280 × 640, drawn from scripts/og-image.html
 //
 // Each poster is Poster mode's live preview (18 × 24 in) at device pixel ratio 2. Run it against
@@ -18,7 +17,8 @@
 //   pnpm posters                               # in another (VERT_URL overrides the address)
 //
 // Needs Playwright's Chromium (`pnpm exec playwright install chromium`), and, only to regenerate
-// these images, macOS `sips` and `cwebp` (Homebrew: `brew install webp`). The elevation tiles come
+// these images, macOS `sips` and `cwebp` (Homebrew: `brew install webp`; the CWEBP environment
+// variable overrides its path, /opt/homebrew/bin/cwebp by default). The elevation tiles come
 // through the preview server's /tiles proxy; nothing else leaves the machine.
 
 import { execFileSync } from 'node:child_process';
@@ -130,31 +130,6 @@ async function captureView(browser, { width, height, touch, maxSide, name }) {
   await context.close();
 }
 
-async function captureUpload(browser) {
-  const context = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    deviceScaleFactor: 2,
-    reducedMotion: 'reduce',
-  });
-  const page = await context.newPage();
-  await page.goto(BASE);
-  await page.getByRole('heading', { level: 1, name: 'Your run, as terrain.' }).waitFor();
-  // The band's images load lazily: bring them into view, wait for them, then go back up.
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await page.waitForFunction(() =>
-    Array.from(document.images).every((image) => image.complete && image.naturalWidth > 0),
-  );
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(300);
-  const shot = join(tmp, 'upload.png');
-  await page.screenshot({ path: shot, fullPage: true });
-  const out = join(IMAGES_DIR, 'upload.png');
-  sips(shot, 1800, out);
-  report(out);
-  await context.close();
-}
-
 const CONTENT_TYPES = { '.html': 'text/html', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 
 /**
@@ -211,7 +186,6 @@ try {
     maxSide: 1200,
     name: 'view-phone',
   });
-  await captureUpload(browser);
   await captureOgImage(browser);
 } finally {
   await browser.close();

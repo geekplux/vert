@@ -37,6 +37,13 @@ This is the only place that owns application state and composes `components`, `t
   browser's (open `/` in a new tab or window).
 - `UploadState/`: the Upload state (h1, intro, Dropzone, note, and the sample preview: a button
   named by its chip). It takes `dragOver` and `dropzoneRef` from the page (see "Dropping a file").
+  Under them, the poster styles band: a labelled `section` (h2 "Three posters from one run.") with
+  three static `figure`s, the sample run as each style (`UploadState/posters/*.webp`, 600 × 800,
+  lazy, `POSTER_EXAMPLES` holds their captions and alt text). `pnpm posters`
+  (`scripts/capture-posters.mjs`, against `pnpm preview --port 4173`) regenerates them from Poster
+  mode's preview, together with the README screenshots and `public/og-image.png`. `UploadLayout`
+  hangs the band from main's bottom edge at ≥ 900px, so the two columns keep filling and centring
+  in the first screen exactly as without it; below 900px it is the next row.
 - Dropping a file: `useWindowFileDrop.ts`, mounted once in `Page.tsx`, listens on `window` on
   every screen and always cancels the browser's own `dragover`/`drop` (a stray drop never opens
   the file in the tab). It ignores the files, and draws nothing, while a load or an export runs

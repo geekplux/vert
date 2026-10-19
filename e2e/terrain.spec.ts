@@ -18,7 +18,8 @@ const SAMPLE_GPX = fileURLToPath(
 /** What the app may ask its origin for. Everything else (or any other origin) fails the test. */
 const ALLOWED_PATHS = [
   /^\/$/,
-  /^\/assets\/[\w.-]+\.(js|css|svg)$/,
+  // Hashed build files; the WebP images are the Upload page's example posters.
+  /^\/assets\/[\w.-]+\.(js|css|svg|webp)$/,
   /^\/fonts\/[\w.-]+\.woff2$/,
   /^\/samples\/coosa-backcountry\.gpx$/,
   /^\/tiles\/\d{1,2}\/\d{1,5}\/\d{1,5}\.png$/,

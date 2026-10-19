@@ -7,6 +7,9 @@ import type { Units } from '../../lib/format';
 import { UploadLayout } from '../PageShell/UploadLayout';
 import { SAMPLE_TOTALS } from '../sample';
 import type { UploadBusy, UploadScreen } from '../state';
+import nightRidge from './posters/night-ridge.webp';
+import surveyQuad from './posters/survey-quad.webp';
+import trailSign from './posters/trail-sign.webp';
 import sampleTerrain from './sample-terrain.svg';
 import styles from './UploadState.module.css';
 
@@ -37,6 +40,31 @@ export function sampleChipText(units: Units): string {
   return `TRY THE SAMPLE RUN · ${distance} · ${vert}`;
 }
 
+/**
+ * The poster styles band's three examples: the sample run at default settings, 18 × 24 in, from
+ * Poster mode's preview (`pnpm posters`, scripts/capture-posters.mjs, writes the images).
+ */
+export const POSTER_EXAMPLES = [
+  {
+    src: trailSign,
+    name: 'A · Trail Sign',
+    description: 'Oblique 3D terrain',
+    alt: 'The sample run as a Trail Sign poster: large condensed title, oblique 3D terrain with an orange route, a stats row and a solid elevation silhouette.',
+  },
+  {
+    src: nightRidge,
+    name: 'B · Night Ridge',
+    description: 'Ridge lines at night',
+    alt: 'The sample run as a Night Ridge poster: dark navy paper, pale blue ridge lines, a glowing amber route and a sunrise marker on the profile.',
+  },
+  {
+    src: surveyQuad,
+    name: 'E · Survey Quad',
+    description: 'Topographic contours',
+    alt: 'The sample run as a Survey Quad poster: a framed top-down contour map in brown with a dashed route, a legend and a scale bar.',
+  },
+] as const;
+
 /** What the polite live region says while the page reads a file or the sample. */
 export function busyAnnouncement(busy: UploadBusy): string {
   switch (busy.kind) {
@@ -51,7 +79,8 @@ export function busyAnnouncement(busy: UploadBusy): string {
 
 /**
  * The Upload state (DESIGN-SPEC §3 "01 Upload", canvas UploadV2 frame): headline, intro, Dropzone
- * and note on the left; the sample preview, a button with its data chip, on the right. The page
+ * and note on the left; the sample preview, a button with its data chip, on the right; under them,
+ * the poster styles band (three example posters, static). The page
  * owns the page-wide drop (`useWindowFileDrop`): it passes `dragOver` and hands dropped files to
  * the Dropzone through `dropzoneRef`.
  */
@@ -67,6 +96,7 @@ export function UploadState({
   const { busy, error } = screen;
   const isBusy = busy.kind !== 'idle';
   const noteId = useId();
+  const stylesHeadingId = useId();
   const parts = sampleChipText(units).split(' · ');
 
   return (
@@ -138,6 +168,37 @@ export function UploadState({
             ))}
           </span>
         </button>
+      }
+      below={
+        // Static: three examples, no controls (DESIGN-SPEC §3 "01 Upload").
+        <section className={styles.styles} aria-labelledby={stylesHeadingId}>
+          <p className={styles.eyebrow}>Poster styles</p>
+          <h2 id={stylesHeadingId} className={styles.stylesTitle}>
+            Three posters from one run.
+          </h2>
+          <p className={styles.stylesLede}>
+            Made from the sample run. Yours render in your browser, up to 18 × 24 in at 300 dpi.
+          </p>
+          <div className={styles.posters}>
+            {POSTER_EXAMPLES.map((poster) => (
+              <figure key={poster.name} className={styles.poster}>
+                <img
+                  className={styles.posterImage}
+                  src={poster.src}
+                  alt={poster.alt}
+                  width={600}
+                  height={800}
+                  loading="lazy"
+                  decoding="async"
+                />
+                <figcaption className={styles.caption}>
+                  <span className={styles.posterName}>{poster.name}</span>
+                  <span className={styles.posterDescription}>{poster.description}</span>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
       }
     />
   );

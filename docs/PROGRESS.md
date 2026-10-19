@@ -140,14 +140,10 @@ sweeps (Activities' 1 px sweep 2.2 s → 23 s) — rate-limit if it matters.
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one
   poster from each, and judge whether at least 8 are worth printing. The agent pass is above.
 - **Keep the repo private** until BlackRock's outside-activity and IP policy check is done (CLAUDE.md).
-- **Phase 4, before Activities embeds Vert**:
-  - Vendoring `dist-lib/` into geekplux/activities (public) publishes Vert's bundle, declarations
-    and README, so it waits for the same policy check.
-  - Activities' own rules: embedding Vert reverses its "Vert: link out" decision and adds `three` as
-    a runtime dependency; approve and record both in Activities' DECISIONS.md.
-  - Which activities get a scene: a scene publishes the shape of the ground around a run (an
-    accepted fingerprint risk, DECISIONS.md "Library for Activities"), and loops or laps keep their
-    start on the drawn route unless `--trim` is raised (the bake warns).
+- **Phase 4, ruled 2026-10-19** (DECISIONS.md "Sean's rulings on embedding"): vendoring into
+  Activities waits for the policy check; embedding and `three` are approved (Activities records
+  them in its own DECISIONS.md); scenes are opt-in per activity, and a run whose start warning a
+  larger `--trim` cannot clear gets none unless its start is a public place.
 - **Name and domain**: check "Vert" for name collisions, and point `vert.geekplux.com` (the URL in
   the posters' footer) at the Worker when you want it public.
 - **Disk**: the system volume was down to ~100 MB free during this phase (agents moved their temp

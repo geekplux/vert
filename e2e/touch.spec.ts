@@ -29,7 +29,10 @@ async function openSample(page: Page) {
   await page.waitForTimeout(500);
 }
 
-type Point = { x: number; y: number };
+interface Point {
+  x: number;
+  y: number;
+}
 
 function touchInput(cdp: CDPSession) {
   return (type: 'touchStart' | 'touchMove' | 'touchEnd', points: Point[]) =>

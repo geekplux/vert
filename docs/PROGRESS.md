@@ -123,6 +123,14 @@ Housekeeping (2026-10-18): `upload-entry-v2` gate passed (lint, typecheck, 1,538
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one
   poster from each, and judge whether at least 8 are worth printing. The agent pass is above.
 - **Keep the repo private** until BlackRock's outside-activity and IP policy check is done (CLAUDE.md).
+- **Phase 4, before Activities embeds Vert**:
+  - Vendoring `dist-lib/` into geekplux/activities (public) publishes Vert's bundle, declarations
+    and README, so it waits for the same policy check.
+  - Activities' own rules: embedding Vert reverses its "Vert: link out" decision and adds `three` as
+    a runtime dependency; approve and record both in Activities' DECISIONS.md.
+  - Which activities get a scene: a scene publishes the shape of the ground around a run (an
+    accepted fingerprint risk, DECISIONS.md "Library for Activities"), and loops or laps keep their
+    start on the drawn route unless `--trim` is raised (the bake warns).
 - **Name and domain**: check "Vert" for name collisions, and point `vert.geekplux.com` (the URL in
   the posters' footer) at the Worker when you want it public.
 - **Disk**: the system volume was down to ~100 MB free during this phase (agents moved their temp

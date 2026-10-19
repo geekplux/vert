@@ -144,7 +144,7 @@ test('the profile and the terrain both follow the wrapper’s tokens, not the pa
   expect(light / n).toBeGreaterThan(0.005);
 });
 
-test('the view and the slider work by keyboard, with the focus ring in --route', async ({
+test('the view and the slider work by keyboard, with the focus ring in the host’s --vert-focus', async ({
   page,
 }) => {
   await openHost(page);
@@ -153,11 +153,14 @@ test('the view and the slider work by keyboard, with the focus ring in --route',
   await page.keyboard.press('Tab');
   await expect(view).toBeFocused();
   expect(await view.evaluate((element) => getComputedStyle(element).outlineColor)).toBe(
-    'rgb(255, 138, 61)',
+    'rgb(230, 237, 243)',
   );
   await page.keyboard.press('Tab');
   const slider = page.getByRole('slider', { name: 'Elevation profile' });
   await expect(slider).toBeFocused();
+  expect(await slider.evaluate((element) => getComputedStyle(element).outlineColor)).toBe(
+    'rgb(230, 237, 243)',
+  );
   await expect(slider).toHaveAttribute('aria-valuenow', '200');
   await page.keyboard.press('End');
   const end = Number(await slider.getAttribute('aria-valuenow'));

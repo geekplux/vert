@@ -146,6 +146,24 @@ verification sub-agent → fix → verify; branch `presentation`, one PR.
 | ---- | ---------------------------------------------------------------------- | ------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [x]  | Domain, wordmark home link, poster styles band, sharing metadata, docs | 2      | PASS    | Posters print VERT.GEEKPLUX.ORG; bake default and proxy User-Agent use vert.geekplux.org (Coosa still bakes byte-identical). The wordmark is a home link in every state (inert and muted during an export). Upload's poster styles band: no overlap with the hero at 11 viewports in the error and busy states; first screen pixel-identical to main except the band's rule; axe 0 at 1440 / 390; CLS 0. Open Graph / Twitter tags and a 1280 × 640 card. Gate: 1,879 unit, 44 e2e. R1 PASS with should-fixes (docs gaps, an unused 1 MB screenshot, no visual cue on the inert link). R2 PASS: screenshot dropped; inert link `--muted` (5.06:1), header at rest still pixel-identical. |
 
+## Library 7: host feedback (2026-10-19)
+
+What Activities had to work around when it embedded the library (rulings in DECISIONS.md
+"Library 7"); version 0.1.1, no breaking change, branch `lib-7-host-feedback`.
+
+| Done | Item                                                                                                 | Notes                                                                                         |
+| ---- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [x]  | Touch: a vertical swipe over the terrain or the profile scrolls the page                             | `pan-y` + `holdTouch.ts`; profile sets on a tap or a sideways drag. e2e/touch.spec.ts at 390. |
+| [x]  | `--vert-focus` for both focus rings                                                                  | Falls back to `--route`; the library-host e2e sets it.                                        |
+| [x]  | `dist-lib/` with `LICENSE`, `VERSION`, `fixtures/`                                                   | `VERT_LIB_VERSION` gains `.dirty` for uncommitted changes.                                    |
+| [x]  | `pnpm bake -` (points on stdin)                                                                      | `--id` required.                                                                              |
+| [x]  | Near-end warning says where and which `--trim` hides it; `offset` line for file − terrain elevation  | Coosa still bakes byte-identical to the fixture (offset +1 m, −8 to +9 m).                    |
+| [x]  | INTEGRATION.md: offset rule, `.scene` Content-Type, caching, distances, Activities' importer, motion | SCENE.md: stdin, the warning, the offset line, distances.                                     |
+
+Gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm build:lib` pass (1,902 unit
+tests, 22 skipped without the git-ignored tile cache); `pnpm test:e2e` 46 passed, 10 skipped (the
+touch spec at 1440, the exports at 390).
+
 ## Needs Sean
 
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one

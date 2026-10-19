@@ -1,6 +1,6 @@
 {
   "name": "vert",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Turn one GPX file into a 3D terrain visualization and a poster.",
   "license": "MIT",

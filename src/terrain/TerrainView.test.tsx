@@ -74,6 +74,46 @@ describe('TerrainView', () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
+  it('lets a vertical swipe scroll the page: pan-y on the canvas, the swipe held from the controls', () => {
+    const { factory } = fakeRenderer();
+    render(
+      <TerrainView
+        heightfield={heightfield()}
+        exaggeration={1.6}
+        ariaLabel="3D terrain"
+        createRenderer={factory}
+      />,
+    );
+    const canvas = screen.getByRole('img', { name: '3D terrain' });
+    // OrbitControls writes `none` inline; the view puts pan-y back.
+    expect(canvas.style.touchAction).toBe('pan-y');
+    // jsdom has no pointer capture, which OrbitControls uses.
+    Object.assign(canvas, { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn() });
+    const reached: string[] = [];
+    const onMove = (event: Event) => reached.push((event as PointerEvent).pointerType);
+    document.addEventListener('pointermove', onMove);
+    try {
+      const send = (type: string, x: number, y: number, pointerType = 'touch') =>
+        canvas.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 3,
+            pointerType,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      send('pointerdown', 100, 100);
+      send('pointermove', 101, 70);
+      send('pointercancel', 101, 70);
+      expect(reached).toEqual([]);
+      send('pointermove', 101, 40, 'mouse');
+      expect(reached).toEqual(['mouse']);
+    } finally {
+      document.removeEventListener('pointermove', onMove);
+    }
+  });
+
   it('gives every stage a canvas of its own, so a remount (StrictMode in dev) never reuses a lost context', async () => {
     const { renderer, factory } = fakeRenderer();
     const onReady = vi.fn();

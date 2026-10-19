@@ -17,6 +17,11 @@
   --route: #d9480f; /* the route, scrub marker, vert number; as text only at >= 24px */
   --route-text: #bb3e0d; /* route-coloured text under 24px: 5.09:1 on --bg (docs/DECISIONS.md) */
   --white: #ffffff;
+  /*
+   * --vert-focus (the focus ring of the terrain view and the profile) is a host's hook and is
+   * deliberately not set here: the CSS reads var(--vert-focus, var(--route)), so it follows
+   * --route wherever --route is set, a wrapper included (DECISIONS.md "Library 7").
+   */
 
   /* Type. Archivo is variable: wdth 62–125, wght 400–800. Metric-matched fallbacks come next. */
   --font-display:

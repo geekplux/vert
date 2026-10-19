@@ -11,9 +11,10 @@ export interface SceneElevationProfileProps extends Omit<
   scene: Scene;
   /**
    * Scrub position, metres from the run's real start (the scene's distances, the same metres as
-   * `TerrainView`'s `scrub`); clamped to the drawn route.
+   * `TerrainView`'s `scrub`); clamped to the drawn route. Null: no position (see
+   * `ElevationProfile`).
    */
-  scrub: number;
+  scrub: number | null;
   /** Called with the new scrub position, in the same metres, on drag and keys. */
   onScrub: (d: number) => void;
 }

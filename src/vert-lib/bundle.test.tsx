@@ -7,7 +7,7 @@
  * custom properties with fallbacks under `vert-` class names, and declarations that type a host's
  * use of the public API.
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -120,6 +120,7 @@ describe('the built library', () => {
     expect(types).toEqual([
       'scene/decode.d.ts',
       'scene/error.d.ts',
+      'scene/time.d.ts',
       'scene/types.d.ts',
       'terrain/attribution.d.ts',
       'vert-lib/ElevationProfile.d.ts',
@@ -210,7 +211,7 @@ describe('the built library', () => {
     const { createRenderer, drawn } = fakeRenderer();
     const ref = { current: null as TerrainViewHandle | null };
     function Host() {
-      const [scrub, setScrub] = useState(scene.route.distance[0] ?? 0);
+      const [scrub, setScrub] = useState<number | null>(scene.route.distance[0] ?? 0);
       return (
         <main>
           <TerrainView
@@ -245,6 +246,79 @@ describe('the built library', () => {
     const slider = screen.getByRole('slider', { name: 'Elevation profile' });
     expect(slider.getAttribute('aria-valuemin')).toBe('200');
     expect(slider.getAttribute('aria-valuetext')).toMatch(/^km 0\.2, \d+ m$/);
+    await expectNoAxeViolations(container);
+  });
+
+  it('syncs a host’s time axis with the scrub: the time helpers, onScrub and null', async () => {
+    const {
+      TerrainView,
+      ElevationProfile,
+      decodeScene,
+      metresAtTime,
+      timeAtMetres,
+      sceneTimeRange,
+    } = lib;
+    const scene = decodeScene(coosaSceneBytes());
+    const range = sceneTimeRange(scene);
+    if (!range) throw new Error('the fixture has times');
+    expect(range.start).toBeGreaterThan(0);
+    // Inside the drawn stretch, a time maps to metres and back; in the trimmed start, to nothing.
+    const half = (range.start + range.end) / 2;
+    const metres = metresAtTime(scene, half);
+    expect(metres).toBeGreaterThan(200);
+    expect(timeAtMetres(scene, metres ?? Number.NaN)).toBeCloseTo(half, 6);
+    expect(metresAtTime(scene, range.start / 2)).toBeNull();
+    expect(timeAtMetres(scene, 100)).toBeNull();
+
+    const { createRenderer, drawn } = fakeRenderer();
+    const reported: (number | null)[] = [];
+    // A host driving the scrub from its own time (half-way), and following the profile back.
+    function Host() {
+      const [scrub, setScrub] = useState<number | null>(metres);
+      return (
+        <main>
+          <TerrainView
+            scene={scene}
+            exaggeration={1.6}
+            scrub={scrub}
+            ariaLabel="3D terrain of the run"
+            createRenderer={createRenderer}
+          />
+          <ElevationProfile
+            scene={scene}
+            scrub={scrub}
+            onScrub={(m) => {
+              reported.push(m);
+              setScrub(m);
+            }}
+          />
+          <p>
+            {scrub === null
+              ? 'No time'
+              : `${String(Math.round(timeAtMetres(scene, scrub) ?? 0))} s`}
+          </p>
+        </main>
+      );
+    }
+    const { container } = render(<Host />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    const marker = () => drawn()?.getObjectByName('marker-scrub');
+    expect(marker()?.visible).toBe(true);
+    expect(screen.getByText(`${String(Math.round(half))} s`)).toBeDefined();
+    const slider = screen.getByRole('slider', { name: 'Elevation profile' });
+    fireEvent.keyDown(slider, { key: 'Home' });
+    expect(reported).toEqual([200]);
+    expect(screen.getByText(`${String(Math.round(range.start))} s`)).toBeDefined();
+    fireEvent.keyDown(slider, { key: 'Escape' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(reported).toEqual([200, null]);
+    expect(marker()?.visible).toBe(false);
+    expect(slider.getAttribute('aria-valuetext')).toBe('No position selected');
+    expect(slider.getAttribute('aria-valuenow')).toBe('200');
     await expectNoAxeViolations(container);
   });
 
@@ -308,10 +382,14 @@ import {
   TerrainView,
   VERT_LIB_VERSION,
   decodeScene,
+  metresAtTime,
+  sceneTimeRange,
+  timeAtMetres,
   type ElevationProfileProps,
   type RoutePalette,
   type Scene,
   type SceneErrorReason,
+  type SceneTimeRange,
   type TerrainPalette,
   type TerrainViewHandle,
   type TerrainViewProps,
@@ -326,7 +404,7 @@ export function Host({ bytes }: { bytes: Uint8Array }) {
     if (error instanceof SceneError) reason = error.reason;
   }
   const ref = useRef<TerrainViewHandle>(null);
-  const [scrub, setScrub] = useState<number>(scene?.route.distance[0] ?? 0);
+  const [scrub, setScrub] = useState<number | null>(scene?.route.distance[0] ?? 0);
   const palette: TerrainPalette = { surface: '#203040', ink: '#e0e8f0' };
   const routePalette: RoutePalette = { route: '#ff8a3d', halo: '#ffffff', ink: '#0b1620' };
   const view: TerrainViewProps = {
@@ -341,12 +419,27 @@ export function Host({ bytes }: { bytes: Uint8Array }) {
   const credit: string = TERRAIN_ATTRIBUTION + TERRAIN_ATTRIBUTION_LINK.href;
   const length: number = scene ? scene.summary.drawnLength : 0;
   ref.current?.rotateBy(1);
-  const profile: ElevationProfileProps | null = scene ? { scene, scrub, onScrub: setScrub } : null;
+  ref.current?.resetView();
+  ref.current?.requestRender();
+  ref.current?.focus();
+  const azimuth: number | undefined = ref.current?.camera()?.azimuth;
+  // A host's own time axis: its position drives the scrub, the profile's moves come back.
+  const range: SceneTimeRange | null = scene ? sceneTimeRange(scene) : null;
+  const fromChart: number | null = scene && range ? metresAtTime(scene, range.start) : null;
+  const [seconds, setSeconds] = useState<number | null>(null);
+  const onScrub = (metres: number | null): void => {
+    setScrub(metres);
+    setSeconds(scene && metres !== null ? timeAtMetres(scene, metres) : null);
+  };
+  const profile: ElevationProfileProps | null = scene ? { scene, scrub, onScrub } : null;
+  // Uncontrolled: no scrub, onScrub optional.
+  const loose: ElevationProfileProps | null = scene ? { scene } : null;
   return (
     <>
       <TerrainView ref={ref} {...view} />
       {profile && <ElevationProfile {...profile} />}
-      <p>{[version, credit, length, reason].join(' ')}</p>
+      {loose && <ElevationProfile {...loose} onScrub={setScrub} />}
+      <p>{[version, credit, length, reason, azimuth, fromChart, seconds].join(' ')}</p>
     </>
   );
 }

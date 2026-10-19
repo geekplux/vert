@@ -36,10 +36,21 @@ export interface ElevationProfileProps {
    * metres; the plot spans `origin` to the last point. Default 0.
    */
   origin?: number;
-  /** Scrub position, metres along the route. */
-  scrub: number;
+  /**
+   * Scrub position, metres along the route. `null` (the library's "no position selected"; the app
+   * always passes a number) draws no scrub line or dot; the slider then reports the plot's start as
+   * its value with the value text "No position selected", and the first key or press moves from
+   * there (and always reports, even to the start).
+   */
+  scrub: number | null;
   /** Called with the new scrub distance (metres, clamped to the route) on drag and keys. */
   onScrub: (d: number) => void;
+  /**
+   * When given, Escape on the slider calls it while there is a position (to clear it: the host
+   * sets `scrub` to null) and prevents the keydown's default (it still propagates); with no
+   * position, Escape is left alone.
+   */
+  onClear?: () => void;
   /** Climbs to shade and number, metres. The `steepest` one gets the stronger shade. */
   climbs?: readonly Climb[];
   /** Ticks in km or mi; also the default value text. Default metric. */
@@ -54,6 +65,9 @@ export interface ElevationProfileProps {
 }
 
 const NO_CLIMBS: readonly Climb[] = [];
+
+/** The slider's value text while `scrub` is null. */
+export const NO_POSITION_TEXT = 'No position selected';
 
 /** Dot diameter (canvas: 14px with a 3px white border). */
 const DOT = 14;
@@ -72,6 +86,7 @@ export function ElevationProfile({
   origin = 0,
   scrub: givenScrub,
   onScrub,
+  onClear,
   climbs: givenClimbs = NO_CLIMBS,
   units = 'metric',
   height = 140,
@@ -96,7 +111,9 @@ export function ElevationProfile({
         : givenClimbs.map((c) => ({ ...c, start: c.start - origin, end: c.end - origin })),
     [givenClimbs, origin],
   );
-  const scrub = givenScrub - origin;
+  // No position: null, or a value that is not a number at all.
+  const hasScrub = givenScrub !== null && Number.isFinite(givenScrub);
+  const scrub = hasScrub ? givenScrub - origin : 0;
 
   // Paths depend on the points only: scrubbing never rebuilds them. The line is drawn from the
   // plotted (minimum-span, smoothed) points; the value text keeps the real elevations.
@@ -161,9 +178,11 @@ export function ElevationProfile({
 
   const value = total > 0 ? clamp(scrub, 0, total) : 0;
   const ele = elevationAt(points, value);
-  const text = valueText
-    ? valueText(value + origin, ele)
-    : defaultValueText(value + origin, ele, units);
+  const text = !hasScrub
+    ? NO_POSITION_TEXT
+    : valueText
+      ? valueText(value + origin, ele)
+      : defaultValueText(value + origin, ele, units);
   const scrubX = scale.x(value);
   // The dot sits on the line as drawn.
   const drawnEle = elevationAt(plot.points, value);
@@ -172,7 +191,8 @@ export function ElevationProfile({
   const commit = (d: number) => {
     if (total <= 0) return;
     const next = clamp(d, 0, total);
-    if (next !== value) onScrub(next + origin);
+    // From no position, any move counts, even one to the start (where the value already reads).
+    if (next !== value || !hasScrub) onScrub(next + origin);
   };
 
   const commitFromPointer = (clientX: number) => {
@@ -233,6 +253,12 @@ export function ElevationProfile({
       case 'End':
         next = total;
         break;
+      case 'Escape':
+        if (!onClear || !hasScrub) return;
+        event.preventDefault();
+        drag.current = null;
+        onClear();
+        return;
       default:
         return;
     }
@@ -269,7 +295,7 @@ export function ElevationProfile({
           focusable="false"
         >
           {layers}
-          {total > 0 && (
+          {total > 0 && hasScrub && (
             <line className={styles.scrubLine} x1={scrubX} y1={0} x2={scrubX} y2={VIEW_H} />
           )}
         </svg>
@@ -283,7 +309,7 @@ export function ElevationProfile({
             {index + 1}
           </span>
         ))}
-        {total > 0 && (
+        {total > 0 && hasScrub && (
           <span
             className={styles.dot}
             style={{ left: percent(scrubX), top: dotTop - DOT / 2 }}

@@ -9,8 +9,12 @@ import type { TerrainViewHandle, TerrainViewProps } from './types';
  * five stable methods. Drag to orbit, wheel or pinch to zoom; keyboard: focus the view (Tab),
  * arrow keys orbit (Shift for bigger steps), + / − zoom. With `prefers-reduced-motion` the intro
  * move is a fade.
+ *
+ * The view only shows the scrub (`scrub`, null hides its marker); it has no scrub input of its
+ * own, since its drags and keys orbit. The user scrubs in `ElevationProfile`, whose `onScrub` is
+ * the one report of a move.
  */
-export function TerrainView({ ref, ...props }: TerrainViewProps) {
+export function TerrainView({ ref, scrub, ...props }: TerrainViewProps) {
   const inner = useRef<StageHandle>(null);
   useImperativeHandle(
     ref,
@@ -23,5 +27,12 @@ export function TerrainView({ ref, ...props }: TerrainViewProps) {
     }),
     [],
   );
-  return <SceneTerrainView {...props} ref={inner} />;
+  return (
+    <SceneTerrainView
+      {...props}
+      // A number that is not finite hides the marker, as null does.
+      scrub={scrub != null && Number.isFinite(scrub) ? scrub : null}
+      ref={inner}
+    />
+  );
 }

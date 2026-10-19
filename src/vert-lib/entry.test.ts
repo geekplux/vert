@@ -41,6 +41,7 @@ describe('library entry', () => {
     expect(modules).toContain('src/terrain/sceneGrid.ts');
     expect(modules).toContain('src/terrain/stage.ts');
     expect(modules).toContain('src/scene/decode.ts');
+    expect(modules).toContain('src/scene/time.ts');
     expect(modules).toContain('src/components/ElevationProfile/SceneElevationProfile.tsx');
   });
 });

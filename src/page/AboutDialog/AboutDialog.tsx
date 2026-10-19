@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { RefObject } from 'react';
 import { Button } from '../../components';
+import { TERRAIN_ATTRIBUTION } from '../../terrain/attribution';
 import { GITHUB_URL } from '../AppHeader/UploadNav';
 import styles from './AboutDialog.module.css';
 
@@ -76,8 +77,8 @@ export function AboutDialog({ open, onClose, returnFocusRef }: AboutDialogProps)
             Credits
           </h3>
           <p className={styles.text}>
-            Elevation: AWS Terrain Tiles / Mapzen (various sources). Sample route: © OpenStreetMap
-            contributors, ODbL. Type: Archivo and IBM Plex Mono (SIL OFL).
+            Elevation: {TERRAIN_ATTRIBUTION}. Sample route: © OpenStreetMap contributors, ODbL.
+            Type: Archivo and IBM Plex Mono (SIL OFL).
           </p>
         </section>
         <p className={styles.text}>

@@ -50,6 +50,25 @@ export interface GridTrack {
    * centre, and a baked scene sets it from its stored markers.
    */
   readonly loop: boolean;
+  /**
+   * Where the markers stand, when they were decided before the track reached the grid: a baked
+   * scene's stored markers (docs/SCENE.md, `MARK`), placed on the original track and kept exactly.
+   * Absent for the app's own tracks, whose markers follow `routeMarkerIndices` (routeRules.ts).
+   */
+  readonly markers?: GridMarkers;
+}
+
+/** A fractional grid position (column, row), as in {@link GridTrack}. */
+export interface GridPoint {
+  readonly col: number;
+  readonly row: number;
+}
+
+/** Fixed markers in grid coordinates: ○ start, ◉ finish (null on a loop), ▲ summit (or null). */
+export interface GridMarkers {
+  readonly start: GridPoint;
+  readonly finish: GridPoint | null;
+  readonly summit: GridPoint | null;
 }
 
 /** Ground the grid spans on its longer side, metres (at its centre). */

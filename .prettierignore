@@ -1,5 +1,6 @@
 pnpm-lock.yaml
 dist/
+dist-lib/
 build/
 coverage/
 playwright-report/

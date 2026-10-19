@@ -7,6 +7,7 @@ import tseslint from 'typescript-eslint';
 export default defineConfig(
   globalIgnores([
     'dist',
+    'dist-lib',
     'build',
     'coverage',
     'playwright-report',

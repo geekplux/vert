@@ -11,9 +11,26 @@ outside grid space by the legend's rule, `isLoop` in lib/loop.ts). A `Heightfiel
 `TerrainGrid` plus the `bounds` it was sampled over and its `failedTiles`. The one conversion is
 `gridTrackFromRun(heightfield, track)` (gridTrack.ts), which `TerrainView` calls once per
 heightfield and track (memoised, so the route is still built once) and the poster A figure calls
-the same way; a baked scene for the library already carries its route in grid units, so it needs no
-conversion at all (DECISIONS.md "Library for Activities"). A grid track belongs to the grid it was
-made for: a new grid brings a new one (`show(grid, { track })`).
+the same way; a baked scene for the library already carries its route in grid-local metres, so it
+is only divided by the grid's spacing (`sceneToGrid`, sceneGrid.ts; DECISIONS.md "Library for
+Activities"). A grid track belongs to the grid it was made for: a new grid brings a new one
+(`show(grid, { track })`).
+
+**The scene path** (docs/SCENE.md, src/vert-lib). `TerrainView` takes either `heightfield` +
+`track` (the page) or `scene` (a decoded `.scene`), never both (a discriminated union of props).
+`sceneToGrid(scene)` gives the grid (the scene's elevations, min, max, spacing and zoom, same
+arrays) and a grid track: column = x / spacing x, row = y / spacing y; `cumulative` the scene's
+distances, which count from the run's real start, so a trimmed route starts past 0 and `scrub` is
+in the same metres; `ele` its elevations; `loop` when it has no finish marker; and `markers`, the
+scene's stored markers as grid positions. The bake placed those on the original track (the summit
+on its highest recorded point), not on the resampled route, so `routeMarkerIndices` on the scene's
+route could move the summit by a step: a track that brings `markers` is drawn with them exactly
+(`markerPositions` in markers.ts). Route and markers are draped on the grid as in the View
+(DECISIONS.md "Scene terrain is softer, accepted"). The conversion is memoised per scene object
+(a `WeakMap`), so the route is built once per scene. Nothing on this path reads a latitude or
+longitude: `SceneTerrainView` (behind the library's `TerrainView`) imports neither gridTrack.ts,
+heightfield.ts, tiles.ts nor lib/geo.ts (src/vert-lib/entry.test.ts walks its imports, and
+bundle.test.ts greps the built bundle).
 
 - `tiles.ts`: `tileUrl`, `fetchTile` (shared `TileLoader`): fetch, decode (body read with
   `arrayBuffer()`, never `blob()`, which fails on a nearly full disk; `createImageBitmap` +
@@ -57,7 +74,7 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   depth (`DEFAULT_BASE_DEPTH`) below the lowest point of the edges facing the camera
   (`visibleEdgeLevel`, updated per frame); where a more oblique wall's edge dips lower, its bottom
   follows the edge. Exaggeration is the `uExaggeration` uniform; colours come from a
-  `TerrainPalette` (`readPalette` reads `--surface` / `--ink`, and falls back to style A's values
+  `TerrainPalette` (`readPalette` reads `--surface` / `--ink` from the style it is given, and falls back to style A's values
   for any token a host page lacks or leaves blank). `gridToLocal` places a grid position on the
   mesh (for the route and markers); `modelBounds` gives the extents; `radialHull` the surface's
   outline revolved around the vertical axis (for the zoom limits) and `surfaceEnvelope` a coarse
@@ -81,8 +98,10 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   idle. `dispose` forces the WebGL context loss before disposing the renderer, so remounts never
   pile up live contexts.
 - `route.ts`: `createRouteLayer(grid, gridTrack, { palette, exaggeration, lift = 2 })`. The
-  track is resampled evenly by distance (≤ 10 m apart, ≤ 4,000 points, interpolating columns and
-  rows) and draped: y is the terrain's own elevation (`gridElevation`, not the GPX's) plus 2 m.
+  track is resampled evenly by distance from its first point to its last (`cumulative[0]`, which
+  is past 0 for a trimmed track: the poster's hide-ends, a scene; ≤ 10 m apart, ≤ 4,000 points,
+  interpolating columns and rows) and draped: y is the terrain's own elevation (`gridElevation`,
+  not the GPX's) plus 2 m.
   Two `Line2`s share one `LineGeometry`: a 9 px `--white` halo under a 4 px `--route` core, CSS-px widths
   (`worldUnits: false`). Positions are stored at exaggeration 1 and the patched vertex shader
   scales y by a shared `uExaggeration`, so the slider never rebuilds. **Visibility:** ridges in
@@ -108,7 +127,9 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   a 1 px ink hairline so the ring reads over the white halo). Sizes follow the canvas's terrain
   figure. A loop (`track.loop`: the route ends within 50 m of its start, by great-circle distance,
   decided by `isLoop` before the track reaches the markers) gets one ○; otherwise the finish
-  is a ◉ (the start circle with an ink dot), never a second ○. `setScrub(d)` moves the scrub
+  is a ◉ (the start circle with an ink dot), never a second ○. A track that brings its own
+  `markers` (a scene's stored ones) is drawn with exactly those (`markerPositions`); the layer's
+  `indices` are then null. `setScrub(d)` moves the scrub
   marker without rebuilding. Textures are painted at 4× their CSS size; a poster figure drawn at a
   larger scale repaints them at `markerTextureScale(scale)` (the 18 × 24 export: 8×) so a sprite
   is never magnified (`setTextureScale`, called by `renderFigure`). Before each frame `updateOcclusion` marches a ray from each marker
@@ -133,14 +154,25 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   a `width × height` output px figure, framed in logical px (`width / scale`), line widths and
   markers × `scale`, synchronously into its canvas sized to `tile` (the camera's view offset is
   `figureViewOffset`: the lens shift moved by the tile's corner). Used by `src/poster/terrainFigure.ts`.
-- `TerrainView.tsx`: the React wrapper. Each stage gets a canvas of its own, created in the stage
-  effect and removed with it (a disposed stage loses its context for good; StrictMode remounts on
-  the same DOM). Canvas is `role="img"` with the page's `aria-label`; the
-  wrapper is focusable (arrow keys orbit, Shift for larger steps, + / − zoom; a visually hidden hint
-  says so). Reduced motion: no camera move, the canvas fades in. Props `track` (a `RunTrack`, put
-  on the heightfield's grid here with `gridTrackFromRun`), `scrub` (metres), `overlays`, `insets`
-  and `routePalette` drive the route layer. A ref handle exposes
-  `rotateBy`, `resetView`, `requestRender`, `focus`, `camera()` and the stage.
+- `GridTerrainView.tsx`: the React wrapper, fed a `TerrainGrid` and a `GridTrack`. Each stage
+  gets a canvas of its own, created in the stage effect and removed with it (a disposed stage
+  loses its context for good; StrictMode remounts on the same DOM). Canvas is `role="img"` with
+  the page's `aria-label`; the wrapper is focusable (arrow keys orbit, Shift for larger steps, the
+  plus and minus keys zoom; a visually hidden hint says so). Reduced motion: no camera move, the
+  canvas fades in. `scrub` (metres, on the track's scale), `overlays`, `insets` and
+  `routePalette` drive the route layer. Colours come from `--surface` / `--ink` and `--route` /
+  `--white` / `--ink` as they reach the view's own container (`getComputedStyle(container)`, at
+  mount): in the app the tokens sit on `:root`, so nothing changes, and a host can set Vert's
+  tokens on a wrapper around the view, as the profile's CSS reads them (src/vert-lib/README.md).
+  `palette` and `routePalette` win over the tokens. A ref handle exposes `rotateBy`, `resetView`,
+  `requestRender`, `focus`, `camera()` and the stage.
+- `TerrainView.tsx`: what the page renders: `heightfield` + `track` (put on the grid with
+  `gridTrackFromRun`) or `scene` (`sceneToGrid`), memoised, drawn by `GridTerrainView`.
+  `SceneTerrainView.tsx`: the scene half alone, which the library's `TerrainView`
+  (src/vert-lib/TerrainView.tsx) wraps with its own standalone props and a handle without the
+  stage.
+- `attribution.ts`: `TERRAIN_ATTRIBUTION`, the elevation credit the About dialog shows (and the
+  library exports), and `TERRAIN_ATTRIBUTION_LINK` with Mapzen's list of sources.
 - three.js is ~150 kB gzipped: the page loads `TerrainView` with `React.lazy` (`src/page/terrainChunk.ts`)
   so the Upload state stays light.
 - Decoding and tile maths are pure and live in `src/lib`, so they test without WebGL.

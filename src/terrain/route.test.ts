@@ -133,6 +133,40 @@ describe('resampleTrack', () => {
     expect(samples.distance.some((d) => d > corner)).toBe(true);
   });
 
+  it('samples a trimmed track (distances from the real start) from its first point, not 0', () => {
+    // The drawn stretch of a run whose first 200 m are hidden: cumulative starts at 200.
+    const hf = hills();
+    const whole = makeGridTrack(
+      hf,
+      Array.from({ length: 7 }, (_, k): [number, number] => [10 + 15 * k, 40 + 2 * k]),
+    );
+    const trim = 200;
+    const trimmed = { ...whole, cumulative: whole.cumulative.map((d) => d + trim) };
+    const length = trackLength(whole);
+    const samples = resampleTrack(trimmed);
+    const reference = resampleTrack(whole);
+    const n = samples.col.length;
+    // As many samples as the stretch's own length needs, the first at its first point.
+    expect(n).toBe(Math.ceil(length / ROUTE_STEP_M) + 1);
+    expect(n).toBe(reference.col.length);
+    expect(samples.distance[0]).toBe(trim);
+    expect(samples.distance[n - 1]).toBeCloseTo(trim + length, 6);
+    // The same positions as the untrimmed track, each sample distinct (no repeats of the first).
+    for (let k = 0; k < n; k++) {
+      expect(samples.col[k]).toBeCloseTo(reference.col[k] ?? 0, 9);
+      expect(samples.row[k]).toBeCloseTo(reference.row[k] ?? 0, 9);
+      expect(samples.distance[k]).toBeCloseTo((reference.distance[k] ?? 0) + trim, 6);
+    }
+    for (let k = 1; k < n; k++) {
+      const gap = gridDistance(
+        hf,
+        { col: samples.col[k - 1] ?? 0, row: samples.row[k - 1] ?? 0 },
+        { col: samples.col[k] ?? 0, row: samples.row[k] ?? 0 },
+      );
+      expect(gap).toBeGreaterThan(ROUTE_STEP_M * 0.9);
+    }
+  });
+
   it('gives two points for a zero-length track and none for an empty one', () => {
     const still = makeGridTrack(hills(), [[10, 20]]);
     expect(resampleTrack(still).col.length).toBe(2);

@@ -247,6 +247,12 @@ export interface TickOptions {
   minEndGap?: number;
   /** Most ticks, including "0 km" and the total. */
   maxTicks?: number;
+  /**
+   * Distance at the plot's left end, metres (a stretch that starts past the run's start): the
+   * first label reads it ("0.2 km"), the rest are round distances from the run's start and the
+   * last is `origin + total`. Default 0.
+   */
+  origin?: number;
 }
 
 /** Width of a 12px IBM Plex Mono glyph (0.6em) and the least space between two labels, px. */
@@ -264,22 +270,26 @@ function decimalsFor(step: number): number {
  * Distance ticks: "0 km", round steps (1/2/5 × 10ⁿ in km or mi, the smallest that gives at most
  * `maxTicks` labels), then the total at the right end. Interior ticks are positioned by distance;
  * one that would crowd the total (within `minEndGap`, or overlapping it at `widthPx`) is dropped.
+ * With an `origin` the plot starts there: the first label is its distance, interior ticks stay on
+ * round distances from the run's start (and also keep `minEndGap` from the first), and the last is
+ * `origin + totalMetres`.
  */
 export function buildTicks(totalMetres: number, units: Units, options: TickOptions = {}): Tick[] {
-  const { widthPx, minEndGap = 0.1, maxTicks = 6 } = options;
+  const { widthPx, minEndGap = 0.1, maxTicks = 6, origin = 0 } = options;
   if (!(totalMetres > 0)) return [];
   const total = totalMetres / unitMetres(units);
-  const totalLabel = total.toFixed(1);
-  const zeroLabel = `0 ${distanceUnit(units)}`;
+  const start = Math.max(0, origin) / unitMetres(units);
+  const totalLabel = (start + total).toFixed(1);
+  const zeroLabel = `${start > 0 ? start.toFixed(1) : '0'} ${distanceUnit(units)}`;
 
   const interiorFor = (step: number): Tick[] => {
     const decimals = decimalsFor(step);
     const ticks: Tick[] = [];
-    for (let i = 1; i * step < total; i += 1) {
+    for (let i = Math.floor(start / step) + 1; i * step < start + total; i += 1) {
       const value = i * step;
-      const at = value / total;
+      const at = (value - start) / total;
       const label = value.toFixed(decimals);
-      if (1 - at < minEndGap) continue;
+      if (1 - at < minEndGap || (start > 0 && at < minEndGap)) continue;
       ticks.push({ label, at, align: 'center' });
     }
     return ticks;

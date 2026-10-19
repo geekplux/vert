@@ -50,7 +50,7 @@ export const STYLE_A_PALETTE: TerrainPalette = {
 };
 
 /**
- * Reads a palette from CSS custom properties (normally `getComputedStyle(document.documentElement)`);
+ * Reads a palette from CSS custom properties (the view passes its container's computed style);
  * a token that is missing or empty falls back to `fallback`.
  */
 export function readPalette(

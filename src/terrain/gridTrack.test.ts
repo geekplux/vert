@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isLoop } from '../lib/loop';
 import { gridTrackFromRun } from './gridTrack';
 import { elevationAt, gridPosition } from './heightfield';
 import { gridElevation } from './grid';
@@ -40,8 +41,22 @@ describe('gridTrackFromRun', () => {
     const track = gridTrackFromRun(hf, run);
     expect(track.cumulative).toBe(run.cumulative);
     expect(track.ele).toBe(run.ele);
-    expect(Object.keys(track).sort()).toEqual(['col', 'cumulative', 'ele', 'row']);
+    expect(Object.keys(track).sort()).toEqual(['col', 'cumulative', 'ele', 'loop', 'row']);
     expect(gridTrackFromRun(hf, makeTrack([[34.71, -83.98]])).ele).toBeNull();
+  });
+
+  it('decides the loop once, with the legend’s rule (isLoop, great-circle distance)', () => {
+    expect(isLoop(run)).toBe(false);
+    expect(gridTrackFromRun(hf, run).loop).toBe(false);
+    // Back to within ~14 m of the start.
+    const loop = makeTrack([
+      [34.705, -83.99],
+      [34.714, -83.972],
+      [34.7051, -83.9899],
+    ]);
+    expect(isLoop(loop)).toBe(true);
+    expect(gridTrackFromRun(hf, loop).loop).toBe(true);
+    expect(gridTrackFromRun(hf, makeTrack([[34.71, -83.98]])).loop).toBe(true);
   });
 
   it('gives an empty track for an empty run', () => {

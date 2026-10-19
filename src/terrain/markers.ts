@@ -5,9 +5,10 @@
  * apart (DESIGN-SPEC §5):
  *
  * - start: hollow circle, white fill, 3 px ink ring;
- * - finish (only when the route does not end within {@link LOOP_DISTANCE_M} of its start): the
- *   start circle with a solid ink dot in the middle (◉), so it never reads as a second start;
- *   a loop gets one ○ ("Start / finish" in the legend);
+ * - finish (only when the route is not a loop, `track.loop`: decided once by `isLoop` in
+ *   src/lib/loop.ts, the legend's and the accessible name's rule): the start circle with a solid
+ *   ink dot in the middle (◉), so it never reads as a second start; a loop gets one ○
+ *   ("Start / finish" in the legend);
  * - summit: solid ink triangle with a 2.5 px white edge, its centroid on the highest point (only
  *   when that stands 10 m or more above the lowest, `hasSummit`);
  * - scrub: route-coloured dot with a 3 px white ring and a 1 px ink hairline outside it (the
@@ -29,7 +30,7 @@
 import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
 import { hasSummit } from '../lib/summit';
 import { sampleBilinear } from '../lib/terrarium';
-import { gridDistance, gridElevation, type GridTrack, type TerrainGrid } from './grid';
+import { gridElevation, type GridTrack, type TerrainGrid } from './grid';
 import { gridToLocal, modelBounds } from './mesh';
 import {
   APP_ROUTE_PALETTE,
@@ -40,9 +41,6 @@ import {
 } from './route';
 
 export type TerrainMarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
-
-/** A route that ends this close to its start is a loop: one ○ marks start and finish. */
-export const LOOP_DISTANCE_M = 50;
 
 /** Marker geometry, CSS px. */
 export const START_DIAMETER_PX = 22;
@@ -91,23 +89,18 @@ export interface RouteMarkerIndices {
 
 /**
  * Where the markers go: start at the first point, finish at the last unless the route is a loop
- * (its ends within {@link LOOP_DISTANCE_M} on the ground, measured with the grid's spacing),
+ * (`track.loop`, decided with the legend's rule; nothing is measured here),
  * summit at the highest point (the track's elevations as the stats use them, so it matches the
  * high point shown in the aside; the terrain's elevations when the file has none), and only when
  * it stands out (`hasSummit`, the same rule as the legend and the posters).
  */
 export function routeMarkerIndices(
-  track: Pick<GridTrack, 'col' | 'row' | 'ele'>,
+  track: Pick<GridTrack, 'col' | 'row' | 'ele' | 'loop'>,
   grid: TerrainGrid,
 ): RouteMarkerIndices {
   const n = track.col.length;
   if (n === 0) throw new RangeError('The track has no points');
   const last = n - 1;
-  const gap = gridDistance(
-    grid,
-    { col: track.col[0] ?? 0, row: track.row[0] ?? 0 },
-    { col: track.col[last] ?? 0, row: track.row[last] ?? 0 },
-  );
   const elevation = (i: number): number => {
     const recorded = track.ele?.[i];
     if (recorded !== undefined && Number.isFinite(recorded)) return recorded;
@@ -126,7 +119,7 @@ export function routeMarkerIndices(
   }
   return {
     start: 0,
-    finish: n > 1 && gap > LOOP_DISTANCE_M ? last : null,
+    finish: n > 1 && !track.loop ? last : null,
     summit: hasSummit(highest, lowest) ? summit : null,
   };
 }
@@ -378,7 +371,7 @@ export interface MarkerLayer {
 /** Start (and finish), summit and scrub markers for `track` (in `grid`'s sample coordinates). */
 export function createMarkerLayer(
   grid: TerrainGrid,
-  track: RouteTrack & Pick<GridTrack, 'ele'>,
+  track: RouteTrack & Pick<GridTrack, 'ele' | 'loop'>,
   { palette = APP_ROUTE_PALETTE, exaggeration = 1, lift = DEFAULT_LIFT_M }: MarkerLayerOptions = {},
 ): MarkerLayer {
   const indices = routeMarkerIndices(track, grid);

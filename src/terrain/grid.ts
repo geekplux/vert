@@ -43,6 +43,13 @@ export interface GridTrack {
    * when there is none, and the terrain's elevations stand in.
    */
   readonly ele: Float64Array | null;
+  /**
+   * The route ends where it starts: one ○ marks both, no ◉ finish. Decided once, outside grid
+   * space, by the same rule as the legend and the accessible name (`isLoop` in src/lib/loop.ts,
+   * by great-circle distance), never re-measured on the grid: the grid's spacing holds only at its
+   * centre, and a baked scene sets it from its stored markers.
+   */
+  readonly loop: boolean;
 }
 
 /** Ground the grid spans on its longer side, metres (at its centre). */

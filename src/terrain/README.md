@@ -6,7 +6,8 @@ scrub marker. No map library, no basemap.
 **Grid space.** Drawing never sees a latitude or longitude. The mesh, the route, the markers and the
 stage take a `TerrainGrid` (grid.ts: `width`, `height`, `elevations`, `min`, `max`,
 `metresPerSample`, `zoom`) and a `GridTrack` (`col` / `row`, fractional sample coordinates: column
-0 the west edge, row 0 the north edge; `cumulative` metres; `ele` or null). A `Heightfield` is a
+0 the west edge, row 0 the north edge; `cumulative` metres; `ele` or null; `loop`, decided once
+outside grid space by the legend's rule, `isLoop` in lib/loop.ts). A `Heightfield` is a
 `TerrainGrid` plus the `bounds` it was sampled over and its `failedTiles`. The one conversion is
 `gridTrackFromRun(heightfield, track)` (gridTrack.ts), which `TerrainView` calls once per
 heightfield and track (memoised, so the route is still built once) and the poster A figure calls
@@ -35,9 +36,12 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   x in [0, 2^z). Latitudes are clamped to ±85 (inside the Mercator square), a minimum span apart.
 - `grid.ts` (no three.js, no lat/lon): `TerrainGrid`, `GridTrack`, `gridElevation` (bilinear, the
   maths `elevationAt` uses, so values match bit for bit), `gridDistance` (metres between grid
-  positions, at the grid's spacing), `groundExtent` (the grid's longer side in metres).
+  positions, at the grid's spacing: exact only at the grid's centre latitude, so never used to
+  decide a loop), `groundExtent` (the grid's longer side in metres).
 - `gridTrack.ts`: `gridTrackFromRun`, the drawing path's only reader of `lat` / `lon`: each point
-  exactly where `gridPosition` puts it, `cumulative` and `ele` passed through (same arrays).
+  exactly where `gridPosition` puts it, `cumulative` and `ele` passed through (same arrays), and
+  `loop` from `isLoop` (lib/loop.ts), the function the View's legend and the terrain's accessible
+  name use, so the ○ / ◉ markers and the words always agree.
 - `mesh.ts`: `createTerrainMesh(grid, options)` builds the grid (`width × height` vertices,
   plus a skirt) in a local frame: x east, y up, z south, origin at the grid
   centre and lowest point, 1 unit = the longer horizontal side, true metres vertically. The style A
@@ -97,8 +101,8 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   the track's elevations, else the terrain's; none when it stands under 10 m above the lowest
   point, `hasSummit`), ● scrub (route fill, 3 px white ring, 14 px, plus
   a 1 px ink hairline so the ring reads over the white halo). Sizes follow the canvas's terrain
-  figure. A route ending within 50 m of its start (on the ground, at the grid's spacing) is a loop
-  and gets one ○; otherwise the finish
+  figure. A loop (`track.loop`: the route ends within 50 m of its start, by great-circle distance,
+  decided by `isLoop` before the track reaches the markers) gets one ○; otherwise the finish
   is a ◉ (the start circle with an ink dot), never a second ○. `setScrub(d)` moves the scrub
   marker without rebuilding. Textures are painted at 4× their CSS size; a poster figure drawn at a
   larger scale repaints them at `markerTextureScale(scale)` (the 18 × 24 export: 8×) so a sprite

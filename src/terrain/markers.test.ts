@@ -1,8 +1,18 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  EARTH_RADIUS_M,
+  MERCATOR_RADIUS_M,
+  haversine,
+  lonLatToWorld,
+  worldToLonLat,
+} from '../lib/geo';
+import { LOOP_DISTANCE_M, isLoop } from '../lib/loop';
+import { gridDistance } from './grid';
+import { gridTrackFromRun } from './gridTrack';
+import type { Heightfield } from './heightfield';
 import { gridToLocal, modelBounds } from './mesh';
 import {
-  LOOP_DISTANCE_M,
   MAX_TEXTURE_SCALE,
   OCCLUDED_OPACITY,
   TEXTURE_SCALE,
@@ -16,7 +26,7 @@ import {
   type TerrainMarkerKind,
 } from './markers';
 import { APP_ROUTE_PALETTE, DEFAULT_LIFT_M, pointAtDistance, trackLength } from './route';
-import { gridTrackOn, hills, makeGridTrack } from './testing';
+import { gridTrackOn, hills, makeGridTrack, makeTrack } from './testing';
 
 /** A 2D context that records the calls the marker drawing makes. */
 function recordingContext() {
@@ -97,21 +107,90 @@ function at(track: { col: Float64Array; row: Float64Array }, i: number) {
 
 describe('routeMarkerIndices', () => {
   it(`treats a route ending within ${String(LOOP_DISTANCE_M)} m of its start as a loop`, () => {
+    expect(LOOP.loop).toBe(true);
     expect(routeMarkerIndices(LOOP, HILLS)).toEqual({ start: 0, finish: null, summit: 3 });
-    // Measured on the ground with the grid's spacing: 49 m apart is a loop, 51 m is not.
-    const { x } = HILLS.metresPerSample;
-    const ends = (metres: number) =>
-      makeGridTrack(
-        HILLS,
-        [
-          [10, 40],
-          [60, 20],
-          [10 + metres / x, 40],
-        ],
-        [500, 600, 500],
-      );
-    expect(routeMarkerIndices(ends(49), HILLS).finish).toBeNull();
-    expect(routeMarkerIndices(ends(51), HILLS).finish).toBe(2);
+  });
+
+  it("reads the track's loop flag and never measures the gap itself", () => {
+    const route = (points: [number, number][], loop: boolean) =>
+      makeGridTrack(HILLS, points, [500, 600, 500], loop);
+    // Ends on the same grid node but flagged not a loop: a ◉ finish.
+    const closed: [number, number][] = [
+      [10, 40],
+      [60, 20],
+      [10, 40],
+    ];
+    expect(routeMarkerIndices(route(closed, false), HILLS).finish).toBe(2);
+    // Ends 1.5 km apart but flagged a loop (as a baked scene may say): one ○.
+    const open: [number, number][] = [
+      [10, 40],
+      [60, 20],
+      [60, 40],
+    ];
+    expect(routeMarkerIndices(route(open, true), HILLS).finish).toBeNull();
+  });
+
+  it('agrees with the legend’s loop rule at 49.9 and 50.1 m, near the edges of a tall grid at 60° N', () => {
+    // A grid 2° tall (≈ 220 km) at 58.5–60.5° N, spaced as buildHeightfield spaces it: its
+    // metres per sample hold at the centre latitude only, ±3% at the north and south edges.
+    const bounds = { west: 10, east: 11, south: 58.5, north: 60.5 };
+    const nw = lonLatToWorld(bounds.west, bounds.north);
+    const se = lonLatToWorld(bounds.east, bounds.south);
+    const height = 240;
+    const width = Math.round(1 + ((height - 1) * (se.x - nw.x)) / (se.y - nw.y));
+    const centreLat = worldToLonLat(0, (nw.y + se.y) / 2).lat;
+    const perWorld = 2 * Math.PI * MERCATOR_RADIUS_M * Math.cos((centreLat * Math.PI) / 180);
+    const tall: Heightfield = {
+      bounds,
+      zoom: 8,
+      width,
+      height,
+      elevations: new Float32Array(width * height).fill(300),
+      min: 300,
+      max: 300,
+      metresPerSample: {
+        x: ((se.x - nw.x) / (width - 1)) * perWorld,
+        y: ((se.y - nw.y) / (height - 1)) * perWorld,
+      },
+      failedTiles: [],
+    };
+    const rad = Math.PI / 180;
+    let gridDisagrees = 0;
+    for (const lat of [60.45, 58.55]) {
+      for (const gap of [49.9, 50.1]) {
+        // The finish `gap` metres east of the start, or north of it.
+        const east =
+          (2 * Math.asin(Math.sin(gap / (2 * EARTH_RADIUS_M)) / Math.cos(lat * rad))) / rad;
+        const north = gap / EARTH_RADIUS_M / rad;
+        for (const [dLat, dLon] of [
+          [0, east],
+          [north, 0],
+        ] as const) {
+          const run = makeTrack(
+            [
+              [lat, 10.5],
+              [lat - 0.01, 10.6],
+              [lat + dLat, 10.5 + dLon],
+            ],
+            [500, 600, 500],
+          );
+          expect(haversine({ lat, lon: 10.5 }, { lat: lat + dLat, lon: 10.5 + dLon })).toBeCloseTo(
+            gap,
+            6,
+          );
+          expect(isLoop(run)).toBe(gap < LOOP_DISTANCE_M);
+          const track = gridTrackFromRun(tall, run);
+          const layer = createMarkerLayer(tall, track);
+          // The terrain draws a ◉ finish exactly when the legend and the label say "not a loop".
+          expect(layer.sprite('finish') === null).toBe(isLoop(run));
+          layer.dispose();
+          // Measured with the grid's centre spacing, the gap can land on the other side of 50 m.
+          const onGrid = gridDistance(tall, at(track, 0), at(track, 2));
+          if (onGrid <= LOOP_DISTANCE_M !== isLoop(run)) gridDisagrees += 1;
+        }
+      }
+    }
+    expect(gridDisagrees).toBeGreaterThan(0);
   });
 
   it('marks start and finish apart otherwise, and the summit at the highest elevation', () => {

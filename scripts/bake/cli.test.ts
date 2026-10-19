@@ -3,7 +3,7 @@
  * `node scripts/bake.ts` end to end, in a child process (exactly as `pnpm bake` runs it, resolve
  * hook included), against a local tile server.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -90,6 +90,22 @@ function bake(...args: string[]): Promise<Result> {
     execFile(process.execPath, [ENTRY, ...args], { encoding: 'utf8' }, (error, stdout, stderr) => {
       resolve({ code: error ? Number(error.code ?? 1) : 0, stdout, stderr });
     });
+  });
+}
+
+/** `bake(...args)` with `input` written to the child's standard input. */
+function bakeWithStdin(input: string, ...args: string[]): Promise<Result> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [ENTRY, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk));
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      resolve({ code: code ?? 1, stdout, stderr });
+    });
+    child.stdin.end(input);
   });
 }
 
@@ -180,6 +196,47 @@ describe('node scripts/bake.ts', () => {
       Buffer.from(bytes).equals(Buffer.from(outputs(join(dir, 'gpx'), 'test-run').bytes)),
     ).toBe(true);
     expectNoCoordinates(result.stdout);
+  });
+
+  it('bakes a points file from standard input (-): the same scene, no file of its own', async () => {
+    const out = join(dir, 'stdin');
+    const result = await bakeWithStdin(
+      pointsJsonOf(route),
+      '-',
+      '--out',
+      out,
+      '--id',
+      'test-run',
+      '--tiles',
+      tiles,
+      '--cache',
+      cache,
+    );
+    expect(result.stderr).toBe('');
+    expect(result.code).toBe(0);
+    expect(readdirSync(out).sort()).toEqual(['test-run.scene', 'test-run.scene.json']);
+    expect(
+      Buffer.from(outputs(out, 'test-run').bytes).equals(
+        Buffer.from(outputs(join(dir, 'gpx'), 'test-run').bytes),
+      ),
+    ).toBe(true);
+    expectNoCoordinates(result.stdout);
+  });
+
+  it('broken points on standard input: exit 1, nothing written, no value echoed', async () => {
+    const out = join(dir, 'stdin-broken');
+    const result = await bakeWithStdin(
+      '{"points": [{"lat": 46.583917, "lng": 7.912846}]}',
+      '-',
+      '--out',
+      out,
+      '--id',
+      'broken',
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/needs at least 2 points|unknown key/);
+    expect(result.stderr).not.toContain('46.58');
+    expect(existsSync(out)).toBe(false);
   });
 
   it('bakes a GPX without <ele>, its elevations from the terrain', async () => {
@@ -279,6 +336,7 @@ describe('node scripts/bake.ts', () => {
     [['in.gpx', '--out', 'x', '--trim', 'lots'], /--trim must be/],
     [['in.gpx', '--out', 'x', '--id', 'Not OK'], /--id must be/],
     [['in.gpx', '--out', 'x', '--colour', 'red'], /Unknown option '--colour'/],
+    [['-', '--out', 'x'], /--id <id> is required when the input is -/],
   ])('usage error %j: exit 2 with the usage', async (args, message) => {
     const result = await bake(...args);
     expect(result.code).toBe(2);

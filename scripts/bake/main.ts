@@ -12,7 +12,7 @@ import { parseArgs } from 'node:util';
 import { formatNumber } from '../../src/lib/format';
 import { BakeError, UsageError, printableMessage } from './errors';
 import { checkDefaultIdTimestamp, checkExplicitId, idFromFileName } from './id';
-import { readInput } from './input';
+import { STDIN_INPUT, readInput } from './input';
 import { DEFAULT_TRIM_M, bakeScene, type BakedScene } from './pipeline';
 import {
   DEFAULT_CACHE_DIR,
@@ -30,12 +30,14 @@ import {
 
 export const USAGE = `Usage: pnpm bake <input> --out <dir> [options]
 
-Bakes one activity (.gpx, or a .json points file) into <dir>/<id>.scene and
-<dir>/<id>.scene.json for a host page (docs/SCENE.md, "Baking a scene").
+Bakes one activity (.gpx, or a .json points file; - reads a points file from
+standard input) into <dir>/<id>.scene and <dir>/<id>.scene.json for a host page
+(docs/SCENE.md, "Baking a scene").
 
 Options:
   --out <dir>       where to write the scene and its sidecar (required)
-  --id <id>         file name base, a-z 0-9 _ - (default: from the input's name)
+  --id <id>         file name base, a-z 0-9 _ - (default: from the input's name;
+                    required with -)
   --trim <metres>   metres hidden at each end of the route (default ${String(DEFAULT_TRIM_M)}; 0 keeps them)
   --tiles <url>     tile URL template with {z} {x} {y}
                     (default ${DEFAULT_TILE_TEMPLATE})
@@ -86,6 +88,9 @@ export function parseCli(argv: readonly string[]): CliArguments | null {
   if (positionals.length !== 1) throw new UsageError('Give exactly one input file.');
   const [input = ''] = positionals;
   if (!values.out) throw new UsageError('--out <dir> is required.');
+  if (input === STDIN_INPUT && values.id === undefined) {
+    throw new UsageError('--id <id> is required when the input is - (standard input).');
+  }
   let trim = DEFAULT_TRIM_M;
   if (values.trim !== undefined) {
     trim = /^\d+(\.\d+)?$/.test(values.trim) ? Number(values.trim) : NaN;

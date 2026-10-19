@@ -25,4 +25,9 @@ pnpm fixtures
 UTMB's terms forbid redistribution, so the `.gpx` files are git-ignored. `courses/SOURCES.md` lists
 each file's race page, download URL, published distance and D+, and the terms.
 
-Tests that read either folder must skip when the files are missing (a fresh clone or CI has none).
+## `fixtures/scenes/`: local bakes
+
+Scenes you bake from your own tracks (`pnpm bake fixtures/gpx/<file>.gpx --out fixtures/scenes
+--id <id>`, docs/SCENE.md, "Baking a scene") go here. Git-ignored like the tracks they come from.
+
+Tests that read these folders must skip when the files are missing (a fresh clone or CI has none).

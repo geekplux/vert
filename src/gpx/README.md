@@ -30,6 +30,7 @@ Files:
 - `handler.ts`: the worker's message protocol (`ParseRequest`, `ParseResponse`) and
   `handleMessage` (decode UTF-8/UTF-16/Latin-1, parse, compute, build the run; never throws),
   testable without a Worker. `worker.ts` is the thin worker entry around it.
+- `limits.ts`: `MAX_FILE_BYTES` (20 MB), shared with `pnpm bake` (no browser API).
 - `client.ts`: `parseInWorker(input, signal)`: one reused module worker, 20 MB limit, abort,
   20 s timeout. `loadRun.ts`: `realLoadRun`, the app's `LoadRun` (a user file is read locally;
   only the sample is fetched, from the app's origin).

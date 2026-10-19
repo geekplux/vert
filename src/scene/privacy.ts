@@ -14,7 +14,8 @@
  *     either order, of adjacent float32 or float64 values inside the box.
  *   - Outside the Rice streams (the header, the fixed fields, any section the format does not
  *     define): adjacent int32 (lat, lon) pairs, and int32 key values, at 1e5, 1e6, 1e7 and
- *     2³¹/180 (semicircles) units per degree; tile (x, y) pairs at zooms 6–15 as u16 or u32.
+ *     2³¹/180 (semicircles) units per degree; tile (x, y) pairs at zooms 6–15 as u16 or u32
+ *     (those with a zero in them, column 0 by the antimeridian, only where tile numbers are).
  *   - In sections the format does not define: any single float32, float64 or int32 (at those
  *     scales) inside the box; any u16 or u32 equal to a tile x or y; float32 or float64 (x, y)
  *     pairs inside the box in projected form (Web Mercator world units, EPSG:3857 metres,
@@ -40,6 +41,7 @@ import {
   lonLatToWorld,
   tilesForBounds,
   worldToLonLat,
+  wrapTile,
   type Bounds,
 } from '../lib/geo';
 import { HEADER_BYTES, SECTION_HEADER_BYTES } from './format';
@@ -163,7 +165,8 @@ function prepare(secrets: LocationSecrets): Prepared {
   const tiles = tileIndices(secrets.bounds);
   return {
     inLat: (v) => v >= south && v <= north,
-    inLon: (v) => v >= west && v <= east,
+    // A box past ±180° (by the antimeridian) also holds the same longitudes a turn away.
+    inLon: (v) => [v, v - 360, v + 360].some((w) => w >= west && w <= east),
     nearKey: (v) => near(sortedKeys, v, KEY_TOLERANCE),
     exact,
     tilePairs: new Set(
@@ -216,11 +219,15 @@ function near(sorted: Float64Array, value: number, tolerance: number): boolean {
   return lo < sorted.length && Math.abs((sorted[lo] ?? NaN) - value) <= tolerance;
 }
 
-/** The (x, y) of every tile over the bounds at {@link TILE_ZOOMS}. */
+/**
+ * The (x, y) of every tile over the bounds at {@link TILE_ZOOMS}, x folded into [0, 2^z) (bounds
+ * past ±180°, by the antimeridian, cover columns −1 or 2^z, which are stored as the tile they
+ * wrap to).
+ */
 export function tileIndices(bounds: readonly Bounds[]): { x: number; y: number; z: number }[] {
   const out: { x: number; y: number; z: number }[] = [];
   for (const b of bounds) {
-    for (const z of TILE_ZOOMS) out.push(...tilesForBounds(b, z));
+    for (const z of TILE_ZOOMS) out.push(...tilesForBounds(b, z).map(wrapTile));
   }
   return out;
 }
@@ -301,16 +308,23 @@ export function scanBytes(bytes: Uint8Array, secrets: LocationSecrets): PrivacyF
         else if (free && inBox(degrees)) found(`int32 at ${String(scale)}/° inside the area`, k);
         if (pair(degrees, next / scale)) found(`int32 lat/lon pair at ${String(scale)}/°`, k);
       }
-      const p16 = `${String(view.getUint16(k, true))},${String(view.getUint16(k + 2, true))}`;
-      if (p.tilePairs.has(p16)) found('u16 tile pair', k);
+      const a16 = view.getUint16(k, true);
+      const b16 = view.getUint16(k + 2, true);
+      // A pair with a zero in it (tile x 0, by the antimeridian) is the same bytes as one u32,
+      // which outside undefined sections is any length or count (a MARK section of 35 bytes read
+      // as tile (0, 35) at zoom 6): looked for in undefined sections only, like a lone number.
+      const p16 = `${String(a16)},${String(b16)}`;
+      if (p.tilePairs.has(p16) && (free || (a16 !== 0 && b16 !== 0))) found('u16 tile pair', k);
       if (free && p.tileNumbers.has(view.getUint16(k, true))) found('u16 tile number', k);
       if (free && p.tileNumbers.has(view.getUint32(k, true))) found('u32 tile number', k);
     } else if (k + 2 <= n && free && p.tileNumbers.has(view.getUint16(k, true))) {
       found('u16 tile number', k);
     }
     if (k + 8 <= n) {
-      const p32 = `${String(view.getUint32(k, true))},${String(view.getUint32(k + 4, true))}`;
-      if (p.tilePairs.has(p32)) found('u32 tile pair', k);
+      const a32 = view.getUint32(k, true);
+      const b32 = view.getUint32(k + 4, true);
+      const p32 = `${String(a32)},${String(b32)}`;
+      if (p.tilePairs.has(p32) && (free || (a32 !== 0 && b32 !== 0))) found('u32 tile pair', k);
     }
   }
   for (const [from, to] of unknown) {

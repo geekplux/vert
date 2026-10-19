@@ -33,3 +33,5 @@ scripts/.cache/
 # fetch with `pnpm fixtures`)
 fixtures/gpx/
 fixtures/courses/*.gpx
+# local bakes of your own tracks (`pnpm bake … --out fixtures/scenes`); never committed
+fixtures/scenes/

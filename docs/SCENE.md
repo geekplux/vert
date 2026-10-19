@@ -566,10 +566,12 @@ antimeridian works as in the app (its longitudes stay unwrapped, and the grid is
 
 **Loops and laps.** The trim hides the first and last metres along the route, but a loop or a lap
 session passes its start again: when the real start or finish lies within 100 m of the drawn route,
-the bake says so on stderr (exit 0): how near, in tens of metres; where along the route it passes,
-`km X of Y` (one decimal, distances along the route only, never a coordinate); and the smallest
-`--trim` (tens of metres) whose drawn route stays 100 m clear of it, or that no `--trim` does (the
-route passes it again too far from both ends, as laps do). A larger trim draws a sub-stretch of a
+the bake says so on stderr (exit 0): how near, in tens of metres ("within 100 m" rather than a
+figure that rounds to it); where the drawn route passes closest, `about km X of Y` (one decimal,
+distances along the route only, never a coordinate); and the smallest `--trim` (tens of metres,
+printed to paste: `--trim 1700`) whose drawn route stays 100 m clear of it, or that no `--trim`
+does (the route passes it again too far from both ends, as laps do; the place named is then that
+pass). A larger trim draws a sub-stretch of a
 smaller one's, so the bake finds that trim by binary search on the warning's own test. It still
 writes the scene: the start is then one point among many of the route, but you decide whether
 that is enough.

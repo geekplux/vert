@@ -812,8 +812,8 @@ prop unless two real uses genuinely differ. Version 0.1.1; no breaking change.
   and past 8 px, because Chromium delivers about 21–25 px of moves before its `pointercancel`.
   Down, up, cancel, two fingers, mouse and pen pass. Vert's own page scrolls at 390 px too (the
   aside sits under the terrain), so it wants the same default: no `touch` prop. Lost on touch:
-  tilting with a finger that starts vertically (a drag that starts sideways still tilts; the
-  arrow keys, Rotate and the flat view remain).
+  tilting with a finger that starts vertically. A drag that starts sideways still tilts, and the
+  arrow keys, Rotate, Reset and Flat remain.
 - **The profile on touch** sets the position on a tap (lifted within 8 px) or once a drag is past
   8 px and more sideways than vertical; a vertical swipe sets nothing. Mouse and pen unchanged.
   A finger is not captured again when the drag starts: touch pointers are captured implicitly at
@@ -830,13 +830,18 @@ var(--route))`; width (2 px) and offset (2 px) stay fixed. It is not defined in 
   A plain text file (not JSON with peers): the version is the one fact a host pins; the `three`
   version stays in the changelog.
 - **`pnpm bake -`** reads the points from standard input, `--id` required; no new flag. A host no
-  longer writes coordinates to a temporary file it must own and clean up on signals.
+  longer writes coordinates to a temporary file it must own and clean up on signals. Read as a
+  stream (`for await`), counted as it arrives and stopped at 128 MB: `readFileSync(0)` throws
+  EAGAIN on a non-blocking pipe once the input outgrows the pipe's buffer (about 110 KB through
+  a shell pipe or an async `spawn`, 16 MB through `spawnSync`).
 - **Near-end warning, informative.** It now says where the route passes the end (km X of Y) and the
   smallest `--trim` (tens of metres, up to 10,000) that hides it, found by binary search on the
   warning's own test (a larger trim draws a sub-stretch, so "clear" is monotone), or that none does.
-  "Where" is the pass farthest from both ends among the recorded points within 100 m: the one a
-  trim must reach. No per-end trims and no acknowledgement flag: the message makes the decision
-  possible, and a host that accepts a public start can treat that warning as it likes.
+  "Where" is the closest approach of the route drawn now (or, when no trim hides the end, of the
+  shortest route a trim can leave: the pass no trim reaches), as "about km X"; the distance is
+  in tens of metres and never "about 100 m" (it reads "within 100 m"). The trim prints as
+  `--trim 1700`, to paste. No per-end trims and no acknowledgement flag: the message makes the
+  decision possible, and a host that accepts a public start can treat that warning as it likes.
 - **Elevation offset line, no flag.** When every elevation is the file's own, the summary prints the
   file's elevations minus the terrain's along the drawn route (mean by distance, range; whole
   metres). A host that prefers the terrain leaves `ele` out of the points: the input already is

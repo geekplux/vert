@@ -475,13 +475,13 @@ no correction. The sidecar's totals (length, climb) are the whole run's.
 
 A loop or a lap session passes its start again after the trim. When the real start or finish lies
 within 100 m of the drawn route, the bake warns on stderr and still writes the scene. The warning
-says where along the route it passes (km, never a coordinate) and the smallest `--trim` that hides
-it, or that none does because the route passes it again far from both ends (laps, or a course
+says how near and where along the route the drawn route passes closest (km, never a coordinate)
+and the smallest `--trim` that hides it, printed so it pastes, or that none does because the route passes it again far from both ends (laps, or a course
 through its own start): then hide it some other way or accept it (a public race start).
 
 ```text
-vert-bake: warning: The run's real start lies within 10 m of the drawn route at km 3.1 of 4.8 (a loop or laps pass it again), so the trim does not hide it; a --trim of 1,700 m does.
-vert-bake: warning: The run's real finish lies within 10 m of the drawn route at km 3.2 of 6.4: the route passes its finish again, so no --trim hides it.
+vert-bake: warning: The drawn route passes within 10 m of the run's real start at about km 1.6 of 4.8 (a loop or laps pass it again), so the trim does not hide it; --trim 1700 does.
+vert-bake: warning: The drawn route passes within 10 m of the run's real finish at about km 3.2 of 6.4: the route passes its finish again, so no --trim hides it.
 ```
 
 ### What it does and prints
@@ -522,48 +522,53 @@ Baked coosa-sample
 
 Nothing printed, errors included, holds a coordinate, a bound, a tile x/y or a tile URL.
 
-### From Activities' importer
+### From a host's importer
 
 The bake lives in Vert's repository and Activities' Cloudflare build cannot see it, so scenes are
-baked on Sean's machine and committed; the deployed build only copies them. What Activities does
-(`scripts/import/scenes.ts`), with Vert checked out next to it:
+baked on Sean's machine and committed; the deployed build only copies them. Activities'
+`pnpm run import` (`scripts/import/scenes.ts`, with Vert checked out next to it) bakes the
+activities its config lists (scenes are opt-in, each with its own `trim`, and an `elevation`
+option, `file` or `terrain`, that leaves `ele` out of the points for a recorder it does not
+trust), and removes pairs no longer listed. As of 0.1.0 it writes each points file to a private
+temporary folder, owned by a child process that removes it on exit and on signals.
 
-1. `pnpm run import` bakes the activities its config lists (scenes are opt-in, per activity, each
-   with its own `--trim`), from the original FIT/GPX, and removes pairs no longer listed.
-2. For each, it pipes the points to the bake and never writes them to disk:
+With 0.1.1 a host can pipe the points to the bake instead, so no coordinate file touches disk
+(Activities moves to this with its next sync). The recommended pattern:
 
-   ```ts
-   const result = spawnSync(
-     process.execPath,
-     [
-       '../vert/scripts/bake.ts',
-       '-',
-       '--id',
-       id,
-       '--out',
-       'public/terrain',
-       '--trim',
-       trim,
-       '--cache',
-       cacheDir,
-     ],
-     {
-       input: JSON.stringify({ points }),
-       encoding: 'utf8',
-       env: { ...process.env, NODE_NO_WARNINGS: '1' },
-     },
-   );
-   ```
+```ts
+const result = spawnSync(
+  process.execPath,
+  [
+    '../vert/scripts/bake.ts',
+    '-',
+    '--id',
+    id,
+    '--out',
+    'public/terrain',
+    '--trim',
+    String(trim),
+    '--cache',
+    cacheDir,
+  ],
+  {
+    input: JSON.stringify({ points }),
+    encoding: 'utf8',
+    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  },
+);
+```
 
-   `NODE_NO_WARNINGS=1` keeps Node's own warnings off stderr, so stderr holds only the bake's.
+An async `spawn` works the same way: write the JSON with `child.stdin.end(json)`. The bake reads
+standard input as a stream, so any size up to the 128 MB limit goes through a pipe.
 
-3. It refuses the pair on a non-zero exit, and on **any** stderr line at exit 0 (a warning: a near
-   end, a tile cache it could not write), printing the bake's words; then it runs its scene guard
-   on the pair, and records the scene's hash and time offset in its `meta.json`.
-
-Always pass `--cache`: without it the tiles land in `../vert/scripts/.cache/terrarium/`, inside
-Vert's checkout. The cache's paths are tile numbers, that is locations: keep it outside both
-repositories (or in an ignored folder), never committed or published.
+- `NODE_NO_WARNINGS=1` keeps Node's own warnings off stderr, so stderr holds only the bake's.
+- Refuse the pair on a non-zero exit, and on **any** stderr line at exit 0 (a warning: a near end,
+  a tile cache it could not write), showing the bake's words; this is what Activities does. Then
+  run your own guard on the pair (Activities' scene guard), and record the scene's hash and the
+  [time offset](#scrub-sync-with-a-time-chart) next to its id.
+- Always pass `--cache`: without it the tiles land in `../vert/scripts/.cache/terrarium/`, inside
+  Vert's checkout. The cache's paths are tile numbers, that is locations: keep it outside both
+  repositories (or in an ignored folder), never committed or published.
 
 ## 5. Tile proxy policy for offline bakes
 
@@ -1534,9 +1539,9 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
   position ([Escape](#escape-and-your-own-key-handlers) says when it is left to your page).
   Pointer: drag orbits, wheel or pinch zooms; press or drag on the profile scrubs.
 - **Touch**: both take `touch-action: pan-y`, so a vertical swipe that starts on them scrolls the
-  page, as anywhere else. On the view a sideways drag orbits and two fingers zoom (one-finger tilt
-  starts only from a sideways drag; the arrow keys, Rotate and Reset remain); on the profile a tap
-  or a sideways drag sets the position, and a vertical swipe sets nothing.
+  page, as anywhere else. On the view a sideways drag orbits and two fingers zoom; one-finger
+  tilt starts only from a sideways drag, and the arrow keys, Rotate, Reset and Flat remain. On
+  the profile a tap or a sideways drag sets the position, and a vertical swipe sets nothing.
 - **No position**: with `scrub={null}` the slider's `aria-valuetext` is "No position selected"
   (its `aria-valuenow` is the drawn start, where the first key moves from).
 - **Reduced motion**: with `prefers-reduced-motion: reduce` there is no camera move: the intro is a
@@ -1666,14 +1671,14 @@ props and handle, same `three` 0.186.1; a host can delete code (below).
 - **`dist-lib/`** also holds `LICENSE`, `VERSION` (`VERT_LIB_VERSION`, `.dirty` when built from
   a checkout with uncommitted changes) and `fixtures/coosa-backcountry.scene` with its sidecar: a
   vendoring script copies one folder and reads one file.
-- **`pnpm bake -`** reads the points from standard input (`--id` required), so a host never
-  writes coordinates to disk.
+- **`pnpm bake -`** reads the points from standard input as a stream (`--id` required), so a host
+  never writes coordinates to disk.
 - **Bake output**: the near-end warning says where (km X of Y) and the smallest `--trim` that
   hides the end, or that none does; when the elevations are the file's own, an `offset` line gives
   the file's elevations minus the terrain's along the drawn route.
 - **Docs**: the scrub offset rule (§7), serving `.scene` as `application/octet-stream` and the
-  `no-cache` policy (§3), how scene distances are measured (§3), what Activities' importer and
-  guards do (§3, §4), what reduced motion does (§9).
+  `no-cache` policy (§3), how scene distances are measured (§3), what Activities' guards do and
+  how a host's importer pipes the points (§3, §4), what reduced motion does (§9).
 
 ### 0.1.0 (2026-10-19)
 

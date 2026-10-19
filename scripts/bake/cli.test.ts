@@ -445,12 +445,12 @@ describe('node scripts/bake.ts', () => {
     );
     expect(result.code).toBe(0);
     expect(result.stderr).toMatch(
-      /^vert-bake: warning: The run's real start lies .* the drawn route/m,
+      /^vert-bake: warning: The drawn route passes .* the run's real start/m,
     );
-    expect(result.stderr).toMatch(/^vert-bake: warning: The run's real finish/m);
+    expect(result.stderr).toMatch(/^vert-bake: warning: The drawn route passes .* real finish/m);
     // Three laps: the start is passed again a lap in; a trim of a little over a lap hides it.
     expect(result.stderr).toMatch(
-      /real start lies within 10 m of the drawn route at km \d+\.\d of \d+\.\d \(a loop or laps pass it again\), so the trim does not hide it; a --trim of 1,\d{3} m does\.$/m,
+      /passes within 10 m of the run's real start at about km \d+\.\d of \d+\.\d \(a loop or laps pass it again\), so the trim does not hide it; --trim 1\d{3} does\.$/m,
     );
     expectNoCoordinates(result.stderr);
   });

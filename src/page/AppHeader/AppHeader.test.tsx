@@ -45,6 +45,59 @@ describe('AppHeader', () => {
   });
 });
 
+describe('AppHeader home link', () => {
+  /** Clicks the wordmark link; returns whether the click's default (following "/") was prevented. */
+  function clickHome(init: MouseEventInit = {}) {
+    const link = screen.getByRole('link', { name: 'Vert, home' });
+    return !fireEvent.click(link, { button: 0, ...init });
+  }
+
+  it('is plain text without onHome', () => {
+    render(<AppHeader state="view" />);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(within(screen.getByRole('banner')).getByText('Vert')).toBeDefined();
+  });
+
+  it('makes the name a link to "/" named "Vert, home"; the tagline stays outside it', () => {
+    render(<AppHeader state="upload" onHome={vi.fn()} />);
+    const link = screen.getByRole<HTMLAnchorElement>('link', { name: 'Vert, home' });
+    expect(link.getAttribute('href')).toBe('/');
+    expect(link.textContent).toBe('Vert');
+    expect(screen.getByText('DROP A GPX. GET A POSTER.').closest('a')).toBeNull();
+  });
+
+  it('handles a plain primary click itself: prevents the navigation and calls onHome', () => {
+    const onHome = vi.fn();
+    render(<AppHeader state="view" onHome={onHome} />);
+    expect(clickHome()).toBe(true);
+    expect(onHome).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['Cmd', { metaKey: true }],
+    ['Ctrl', { ctrlKey: true }],
+    ['Shift', { shiftKey: true }],
+    ['Alt', { altKey: true }],
+    ['middle button', { button: 1 }],
+  ])('leaves a %s click to the browser (a new tab or window)', (_name, init) => {
+    const onHome = vi.fn();
+    render(<AppHeader state="view" onHome={onHome} />);
+    expect(clickHome(init)).toBe(false);
+    expect(onHome).not.toHaveBeenCalled();
+  });
+
+  it('with homeDisabled: stays a focusable link, ignores a plain click, and does not leave', () => {
+    const onHome = vi.fn();
+    render(<AppHeader state="poster" routeName="Loop" onHome={onHome} homeDisabled />);
+    const link = screen.getByRole('link', { name: 'Vert, home' });
+    expect(link.getAttribute('aria-disabled')).toBe('true');
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    expect(clickHome()).toBe(true);
+    expect(onHome).not.toHaveBeenCalled();
+  });
+});
+
 describe('UploadNav', () => {
   it('has About as a button and GitHub as a link, in a named nav', () => {
     render(<UploadNav onAbout={vi.fn()} />);
@@ -97,7 +150,7 @@ describe('PosterNav', () => {
 describe('AppHeader accessibility', () => {
   it('has no axe violations in each state', async () => {
     const upload = render(
-      <AppHeader state="upload">
+      <AppHeader state="upload" onHome={vi.fn()}>
         <UploadNav onAbout={vi.fn()} />
       </AppHeader>,
     );
@@ -105,7 +158,7 @@ describe('AppHeader accessibility', () => {
     upload.unmount();
 
     const view = render(
-      <AppHeader state="view">
+      <AppHeader state="view" onHome={vi.fn()}>
         <ViewNav {...viewNavProps()} />
       </AppHeader>,
     );
@@ -113,8 +166,8 @@ describe('AppHeader accessibility', () => {
     view.unmount();
 
     const poster = render(
-      <AppHeader state="poster" routeName="Loop">
-        <PosterNav onBack={vi.fn()} />
+      <AppHeader state="poster" routeName="Loop" onHome={vi.fn()} homeDisabled>
+        <PosterNav onBack={vi.fn()} disabled />
       </AppHeader>,
     );
     await expectNoAxeViolations(poster.container);

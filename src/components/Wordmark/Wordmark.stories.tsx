@@ -13,3 +13,9 @@ ViewTagline.storyName = 'TRAIL RUNS AS TERRAIN';
 
 export const PosterTagline: Story = () => <Wordmark tagline="POSTER · CHATTAHOOCHEE LOOP" />;
 PosterTagline.storyName = 'POSTER · CHATTAHOOCHEE LOOP';
+
+// The page header's wordmark: the name links home (Page handles a plain click).
+export const HomeLink: Story = () => (
+  <Wordmark tagline="TRAIL RUNS AS TERRAIN" link={{ href: '/', label: 'Vert, home' }} />
+);
+HomeLink.storyName = 'Name as a home link';

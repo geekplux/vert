@@ -273,7 +273,8 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
       ? 'Choose a .gpx file. Tap to open your files'
       : 'Drop a .gpx file here. or click to choose one';
     const preview = 'TRY THE SAMPLE RUN · 21.5 km · +1,102 m';
-    for (const name of ['About', 'GitHub', card, 'Try the sample run', preview]) {
+    // The wordmark, a link home, is the first stop in every state.
+    for (const name of ['Vert, home', 'About', 'GitHub', card, 'Try the sample run', preview]) {
       await page.keyboard.press('Tab');
       await expect(focused(page)).toHaveAccessibleName(name);
       await expectVisibleFocus(page);
@@ -317,8 +318,15 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     // Units: the radiogroup's checked radio takes focus; arrows switch and select.
     const distanceValue = page.locator('div:has(> dt:text-is("Distance")) > dd');
     await expect(distanceValue).toContainText(/km$/);
-    await tabUntil(page, isFocused(page.getByRole('radio', { name: 'km' })));
+    const km = page.getByRole('radio', { name: 'km' });
+    await tabUntil(page, isFocused(km));
     await expectVisibleFocus(page);
+    // The wordmark comes just before the header's controls.
+    await page.keyboard.press('Shift+Tab');
+    await expect(focused(page)).toHaveAccessibleName('Vert, home');
+    await expectVisibleFocus(page);
+    await page.keyboard.press('Tab');
+    await expect(km).toBeFocused();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('radio', { name: 'mi' })).toBeChecked();
     await expect(page.getByRole('radio', { name: 'mi' })).toBeFocused();
@@ -461,6 +469,15 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     const cancel = page.getByRole('button', { name: 'Cancel' });
     await expect(cancel).toBeFocused();
     await expectVisibleFocus(page);
+
+    // The wordmark stays a focusable link, but like Back to the run it does not leave the export.
+    const home = page.getByRole('link', { name: 'Vert, home' });
+    await shiftTabUntil(page, isFocused(home), 10);
+    await expectVisibleFocus(page);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { level: 1, name: 'Make a poster' })).toBeVisible();
+    await expect(cancel).toBeVisible();
+    await tabUntil(page, isFocused(cancel), 10);
     await page.keyboard.press('Enter');
     await expect(cancel).toBeHidden();
     await expect(pngButton).toBeFocused();
@@ -492,5 +509,35 @@ test('all four states can be walked by keyboard alone', async ({ page }) => {
     await expect(uploadHeading).toBeFocused();
     await expect(page.getByRole('group', { name: /GPX/i })).toBeVisible();
     await expectAccessibleAndNoSideScroll(page, 'Upload again');
+  });
+
+  // 6. Home -----------------------------------------------------------------------------------
+  await test.step('The wordmark: home from Upload and from the View, without a reload', async () => {
+    // A marker on the window: a real navigation to "/" would reload the page and lose it.
+    await page.evaluate(() => {
+      (window as unknown as { vertWalk: boolean }).vertWalk = true;
+    });
+    const stillLoaded = () =>
+      page.evaluate(() => (window as unknown as { vertWalk?: boolean }).vertWalk === true);
+    const home = page.getByRole('link', { name: 'Vert, home' });
+
+    // On Upload: no change of state, focus back on the h1.
+    await shiftTabUntil(page, isFocused(home), 5);
+    await page.keyboard.press('Enter');
+    await expect(uploadHeading).toBeFocused();
+    expect(await stillLoaded()).toBe(true);
+
+    // From the View: back to Upload, as New file.
+    await tabUntil(
+      page,
+      isFocused(page.getByRole('button', { name: 'Try the sample run', exact: true })),
+    );
+    await page.keyboard.press('Enter');
+    await expect(viewHeading).toBeFocused();
+    await expect(viewHeading).not.toHaveText(/Your run/);
+    await shiftTabUntil(page, isFocused(home));
+    await page.keyboard.press('Enter');
+    await expect(uploadHeading).toBeFocused();
+    expect(await stillLoaded()).toBe(true);
   });
 });

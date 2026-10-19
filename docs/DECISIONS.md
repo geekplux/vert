@@ -748,3 +748,21 @@ installs `three` from npm.
   A host must show it, linked, wherever a scene is shown; Vert's About dialog links it the same way.
 - **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
   pin and report what it vendored.
+
+### the maintainer's rulings on embedding (2026-10-19)
+
+On the three phase 4 items in PROGRESS.md "Needs the maintainer", the maintainer chose to follow the main agent's
+recommendations:
+
+- **Vendoring waits for the public launch.** `dist-lib/` is not committed to the host site repo
+  (public) until the public launch.
+- **Embedding is approved.** Activities may replace its `TerrainSlot` placeholder with Vert's
+  TerrainView (reversing its "Vert: link out" decision) and add `three` as an exact runtime
+  dependency. Activities records both in its own `docs/DECISIONS.md` when that work starts there;
+  this repo does not edit Activities.
+- **Which activities get a scene.** A scene is opt-in, one activity at a time, baked with the
+  default `--trim 200`. When the bake warns that the real start or finish lies near the drawn route
+  (a loop or laps), raise `--trim` until the warning clears. If it cannot clear without hiding most
+  of the run (a lap session, a loop from home), that activity gets no scene, unless its start is a
+  public place (a race start, a trailhead, a public track). The terrain fingerprint stays an
+  accepted risk for every scene published.

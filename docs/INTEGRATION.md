@@ -48,7 +48,7 @@ in `docs/DECISIONS.md` ("Library for Activities") and `docs/SCENE.md` ("Forbidde
 
 **Before vendoring into a public repository.** Vert's repository is private until the public launch (`CLAUDE.md`). the host site repo is public, so
 committing `dist-lib/` there publishes Vert's bundle, declarations and README. That waits for the
-check and for the maintainer's decision. Until Vert is public, the GitHub links to this guide (in the shipped
+check (the maintainer's ruling, 2026-10-19). Until Vert is public, the GitHub links to this guide (in the shipped
 README) are a 404 for anyone but its owner.
 
 **For Activities, the whole change**, each item explained below:
@@ -56,7 +56,8 @@ README) are a 404 for anyone but its owner.
 - **Approval first.** Embedding Vert reverses an Activities decision marked "do not relitigate"
   (its `CLAUDE.md`, "Vert: link out; `TerrainSlot` placeholder"; `docs/PLAN.md` §2, "integrate
   later as a package"), adds a runtime dependency (`three`, exact) and a vendored folder. the maintainer
-  approves it, and Activities records it in its `docs/DECISIONS.md`.
+  approved it on 2026-10-19 (Vert's `docs/DECISIONS.md`); Activities records it in its own
+  `docs/DECISIONS.md`.
 - `vendor/vert/` committed, ignored by ESLint and Prettier; `three@0.186.1` installed
   ([Vendoring](#2-vendoring-dist-lib)); a pin test under `scripts/`.
 - `public/scenes/` with the baked pairs, the `virtual:vert-scenes` plugin, a `/scenes/*` rule in

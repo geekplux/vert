@@ -300,7 +300,7 @@ describe('createMarkerLayer', () => {
       [1, 2, 1],
     );
     const layer = createMarkerLayer(hills(), flat, { exaggeration: 1 });
-    expect(layer.indices.summit).toBeNull();
+    expect(layer.indices?.summit).toBeNull();
     expect(layer.sprite('summit')).toBeNull();
     expect(layer.fixedMarkers().map((m) => m.kind)).toEqual(['start', 'finish']);
     layer.dispose();

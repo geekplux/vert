@@ -1,6 +1,6 @@
 {
   "name": "vert",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Turn one GPX file into a 3D terrain visualization and a poster.",
   "license": "MIT",
@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:lib": "vite build -c vite.lib.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

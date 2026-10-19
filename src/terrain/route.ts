@@ -204,15 +204,17 @@ export function pointAtDistance(track: RouteTrack, d: number): TrackPoint {
 export interface ResampledTrack {
   readonly col: Float64Array;
   readonly row: Float64Array;
-  /** Distance of each sample from the start, metres. */
+  /** Distance of each sample, metres, on the track's own scale (`cumulative`). */
   readonly distance: Float64Array;
 }
 
 /**
- * Samples the track at even distances, first and last points included: spacing at most `step`
- * metres, unless that would take more than `maxPoints` points, in which case it is
- * `length / (maxPoints − 1)`. A track of zero length gives its first point twice (a line needs
- * two); an empty track gives no samples.
+ * Samples the track at even distances from its first point to its last, both included: spacing at
+ * most `step` metres, unless that would take more than `maxPoints` points, in which case it is
+ * `length / (maxPoints − 1)`. Distances run from `cumulative[0]`, which need not be 0: a trimmed
+ * track (the poster's "Hide start and end", a baked scene's drawn route) keeps its distances from
+ * the run's real start. A track of zero length gives its first point twice (a line needs two); an
+ * empty track gives no samples.
  */
 export function resampleTrack(
   track: RouteTrack,
@@ -222,16 +224,17 @@ export function resampleTrack(
   if (n === 0) {
     return { col: new Float64Array(0), row: new Float64Array(0), distance: new Float64Array(0) };
   }
-  const total = trackLength(track);
-  const count = Math.max(2, Math.min(Math.max(2, maxPoints), Math.ceil(total / step) + 1));
+  const { cumulative } = track;
+  const first = cumulative[0] ?? 0;
+  const length = Math.max(0, trackLength(track) - first);
+  const count = Math.max(2, Math.min(Math.max(2, maxPoints), Math.ceil(length / step) + 1));
   const col = new Float64Array(count);
   const row = new Float64Array(count);
   const distance = new Float64Array(count);
-  const { cumulative } = track;
   // One forward walk over the recorded points: the samples are in order.
   let i = 0;
   for (let k = 0; k < count; k++) {
-    const d = (total * k) / (count - 1);
+    const d = first + (length * k) / (count - 1);
     while (i < n - 2 && (cumulative[i + 1] ?? 0) <= d) i++;
     const d0 = cumulative[i] ?? 0;
     const d1 = cumulative[Math.min(i + 1, n - 1)] ?? d0;

@@ -29,7 +29,7 @@
  */
 import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
 import { sampleBilinear } from '../lib/terrarium';
-import type { GridTrack, TerrainGrid } from './grid';
+import type { GridMarkers, GridTrack, TerrainGrid } from './grid';
 import { gridToLocal, modelBounds } from './mesh';
 import { routeMarkerIndices, type RouteMarkerIndices } from './routeRules';
 import {
@@ -297,7 +297,13 @@ export interface MarkerLayerOptions {
 
 export interface MarkerLayer {
   readonly group: Group;
-  readonly indices: RouteMarkerIndices;
+  /**
+   * The markers' indices in the track (`routeMarkerIndices`), or null when the track brings its
+   * own marker positions (`track.markers`, a baked scene's stored markers).
+   */
+  readonly indices: RouteMarkerIndices | null;
+  /** Where the fixed markers stand, grid coordinates (finish and summit null when absent). */
+  readonly positions: GridMarkers;
   /** The sprite for `kind`, or null when this route has none (finish on a loop). */
   sprite(kind: TerrainMarkerKind): Sprite | null;
   /**
@@ -324,13 +330,34 @@ export interface MarkerLayer {
   dispose(): void;
 }
 
+/**
+ * Where the fixed markers of `track` stand: its own `markers` when it brings them (a baked scene's,
+ * stored exactly), else the points `routeMarkerIndices` picks.
+ */
+export function markerPositions(
+  track: RouteTrack & Pick<GridTrack, 'ele' | 'loop' | 'markers'>,
+  grid: TerrainGrid,
+): { indices: RouteMarkerIndices | null; positions: GridMarkers } {
+  if (track.markers) return { indices: null, positions: track.markers };
+  const indices = routeMarkerIndices(track, grid);
+  const at = (index: number) => ({ col: track.col[index] ?? 0, row: track.row[index] ?? 0 });
+  return {
+    indices,
+    positions: {
+      start: at(indices.start),
+      finish: indices.finish === null ? null : at(indices.finish),
+      summit: indices.summit === null ? null : at(indices.summit),
+    },
+  };
+}
+
 /** Start (and finish), summit and scrub markers for `track` (in `grid`'s sample coordinates). */
 export function createMarkerLayer(
   grid: TerrainGrid,
-  track: RouteTrack & Pick<GridTrack, 'ele' | 'loop'>,
+  track: RouteTrack & Pick<GridTrack, 'ele' | 'loop' | 'markers'>,
   { palette = APP_ROUTE_PALETTE, exaggeration = 1, lift = DEFAULT_LIFT_M }: MarkerLayerOptions = {},
 ): MarkerLayer {
-  const indices = routeMarkerIndices(track, grid);
+  const { indices, positions } = markerPositions(track, grid);
   const group = new Group();
   group.name = 'marker-layer';
   const markers = new Map<TerrainMarkerKind, MarkerSprite>();
@@ -350,22 +377,23 @@ export function createMarkerLayer(
     marker.base.copy(gridToLocal(grid, col, row, 1, lift));
     marker.sprite.position.set(marker.base.x, marker.base.y * currentExaggeration, marker.base.z);
   };
-  const add = (kind: TerrainMarkerKind, index: number | null) => {
+  const add = (kind: TerrainMarkerKind, at: GridMarkers['start'] | null) => {
     const marker = createMarkerSprite(kind, palette);
     markers.set(kind, marker);
     group.add(marker.sprite);
-    if (index !== null) place(marker, track.col[index] ?? 0, track.row[index] ?? 0);
+    if (at !== null) place(marker, at.col, at.row);
     return marker;
   };
-  add('start', indices.start);
-  if (indices.finish !== null) add('finish', indices.finish);
-  if (indices.summit !== null) add('summit', indices.summit);
+  add('start', positions.start);
+  if (positions.finish !== null) add('finish', positions.finish);
+  if (positions.summit !== null) add('summit', positions.summit);
   const scrub = add('scrub', null);
   scrub.sprite.visible = false;
 
   return {
     group,
     indices,
+    positions,
     sprite: (kind) => markers.get(kind)?.sprite ?? null,
     fixedMarkers: () =>
       [...markers.values()]

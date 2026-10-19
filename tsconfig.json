@@ -12,6 +12,9 @@
     },
     {
       "path": "./worker"
+    },
+    {
+      "path": "./e2e/library-host"
     }
   ]
 }

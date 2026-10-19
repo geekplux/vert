@@ -701,5 +701,27 @@ installs `three` from npm.
   Wallis and Futuna, the Aleutians east of 180°, eastern Chukotka); row 0 needs latitude above 84.4°,
   where there is no land. A leak there would need an encoder bug writing such a pair into a legal
   value of a defined field, which the decoded-object scan also covers.
+- **The library's `TerrainView` draws scenes only.** `dist-lib` exports the scene view under the
+  name `TerrainView`; the app's union component (`heightfield` + `track`, or `scene`) stays app-side,
+  because its heightfield half reaches `gridTrackFromRun`, the tile loader and `lib/geo`, which a host
+  could not use anyway. The bundle contains no network code and no geodesy (a test greps it).
+- **Stored markers are drawn as stored.** The scene's ○ / ◉ / ▲ positions come from the bake (summit
+  on the original track's highest point); recomputing them on the 10 m-resampled route could move
+  the summit, so `GridTrack.markers` carries them through.
+- **Distances stay true on a trimmed route.** The profile plots the drawn stretch with an `origin`
+  (its first distance): ticks, slider range and readouts are metres from the run's real start ("km
+  0.2" at a 200 m trim), so a host's time ↔ distance mapping needs no offset.
+- **A small, stable public surface.** The library's types are its own (`src/vert-lib/types.ts`):
+  the handle is `rotateBy`, `resetView`, `requestRender`, `focus`, `camera` (no `stage`); only the
+  declarations the entry reaches ship, with `.js` specifiers (bundler, node16 and nodenext hosts);
+  `createRenderer` and `onRenderFrame` are documented as testing and instrumentation aids.
+- **Tokens scope to a wrapper.** The terrain reads its palette from its own container, as the
+  profile's CSS inherits from its ancestors, so a host sets Vert's custom properties once on a
+  wrapper and both follow; `palette` / `routePalette` props still win. Every property has style A's
+  value as its fallback, which suits a light page; a dark page must set them (`dist-lib/README.md`).
+  The app is pixel-identical (tokens on `:root`).
+- **`resampleTrack` starts at the track's first distance.** A trimmed track (poster hide-ends, every
+  scene) used to spend ~20 samples repeating its first point; poster A at hide-ends 200 now differs
+  by 54–108 px of route-edge antialiasing, everything else by 0 px.
 - **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
   pin and report what it vendored.

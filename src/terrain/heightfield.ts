@@ -15,6 +15,7 @@ import {
   type Bounds,
   type TileCoord,
 } from '../lib/geo';
+import { smoothSample } from '../lib/smoothSample';
 import { removeSpikes, sampleBilinear, spikeThreshold } from '../lib/terrarium';
 import { gridElevation, type TerrainGrid } from './grid';
 import {
@@ -37,6 +38,11 @@ export interface Heightfield extends TerrainGrid {
   readonly bounds: Bounds;
   /** Tiles that could not be loaded; their area was filled from neighbouring tiles. */
   readonly failedTiles: readonly TileCoord[];
+  /**
+   * `'smooth'` when the grid was sampled with `sampling: 'smooth'` (no trace of the tiles' pixel
+   * pitch: what a Vert scene requires); absent for the default bilinear sampling.
+   */
+  readonly sampling?: 'smooth';
 }
 
 /** Fraction of the track bbox's width and height added to each side by default. */
@@ -69,7 +75,26 @@ export interface BuildHeightfieldOptions {
   signal?: AbortSignal;
   /** Tile source; defaults to the cached same-origin {@link defaultFetchTile}. */
   fetchTile?: (coord: TileCoord, options: { signal?: AbortSignal }) => Promise<TileElevations>;
+  /**
+   * How the grid is sampled from the tiles. `'bilinear'` (the default, what the app draws): exact
+   * at the tiles' pixels, sharp. `'smooth'`: a Gaussian low-pass of {@link SMOOTH_SIGMA_EQUATOR_PX}
+   * equatorial pixels or {@link SMOOTH_SIGMA_PER_SPACING} of the grid spacing, whichever is wider
+   * (`smoothSample`), which leaves no trace of the tiles' pixel pitch in the grid; Vert scenes use
+   * it, since that pitch and the zoom would give the latitude (docs/SCENE.md).
+   */
+  sampling?: 'bilinear' | 'smooth';
 }
+
+/**
+ * `sampling: 'smooth'`: the narrowest Gaussian (standard deviation), in **equatorial** tile pixels
+ * of the grid's zoom (2π · 6,378,137 m / (256 · 2^zoom)), so at least this many real pixels at any
+ * latitude. 1 real pixel still leaves a measurable pixel-pitch ripple on pixel-noise tiles; 1.5
+ * leaves none (smoothSample.ts). Measured in equatorial pixels so the width, readable from the
+ * grid's spectrum, says nothing the zoom and the spacing do not.
+ */
+export const SMOOTH_SIGMA_EQUATOR_PX = 1.5;
+/** `sampling: 'smooth'`: the Gaussian's standard deviation as a fraction of the grid spacing. */
+export const SMOOTH_SIGMA_PER_SPACING = 0.5;
 
 /** Why no tile loaded: see {@link HeightfieldError}. */
 export type HeightfieldErrorKind = 'network' | 'decode' | 'unserved';
@@ -301,6 +326,7 @@ export async function buildHeightfield(
     concurrency = 6,
     signal,
     fetchTile = defaultFetchTile,
+    sampling = 'bilinear',
   }: BuildHeightfieldOptions = {},
 ): Promise<Heightfield> {
   signal?.throwIfAborted();
@@ -382,18 +408,60 @@ export async function buildHeightfield(
   const mosaicRows = rows * TILE_SIZE;
   let min = Infinity;
   let max = -Infinity;
-  for (let j = 0; j < height; j++) {
-    const wy = nw.y + (spanY * j) / (height - 1);
-    // Mosaic pixel coordinates: integer values are pixel centres (hence the −0.5).
-    const fy = (wy * n - first.y) * TILE_SIZE - 0.5;
-    for (let i = 0; i < width; i++) {
-      const wx = nw.x + (spanX * i) / (width - 1);
-      const fx = (wx * n - first.x) * TILE_SIZE - 0.5;
-      const index = j * width + i;
-      elevations[index] = sampleBilinear(mosaic, stride, mosaicRows, fx, fy);
-      const value = elevations[index] ?? NaN; // the stored float32, so min/max match the grid
+  if (sampling === 'smooth') {
+    // Mosaic pixel coordinates of the grid's columns and rows (integer = pixel centre).
+    const xs = Float64Array.from(
+      { length: width },
+      (_, i) => ((nw.x + (spanX * i) / (width - 1)) * n - first.x) * TILE_SIZE - 0.5,
+    );
+    const ys = Float64Array.from(
+      { length: height },
+      (_, j) => ((nw.y + (spanY * j) / (height - 1)) * n - first.y) * TILE_SIZE - 0.5,
+    );
+    // The kernel's width in grid samples comes from values the grid publishes anyway (zoom and
+    // spacing), never from the latitude: the larger of SMOOTH_SIGMA_EQUATOR_PX equatorial pixels
+    // of this zoom (≥ that many real pixels, which are smaller by cos(latitude)) and
+    // SMOOTH_SIGMA_PER_SPACING samples. A width tied to the real pixel would be readable from
+    // the grid's spectrum and give the latitude back.
+    const centre = worldToLonLat(0, (nw.y + se.y) / 2).lat;
+    const perWorldUnit = 2 * Math.PI * MERCATOR_RADIUS_M * Math.cos((centre * Math.PI) / 180);
+    const equatorPixel = (2 * Math.PI * MERCATOR_RADIUS_M) / (TILE_SIZE * n);
+    const sigmaPx = (span: number, samples: number, positions: Float64Array) => {
+      const spacing = (span / (samples - 1)) * perWorldUnit;
+      const inSamples = Math.max(
+        (SMOOTH_SIGMA_EQUATOR_PX * equatorPixel) / spacing,
+        SMOOTH_SIGMA_PER_SPACING,
+      );
+      return (inSamples * ((positions.at(-1) ?? 0) - (positions[0] ?? 0))) / (samples - 1);
+    };
+    const smoothed = smoothSample(
+      mosaic,
+      stride,
+      mosaicRows,
+      xs,
+      ys,
+      sigmaPx(spanX, width, xs),
+      sigmaPx(spanY, height, ys),
+    );
+    elevations.set(smoothed);
+    for (const value of elevations) {
       if (value < min) min = value;
       if (value > max) max = value;
+    }
+  } else {
+    for (let j = 0; j < height; j++) {
+      const wy = nw.y + (spanY * j) / (height - 1);
+      // Mosaic pixel coordinates: integer values are pixel centres (hence the −0.5).
+      const fy = (wy * n - first.y) * TILE_SIZE - 0.5;
+      for (let i = 0; i < width; i++) {
+        const wx = nw.x + (spanX * i) / (width - 1);
+        const fx = (wx * n - first.x) * TILE_SIZE - 0.5;
+        const index = j * width + i;
+        elevations[index] = sampleBilinear(mosaic, stride, mosaicRows, fx, fy);
+        const value = elevations[index] ?? NaN; // the stored float32, so min/max match the grid
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
     }
   }
 
@@ -413,6 +481,7 @@ export async function buildHeightfield(
       y: (spanY / (height - 1)) * metresPerWorldUnit,
     },
     failedTiles,
+    ...(sampling === 'smooth' ? { sampling } : {}),
   };
 }
 

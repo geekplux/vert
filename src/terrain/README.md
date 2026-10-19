@@ -34,6 +34,9 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   terrain-filled elevations; gridTrack.ts for the route). Across the antimeridian the bounds run
   past ±180 (lib/geo), the mosaic's columns stay contiguous and each tile is fetched as `wrapTile(tile)`, so requests keep
   x in [0, 2^z). Latitudes are clamped to ±85 (inside the Mercator square), a minimum span apart.
+  The grid is sampled bilinearly (the default, the app's grids); `sampling: 'smooth'` samples it
+  with a Gaussian low-pass instead (lib/smoothSample.ts), which leaves no trace of the tiles' pixel
+  pitch: Vert scenes require it (docs/SCENE.md, "No latitude from the grid").
 - `grid.ts` (no three.js, no lat/lon): `TerrainGrid`, `GridTrack`, `gridElevation` (bilinear, the
   maths `elevationAt` uses, so values match bit for bit), `gridDistance` (metres between grid
   positions, at the grid's spacing: exact only at the grid's centre latitude, so never used to
@@ -42,6 +45,8 @@ made for: a new grid brings a new one (`show(grid, { track })`).
   exactly where `gridPosition` puts it, `cumulative` and `ele` passed through (same arrays), and
   `loop` from `isLoop` (lib/loop.ts), the function the View's legend and the terrain's accessible
   name use, so the ○ / ◉ markers and the words always agree.
+- `routeRules.ts` (no three.js): `ROUTE_STEP_M`, `MAX_ROUTE_POINTS` and `routeMarkerIndices`,
+  shared by the renderer and the scene bake; `route.ts` and `markers.ts` re-export them.
 - `mesh.ts`: `createTerrainMesh(grid, options)` builds the grid (`width × height` vertices,
   plus a skirt) in a local frame: x east, y up, z south, origin at the grid
   centre and lowest point, 1 unit = the longer horizontal side, true metres vertically. The style A

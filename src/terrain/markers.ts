@@ -28,10 +28,10 @@
  * hidden marker to {@link OCCLUDED_OPACITY}: still there, plainly behind something.
  */
 import { CanvasTexture, Group, SRGBColorSpace, Sprite, SpriteMaterial, Vector3 } from 'three';
-import { hasSummit } from '../lib/summit';
 import { sampleBilinear } from '../lib/terrarium';
-import { gridElevation, type GridTrack, type TerrainGrid } from './grid';
+import type { GridTrack, TerrainGrid } from './grid';
 import { gridToLocal, modelBounds } from './mesh';
+import { routeMarkerIndices, type RouteMarkerIndices } from './routeRules';
 import {
   APP_ROUTE_PALETTE,
   DEFAULT_LIFT_M,
@@ -39,6 +39,8 @@ import {
   type RoutePalette,
   type RouteTrack,
 } from './route';
+
+export { routeMarkerIndices, type RouteMarkerIndices } from './routeRules';
 
 export type TerrainMarkerKind = 'start' | 'finish' | 'summit' | 'scrub';
 
@@ -77,52 +79,6 @@ const RENDER_ORDER: Record<TerrainMarkerKind, number> = {
   summit: 4,
   scrub: 5,
 };
-
-/** Indices of the route's markers in the track. */
-export interface RouteMarkerIndices {
-  readonly start: number;
-  /** Null for a loop (the start marker stands for both). */
-  readonly finish: number | null;
-  /** Null when the high point is no summit (`hasSummit`: under 10 m above the lowest point). */
-  readonly summit: number | null;
-}
-
-/**
- * Where the markers go: start at the first point, finish at the last unless the route is a loop
- * (`track.loop`, decided with the legend's rule; nothing is measured here),
- * summit at the highest point (the track's elevations as the stats use them, so it matches the
- * high point shown in the aside; the terrain's elevations when the file has none), and only when
- * it stands out (`hasSummit`, the same rule as the legend and the posters).
- */
-export function routeMarkerIndices(
-  track: Pick<GridTrack, 'col' | 'row' | 'ele' | 'loop'>,
-  grid: TerrainGrid,
-): RouteMarkerIndices {
-  const n = track.col.length;
-  if (n === 0) throw new RangeError('The track has no points');
-  const last = n - 1;
-  const elevation = (i: number): number => {
-    const recorded = track.ele?.[i];
-    if (recorded !== undefined && Number.isFinite(recorded)) return recorded;
-    return gridElevation(grid, track.col[i] ?? 0, track.row[i] ?? 0);
-  };
-  let summit = 0;
-  let highest = -Infinity;
-  let lowest = Infinity;
-  for (let i = 0; i < n; i++) {
-    const e = elevation(i);
-    if (e > highest) {
-      highest = e;
-      summit = i;
-    }
-    if (e < lowest) lowest = e;
-  }
-  return {
-    start: 0,
-    finish: n > 1 && !track.loop ? last : null,
-    summit: hasSummit(highest, lowest) ? summit : null,
-  };
-}
 
 /**
  * True when the terrain hides `point` (local frame, at `exaggeration`) from `eye`: some sample on

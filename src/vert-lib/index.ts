@@ -42,6 +42,9 @@ export type {
   SceneSummary,
 } from '../scene/types';
 
+// Time ↔ distance on the drawn route: a host's time-based chart drives the scrub, and follows it.
+export { metresAtTime, sceneTimeRange, timeAtMetres, type SceneTimeRange } from '../scene/time';
+
 // What the host shows alongside: the build it vendored, and the credit for the elevation data.
 export { VERT_LIB_VERSION } from './version';
 export { TERRAIN_ATTRIBUTION, TERRAIN_ATTRIBUTION_LINK } from '../terrain/attribution';

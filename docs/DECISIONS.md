@@ -723,5 +723,23 @@ installs `three` from npm.
 - **`resampleTrack` starts at the track's first distance.** A trimmed track (poster hide-ends, every
   scene) used to spend ~20 samples repeating its first point; poster A at hide-ends 200 now differs
   by 54–108 px of route-edge antialiasing, everything else by 0 px.
+- **Scrub sync: the profile reports, the terrain follows.** The library's `ElevationProfile` calls
+  `onScrub(metres)` on every user move (press, drag, slider keys) and `onScrub(null)` on Escape while
+  there is a position; host changes of `scrub` or `scene` never call it. `TerrainView` has no scrub
+  input of its own (drag and arrow keys orbit); it shows the host's `scrub` and hides the marker for
+  `null`. The profile is controlled when `scrub` is given (`null` = no position; the slider keeps
+  `aria-valuenow` at the drawn start with `aria-valuetext` "No position selected") and uncontrolled
+  otherwise (it starts at no position again for each new scene).
+- **Escape is only taken when it can clear something**: with a position, on a profile whose clearing
+  can show (uncontrolled, or with `onScrub`); then `preventDefault()` only, so a host's own handlers
+  check `event.defaultPrevented` and a surrounding `<dialog>` stays open on that press. A read-only
+  profile leaves Escape to the page.
+- **Time ↔ distance outside the drawn stretch is `null`, not clamped**: `metresAtTime` /
+  `timeAtMetres` return `null` in the trimmed ends (and without times, for non-finite input or
+  disordered arrays), so a host hides the scrub rather than parking it where the runner was not;
+  `sceneTimeRange` tells a heart-rate chart which stretch can drive it.
+- **No version bump for the `onScrub` type** (`(metres: number | null) => void`; a
+  `useState<number>` setter no longer fits): nothing has been vendored yet, so 0.1.0 is the whole
+  phase.
 - **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
   pin and report what it vendored.

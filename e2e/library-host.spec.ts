@@ -66,7 +66,7 @@ test.beforeAll(async () => {
 });
 
 /** Serves the host page under /library-host/ (nothing else of the app is involved). */
-async function openHost(page: Page) {
+async function serveHost(page: Page) {
   await page.route(`**${BASE}**`, async (route) => {
     const name = new URL(route.request().url()).pathname.slice(BASE.length) || 'index.html';
     const file = site.get(name);
@@ -76,6 +76,11 @@ async function openHost(page: Page) {
     }
     await route.fulfill({ status: 200, contentType: file.type, body: Buffer.from(file.body) });
   });
+}
+
+/** Opens the host page and waits for the terrain to settle. */
+async function openHost(page: Page) {
+  await serveHost(page);
   await page.goto(BASE);
   await expect(page.locator('canvas[role="img"][data-visible]')).toBeAttached({ timeout: 30_000 });
   // The canvas fades in (and the intro moves the camera): let both finish.
@@ -158,4 +163,40 @@ test('the view and the slider work by keyboard, with the focus ring in --route',
   const end = Number(await slider.getAttribute('aria-valuenow'));
   expect(end).toBeGreaterThan(20_000);
   await expect(slider).toHaveAttribute('aria-valuetext', /^km 21\.\d, \d+ m$/);
+});
+
+test('Escape in a dialog: a read-only profile leaves it to the dialog, which closes', async ({
+  page,
+}) => {
+  await serveHost(page);
+  await page.goto(`${BASE}#dialog-read-only`);
+  const dialog = page.getByRole('dialog', { name: 'Elevation of the run' });
+  const slider = page.getByRole('slider', { name: 'Elevation profile' });
+  await expect(dialog).toBeVisible();
+  await expect(slider).toHaveAttribute('aria-valuenow', '5000');
+  await slider.focus();
+  await expect(slider).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('dialog')).toHaveJSProperty('open', false);
+});
+
+test('Escape in a dialog: a synced profile clears first, then the dialog closes', async ({
+  page,
+}) => {
+  await serveHost(page);
+  await page.goto(`${BASE}#dialog-synced`);
+  const dialog = page.getByRole('dialog', { name: 'Elevation of the run' });
+  const slider = page.getByRole('slider', { name: 'Elevation profile' });
+  await expect(dialog).toBeVisible();
+  await expect(slider).toHaveAttribute('aria-valuenow', '5000');
+  await slider.focus();
+  await expect(slider).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(slider).toHaveAttribute('aria-valuetext', 'No position selected');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('dialog')).toHaveJSProperty('open', true);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('dialog')).toHaveJSProperty('open', false);
 });

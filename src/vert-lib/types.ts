@@ -121,8 +121,9 @@ export interface TerrainViewProps {
   className?: string;
   /**
    * Scrub position, metres from the run's real start (the scene's distances, as
-   * `ElevationProfile` reports them); moves the scrub marker without rebuilding. Null or absent
-   * hides it; values off the drawn route clamp to its ends.
+   * `ElevationProfile` reports them); moves the scrub marker without rebuilding. Null, absent or
+   * not finite hides it; values off the drawn route clamp to its ends. The view has no scrub input
+   * of its own (its drags and keys orbit): the user scrubs in `ElevationProfile` (`onScrub`).
    */
   scrub?: number | null;
   /** Terrain colours, over the tokens. Read once, when the view mounts. */
@@ -149,17 +150,43 @@ export type Units = 'metric' | 'imperial';
 export interface ElevationProfileProps {
   /** The decoded scene: its drawn route's elevations and its climbs are drawn. */
   scene: Scene;
-  /** Scrub position, metres from the run's real start (the same metres as `TerrainView`'s). */
-  scrub: number;
-  /** Called with the new scrub position, same metres, while dragging and on keys. */
-  onScrub: (d: number) => void;
+  /**
+   * Scrub position, metres from the run's real start (the same metres as `TerrainView`'s), or
+   * `null` for none: no scrub line or dot (pass the same null to `TerrainView` to hide its marker).
+   * Values off the drawn route are shown at its nearer end; a non-finite number counts as null.
+   *
+   * **Controlled** when given (null included): the host's value is what the profile shows, and a
+   * user's move only reaches the screen when the host passes the reported metres back as `scrub`.
+   * **Uncontrolled** when left out (`undefined`): the profile keeps its own position, starting at
+   * none (and back to none, unreported, when `scene` changes), and still reports every move through
+   * `onScrub`. Pick one for the component's lifetime.
+   */
+  scrub?: number | null;
+  /**
+   * Called when the user moves the scrub in the profile, with the new position in the same metres
+   * (clamped to the drawn route): on pointer press and while dragging, and on the slider's keys
+   * (arrows, Shift + arrows, PageUp / PageDown, Home / End). Called with `null` when the user
+   * presses Escape on the slider while there is a position; the profile then calls
+   * `preventDefault()` on that keydown (it does not stop it propagating: your own Escape handlers
+   * still see it, with `defaultPrevented` true, and should check that). Escape is left alone, not
+   * prevented, when there is no position, and on a controlled profile without `onScrub` (read-only),
+   * so a dialog around it still closes. A host that passes `onScrub` should handle `null`. Nothing
+   * else calls it: not the pointer leaving (the profile scrubs on press and drag, not hover, so the
+   * position stays where it was put), not blur, not a change of `scrub` or `scene` from the host.
+   * From no position the first key or press always reports, even a move to the start.
+   */
+  onScrub?: (metres: number | null) => void;
   /** Ticks and value text in km and m (default) or mi and ft. */
   units?: Units;
   /** Plot height, px (default 140). */
   height?: number;
   /** The slider's accessible name (default "Elevation profile"). */
   label?: string;
-  /** The slider's value text for a distance and elevation (default "km 12.2, 640 m"). */
+  /**
+   * The slider's value text for a distance and elevation (default "km 12.2, 640 m"). With no
+   * position the value text is "No position selected" (and `aria-valuenow`, which a slider must
+   * have, the drawn route's start, where the first key moves from).
+   */
   valueText?: (d: number, ele: number) => string;
   className?: string;
 }

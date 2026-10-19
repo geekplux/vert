@@ -14,14 +14,19 @@ vi.mock('../terrain/TerrainView', () => import('../test/fakeTerrainView'));
 
 const h1 = (name: string) => screen.getByRole('heading', { level: 1, name });
 
-describe('Page', () => {
+// Under the full suite's load a run's first render can outlast Testing Library's 1 s default (seen
+// failing): wait up to 10 s for it, and give these tests 30 s. What they assert is unchanged.
+const FIND = { timeout: 10_000 };
+const SLOW = { timeout: 30_000 };
+
+describe('Page', SLOW, () => {
   it('walks Upload → View → Poster → View → Upload with one main throughout', async () => {
     render(<Page schedule={immediateSchedule} />);
     expect(screen.getByRole('button', { name: 'About' })).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND),
     ).toBeDefined();
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.getByRole('banner').textContent).toContain('TRAIL RUNS AS TERRAIN');
@@ -58,7 +63,7 @@ describe('Page', () => {
       await Promise.resolve();
     });
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }),
+      await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND),
     ).toBeDefined();
   });
 
@@ -86,7 +91,7 @@ describe('Page', () => {
   it('keeps the units preference: switched in View, shown on the sample chip after New file', async () => {
     render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND);
     fireEvent.click(screen.getByRole('radio', { name: 'mi' }));
     fireEvent.click(screen.getByRole('button', { name: 'New file' }));
     expect(
@@ -97,7 +102,7 @@ describe('Page', () => {
   it('has no axe violations in the View', async () => {
     const { container } = render(<Page schedule={immediateSchedule} />);
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND);
     await expectNoAxeViolations(container);
   });
 });
@@ -128,7 +133,7 @@ function recordingLoader() {
   return { sources, loadRun };
 }
 
-describe('Page: dropping a file on View and Poster mode', () => {
+describe('Page: dropping a file on View and Poster mode', SLOW, () => {
   let uninstall: () => void;
   beforeEach(() => {
     uninstall = installDialogPolyfill();
@@ -140,7 +145,7 @@ describe('Page: dropping a file on View and Poster mode', () => {
   async function openSample(loadRun: LoadRun) {
     const view = render(<Page loadRun={loadRun} />);
     fireEvent.click(screen.getByRole('button', { name: 'Try the sample run' }));
-    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' });
+    await screen.findByRole('heading', { level: 1, name: 'Coosa Backcountry Trail' }, FIND);
     return view;
   }
 
@@ -174,7 +179,9 @@ describe('Page: dropping a file on View and Poster mode', () => {
     expect(cancelled).toBe(true);
     expect(screen.queryByTestId('drop-frame')).toBeNull();
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND),
+    ).toBeDefined();
     expect(sources).toEqual(['sample', 'harbour.gpx']);
   });
 
@@ -186,7 +193,9 @@ describe('Page: dropping a file on View and Poster mode', () => {
     dragFiles(document.body);
     expect(screen.getByText('Drop to open a new run')).toBeDefined();
     dropFiles(document.body, [gpxFile('harbour.gpx')]);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND),
+    ).toBeDefined();
     expect(sources).toEqual(['sample', 'harbour.gpx']);
   });
 
@@ -194,7 +203,7 @@ describe('Page: dropping a file on View and Poster mode', () => {
     const { sources, loadRun } = recordingLoader();
     await openSample(loadRun);
     dropFiles(screen.getByRole('main'), [gpxFile('harbour.gpx')]);
-    await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' });
+    await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND);
 
     fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'New file' }));
     expect(h1('Your run, as terrain.')).toBeDefined();
@@ -248,7 +257,9 @@ describe('Page: dropping a file on View and Poster mode', () => {
     expect(alerts[0]?.textContent).toBe("That's a .tcx file. Vert reads .gpx files in v1.");
 
     dropFiles(screen.getByRole('main'), [gpxFile('harbour.gpx')]);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' })).toBeDefined();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Harbour Loop' }, FIND),
+    ).toBeDefined();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(sources).toEqual(['sample', 'harbour.gpx']);
   });
@@ -280,8 +291,13 @@ describe('Page: dropping a file on View and Poster mode', () => {
     dropFiles(screen.getByRole('main'), [gpxFile('empty.gpx')]);
     expect(h1('Your run, as terrain.')).toBeDefined();
     expect(
-      (await within(screen.getByRole('group', { name: 'Upload a GPX file' })).findByRole('alert'))
-        .textContent,
+      (
+        await within(screen.getByRole('group', { name: 'Upload a GPX file' })).findByRole(
+          'alert',
+          {},
+          FIND,
+        )
+      ).textContent,
     ).toBe('This file has no track points.');
   });
 

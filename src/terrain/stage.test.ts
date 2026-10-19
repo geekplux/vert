@@ -40,7 +40,7 @@ import {
 } from './stage';
 import { LONG_ROUTE_EXTENT_M, LONG_ROUTE_POLAR } from './camera';
 import { markerExtent, type TerrainMarkerKind } from './markers';
-import { makeTrack } from './testing';
+import { gridTrackOn } from './testing';
 import type { RouteLayer } from './route';
 
 const DEG = Math.PI / 180;
@@ -956,7 +956,7 @@ describe('TerrainStage zoom while turning', () => {
     stage.setOverlays(rects);
     stage.show(hills(), { exaggeration: 3, view: 'oblique', reducedMotion: true });
     stage.setTrack(
-      makeTrack([
+      gridTrackOn(hills(), [
         [34.7001, -83.9999],
         [34.71, -83.98],
         [34.7199, -83.9601],
@@ -1169,7 +1169,8 @@ describe('TerrainStage route and markers', () => {
     vi.restoreAllMocks();
   });
 
-  const track = makeTrack(
+  const track = gridTrackOn(
+    hills(),
     [
       [34.705, -83.99],
       [34.71, -83.985],
@@ -1228,7 +1229,8 @@ describe('TerrainStage route and markers', () => {
     'keeps the markers and the scrub marker’s room inside the fit region (azimuth %s°)',
     (degrees) => {
       // Summit on the high hill near the north-east corner.
-      const summitTrack = makeTrack(
+      const summitTrack = gridTrackOn(
+        hills(),
         [
           [34.705, -83.995],
           [34.712, -83.975],
@@ -1276,7 +1278,8 @@ describe('TerrainStage route and markers', () => {
     'keeps the ▲ summit and the ○ start 12 px clear of the legend chip and buttons (%s box)',
     (_name, width, height, rects) => {
       // Summit on the high hill near the north-east corner, which turns past the top-left chip.
-      const summitTrack = makeTrack(
+      const summitTrack = gridTrackOn(
+        hills(),
         [
           [34.705, -83.995],
           [34.712, -83.975],

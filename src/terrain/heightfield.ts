@@ -16,6 +16,7 @@ import {
   type TileCoord,
 } from '../lib/geo';
 import { removeSpikes, sampleBilinear, spikeThreshold } from '../lib/terrarium';
+import { gridElevation, type TerrainGrid } from './grid';
 import {
   TILE_SIZE,
   TileDecodeError,
@@ -25,23 +26,15 @@ import {
   type TileElevations,
 } from './tiles';
 
+// Lives in grid.ts (it needs no bounds); re-exported so heightfield callers keep one import.
+export { groundExtent } from './grid';
+
 /**
- * A regular grid of elevations. Samples sit on grid nodes: column 0 is the west edge of `bounds`,
- * column `width − 1` the east edge, row 0 the north edge, row `height − 1` the south edge, evenly
- * spaced in Web Mercator x and y (so very nearly square on the ground).
+ * The height grid for an area: a {@link TerrainGrid} sampled over `bounds`, evenly spaced in Web
+ * Mercator x and y (column 0 is the west edge of `bounds`, row 0 the north edge).
  */
-export interface Heightfield {
+export interface Heightfield extends TerrainGrid {
   readonly bounds: Bounds;
-  /** Zoom of the tiles the grid was sampled from. */
-  readonly zoom: number;
-  readonly width: number;
-  readonly height: number;
-  /** Metres, row-major from the north-west corner, `width * height` values. */
-  readonly elevations: Float32Array;
-  readonly min: number;
-  readonly max: number;
-  /** Ground distance between neighbouring samples at the grid's centre latitude. */
-  readonly metresPerSample: { readonly x: number; readonly y: number };
   /** Tiles that could not be loaded; their area was filled from neighbouring tiles. */
   readonly failedTiles: readonly TileCoord[];
 }
@@ -423,10 +416,24 @@ export async function buildHeightfield(
   };
 }
 
-/** Ground the grid spans on its longer side, metres (at its centre latitude). */
-export function groundExtent(heightfield: Heightfield): number {
-  const { width, height, metresPerSample } = heightfield;
-  return Math.max(metresPerSample.x * (width - 1), metresPerSample.y * (height - 1));
+/** Fractional grid position (column, row) of a lon/lat: see {@link gridPosition}. */
+export type GridProjection = (lon: number, lat: number) => { x: number; y: number };
+
+/**
+ * Projects lon/lat onto `heightfield`'s grid, with the Mercator corners computed once for many
+ * points (gridTrack.ts).
+ */
+export function gridProjection(heightfield: Heightfield): GridProjection {
+  const { bounds, width, height } = heightfield;
+  const nw = lonLatToWorld(bounds.west, bounds.north);
+  const se = lonLatToWorld(bounds.east, bounds.south);
+  return (lon, lat) => {
+    const p = lonLatToWorld(lon, lat);
+    return {
+      x: ((p.x - nw.x) / (se.x - nw.x)) * (width - 1),
+      y: ((p.y - nw.y) / (se.y - nw.y)) * (height - 1),
+    };
+  };
 }
 
 /**
@@ -434,18 +441,11 @@ export function groundExtent(heightfield: Heightfield): number {
  * values fall outside [0, width − 1] × [0, height − 1].
  */
 export function gridPosition(heightfield: Heightfield, lon: number, lat: number) {
-  const { bounds, width, height } = heightfield;
-  const nw = lonLatToWorld(bounds.west, bounds.north);
-  const se = lonLatToWorld(bounds.east, bounds.south);
-  const p = lonLatToWorld(lon, lat);
-  return {
-    x: ((p.x - nw.x) / (se.x - nw.x)) * (width - 1),
-    y: ((p.y - nw.y) / (se.y - nw.y)) * (height - 1),
-  };
+  return gridProjection(heightfield)(lon, lat);
 }
 
 /** Bilinear elevation at a lon/lat, in metres; positions outside the grid take its edge value. */
 export function elevationAt(heightfield: Heightfield, lon: number, lat: number): number {
   const { x, y } = gridPosition(heightfield, lon, lat);
-  return sampleBilinear(heightfield.elevations, heightfield.width, heightfield.height, x, y);
+  return gridElevation(heightfield, x, y);
 }

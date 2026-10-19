@@ -1,6 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { heightfieldToLocal, modelBounds } from './mesh';
+import { gridToLocal, modelBounds } from './mesh';
 import {
   LOOP_DISTANCE_M,
   MAX_TEXTURE_SCALE,
@@ -16,7 +16,7 @@ import {
   type TerrainMarkerKind,
 } from './markers';
 import { APP_ROUTE_PALETTE, DEFAULT_LIFT_M, pointAtDistance, trackLength } from './route';
-import { hills, makeTrack } from './testing';
+import { gridTrackOn, hills, makeGridTrack } from './testing';
 
 /** A 2D context that records the calls the marker drawing makes. */
 function recordingContext() {
@@ -62,8 +62,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const HILLS = hills();
+
 /** An out-and-back or loop over the hills, with a clear high point at index 3. */
-const LOOP = makeTrack(
+const LOOP = gridTrackOn(
+  HILLS,
   [
     [34.705, -83.99],
     [34.71, -83.985],
@@ -76,7 +79,8 @@ const LOOP = makeTrack(
   [500, 560, 700, 910, 640, 520, 501],
 );
 
-const POINT_TO_POINT = makeTrack(
+const POINT_TO_POINT = gridTrackOn(
+  HILLS,
   [
     [34.705, -83.99],
     [34.71, -83.985],
@@ -86,18 +90,37 @@ const POINT_TO_POINT = makeTrack(
   [500, 700, 950, 800],
 );
 
+/** Point `i` of a grid track. */
+function at(track: { col: Float64Array; row: Float64Array }, i: number) {
+  return { col: track.col[i] ?? NaN, row: track.row[i] ?? NaN };
+}
+
 describe('routeMarkerIndices', () => {
   it(`treats a route ending within ${String(LOOP_DISTANCE_M)} m of its start as a loop`, () => {
-    expect(routeMarkerIndices(LOOP)).toEqual({ start: 0, finish: null, summit: 3 });
+    expect(routeMarkerIndices(LOOP, HILLS)).toEqual({ start: 0, finish: null, summit: 3 });
+    // Measured on the ground with the grid's spacing: 49 m apart is a loop, 51 m is not.
+    const { x } = HILLS.metresPerSample;
+    const ends = (metres: number) =>
+      makeGridTrack(
+        HILLS,
+        [
+          [10, 40],
+          [60, 20],
+          [10 + metres / x, 40],
+        ],
+        [500, 600, 500],
+      );
+    expect(routeMarkerIndices(ends(49), HILLS).finish).toBeNull();
+    expect(routeMarkerIndices(ends(51), HILLS).finish).toBe(2);
   });
 
   it('marks start and finish apart otherwise, and the summit at the highest elevation', () => {
-    expect(routeMarkerIndices(POINT_TO_POINT)).toEqual({ start: 0, finish: 3, summit: 2 });
+    expect(routeMarkerIndices(POINT_TO_POINT, HILLS)).toEqual({ start: 0, finish: 3, summit: 2 });
   });
 
   it("uses the terrain's elevations when the file has none", () => {
     const hf = hills(); // the hill peaks at 70% across, 30% down
-    const track = makeTrack([
+    const track = gridTrackOn(hf, [
       [34.705, -83.99],
       [34.714, -83.972], // near the peak
       [34.705, -83.965],
@@ -106,7 +129,8 @@ describe('routeMarkerIndices', () => {
   });
 
   it('marks no summit on a flat route (high point under 10 m above the lowest)', () => {
-    const flat = makeTrack(
+    const flat = gridTrackOn(
+      HILLS,
       [
         [34.705, -83.99],
         [34.71, -83.985],
@@ -115,23 +139,25 @@ describe('routeMarkerIndices', () => {
       ],
       [0.4, 1.2, 0.9, 0.5],
     );
-    expect(routeMarkerIndices(flat).summit).toBeNull();
-    const nine = makeTrack(
+    expect(routeMarkerIndices(flat, HILLS).summit).toBeNull();
+    const nine = gridTrackOn(
+      HILLS,
       [
         [34.705, -83.99],
         [34.714, -83.972],
       ],
       [500, 509.9],
     );
-    expect(routeMarkerIndices(nine).summit).toBeNull();
-    const ten = makeTrack(
+    expect(routeMarkerIndices(nine, HILLS).summit).toBeNull();
+    const ten = gridTrackOn(
+      HILLS,
       [
         [34.705, -83.99],
         [34.714, -83.972],
       ],
       [500, 510],
     );
-    expect(routeMarkerIndices(ten).summit).toBe(1);
+    expect(routeMarkerIndices(ten, HILLS).summit).toBe(1);
   });
 });
 
@@ -185,7 +211,8 @@ describe('markerExtent', () => {
 
 describe('createMarkerLayer', () => {
   it('draws no ▲ for a flat route', () => {
-    const flat = makeTrack(
+    const flat = gridTrackOn(
+      HILLS,
       [
         [34.705, -83.99],
         [34.714, -83.972],
@@ -206,11 +233,14 @@ describe('createMarkerLayer', () => {
     expect(layer.sprite('finish')).toBeNull();
     const start = layer.sprite('start');
     const summit = layer.sprite('summit');
-    expect(start?.position.distanceTo(heightfieldToLocal(hf, -83.99, 34.705, 1, 2))).toBeLessThan(
-      1e-9,
-    );
+    // The first point, and the highest (index 3: -83.972, 34.714), on the terrain.
     expect(
-      summit?.position.distanceTo(heightfieldToLocal(hf, -83.972, 34.714, 1, DEFAULT_LIFT_M)),
+      start?.position.distanceTo(gridToLocal(hf, at(LOOP, 0).col, at(LOOP, 0).row, 1, 2)),
+    ).toBeLessThan(1e-9);
+    expect(
+      summit?.position.distanceTo(
+        gridToLocal(hf, at(LOOP, 3).col, at(LOOP, 3).row, 1, DEFAULT_LIFT_M),
+      ),
     ).toBeLessThan(1e-9);
     layer.dispose();
   });
@@ -222,9 +252,11 @@ describe('createMarkerLayer', () => {
     const fixed = layer.fixedMarkers();
     expect(fixed.map((m) => m.kind).sort()).toEqual(['finish', 'start', 'summit']);
     const start = fixed.find((m) => m.kind === 'start');
-    expect(start?.position.distanceTo(heightfieldToLocal(hf, -83.99, 34.705, 1, 2))).toBeLessThan(
-      1e-9,
-    );
+    expect(
+      start?.position.distanceTo(
+        gridToLocal(hf, at(POINT_TO_POINT, 0).col, at(POINT_TO_POINT, 0).row, 1, 2),
+      ),
+    ).toBeLessThan(1e-9);
     // A copy: the framing may scale it.
     start?.position.setY(99);
     expect(layer.sprite('start')?.position.y).not.toBe(99);
@@ -275,19 +307,19 @@ describe('createMarkerLayer', () => {
       const d = total * fraction;
       layer.setScrub(d);
       const point = pointAtDistance(LOOP, d);
-      const expected = heightfieldToLocal(hf, point.lon, point.lat, 1.6, DEFAULT_LIFT_M);
+      const expected = gridToLocal(hf, point.col, point.row, 1.6, DEFAULT_LIFT_M);
       expect(scrub?.visible).toBe(true);
       expect(scrub?.position.distanceTo(expected)).toBeLessThan(1e-9);
     }
     // Halfway along the first segment is halfway between its ends (on the ground plane).
     const first = LOOP.cumulative[1] ?? 0;
     layer.setScrub(first / 2);
-    const a = heightfieldToLocal(hf, -83.99, 34.705);
-    const b = heightfieldToLocal(hf, -83.985, 34.71);
+    const a = gridToLocal(hf, at(LOOP, 0).col, at(LOOP, 0).row);
+    const b = gridToLocal(hf, at(LOOP, 1).col, at(LOOP, 1).row);
     const mid = new Vector3().addVectors(a, b).multiplyScalar(0.5);
-    // (Linear in lon/lat, so a hair off the Mercator midpoint: millimetres.)
-    expect(scrub?.position.x).toBeCloseTo(mid.x, 5);
-    expect(scrub?.position.z).toBeCloseTo(mid.z, 5);
+    // Linear in grid space, as the mesh is: exactly the midpoint.
+    expect(scrub?.position.x).toBeCloseTo(mid.x, 9);
+    expect(scrub?.position.z).toBeCloseTo(mid.z, 9);
     expect(layer.sprite('scrub')).toBe(scrub);
     expect(scrub?.material).toBe(material);
     layer.setScrub(null);
@@ -360,7 +392,7 @@ describe('isOccluded', () => {
 
   it('hides a point in the lee of the hill from a low camera on the other side', () => {
     const behind = local(0.7, 0.05); // north of the peak, low ground
-    behind.y = heightfieldToLocal(hf, ...lonLatAt(0.7, 0.05), 1, 2).y;
+    behind.y = gridToLocal(hf, ...gridAt(0.7, 0.05), 1, 2).y;
     const eye = new Vector3(behind.x, 0.12, 2); // far south, low
     expect(isOccluded(hf, behind, eye, 1)).toBe(true);
     // From straight above (nearly), nothing is in the way.
@@ -368,17 +400,13 @@ describe('isOccluded', () => {
   });
 
   it('never hides a point on the summit', () => {
-    const summit = heightfieldToLocal(hf, ...lonLatAt(0.7, 0.3), 1, 2);
+    const summit = gridToLocal(hf, ...gridAt(0.7, 0.3), 1, 2);
     expect(isOccluded(hf, summit, new Vector3(0, 0.2, 2), 1)).toBe(false);
     expect(isOccluded(hf, summit, new Vector3(-2, 0.1, -1), 1)).toBe(false);
   });
 
   it('fades a hidden marker in the layer', () => {
-    const track = makeTrack([
-      [lonLatAt(0.7, 0.05)[1], lonLatAt(0.7, 0.05)[0]],
-      [lonLatAt(0.7, 0.3)[1], lonLatAt(0.7, 0.3)[0]],
-      [lonLatAt(0.3, 0.8)[1], lonLatAt(0.3, 0.8)[0]],
-    ]);
+    const track = makeGridTrack(hf, [gridAt(0.7, 0.05), gridAt(0.7, 0.3), gridAt(0.3, 0.8)]);
     const layer = createMarkerLayer(hf, track);
     const start = layer.sprite('start');
     const eye = new Vector3(start?.position.x ?? 0, 0.12, 2);
@@ -391,9 +419,8 @@ describe('isOccluded', () => {
     layer.dispose();
   });
 
-  /** Lon/lat at fractions across (west → east) and down (north → south) the fixture's bounds. */
-  function lonLatAt(fx: number, fz: number): [number, number] {
-    const { west, east, north, south } = hf.bounds;
-    return [west + (east - west) * fx, north + (south - north) * fz];
+  /** Column and row at fractions across (west → east) and down (north → south) the grid. */
+  function gridAt(fx: number, fz: number): [number, number] {
+    return [fx * (hf.width - 1), fz * (hf.height - 1)];
   }
 });

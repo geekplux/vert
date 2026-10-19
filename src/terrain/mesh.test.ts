@@ -1,6 +1,7 @@
 import { Color, PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { lonLatToWorld, worldToLonLat } from '../lib/geo';
+import { gridTrackFromRun } from './gridTrack';
 import type { Heightfield } from './heightfield';
 import {
   DEFAULT_WALL_SHADE,
@@ -11,7 +12,7 @@ import {
   edgeLevel,
   edgeLevels,
   edgePoints,
-  heightfieldToLocal,
+  gridToLocal,
   modelBounds,
   radialHull,
   readPalette,
@@ -155,6 +156,11 @@ describe('palette and uniforms', () => {
     });
   });
 
+  it('falls back to style A for every token a host lacks or leaves blank', () => {
+    expect(readPalette({ getPropertyValue: () => '' })).toEqual(STYLE_A_PALETTE);
+    expect(readPalette({ getPropertyValue: () => ' \t' })).toEqual(STYLE_A_PALETTE);
+  });
+
   it('chooses the row step for about 48 ridge lines across the longer side', () => {
     const hf = tinyHeightfield();
     expect(rowStepFor(hf)).toBe(1);
@@ -173,31 +179,54 @@ describe('palette and uniforms', () => {
   });
 });
 
-describe('heightfieldToLocal', () => {
+describe('gridToLocal', () => {
   it('maps the corners and centre of the grid onto the mesh', () => {
     const hf = tinyHeightfield();
-    const nw = lonLatOfNode(hf, 0, 0);
-    const se = lonLatOfNode(hf, 3, 2);
-    const a = heightfieldToLocal(hf, nw.lon, nw.lat);
+    const a = gridToLocal(hf, 0, 0);
     expect(a.x).toBeCloseTo(-0.5);
     expect(a.z).toBeCloseTo(-1 / 6);
     expect(a.y).toBeCloseTo(0, 4);
-    const b = heightfieldToLocal(hf, se.lon, se.lat, 2);
+    const b = gridToLocal(hf, 3, 2, 2);
     expect(b.x).toBeCloseTo(0.5);
     expect(b.z).toBeCloseTo(1 / 6);
     expect(b.y).toBeCloseTo((230 / 300) * 2, 4);
     // Grid centre (column 1.5, row 1): elevation 1000 + 15 + 100 = 1115.
-    const c = lonLatOfNode(hf, 1.5, 1);
-    const centre = heightfieldToLocal(hf, c.lon, c.lat);
+    const centre = gridToLocal(hf, 1.5, 1);
     expect(centre.x).toBeCloseTo(0);
     expect(centre.z).toBeCloseTo(0);
     expect(centre.y).toBeCloseTo(115 / 300, 4);
   });
 
+  it('places a lon/lat where the mesh has it, through gridTrackFromRun', () => {
+    const hf = tinyHeightfield();
+    const nodes: [number, number][] = [
+      [0, 0],
+      [3, 2],
+      [1.5, 1],
+    ];
+    const lonLat = nodes.map(([i, j]) => lonLatOfNode(hf, i, j));
+    const track = gridTrackFromRun(hf, {
+      lat: Float64Array.from(lonLat.map((p) => p.lat)),
+      lon: Float64Array.from(lonLat.map((p) => p.lon)),
+      cumulative: new Float64Array(3),
+      ele: null,
+    });
+    nodes.forEach(([i, j], k) => {
+      const p = gridToLocal(hf, track.col[k] ?? NaN, track.row[k] ?? NaN);
+      expect(p.distanceTo(gridToLocal(hf, i, j))).toBeLessThan(1e-9);
+    });
+  });
+
   it('lifts by true metres, scaled with the exaggeration', () => {
     const hf = tinyHeightfield();
-    const nw = lonLatOfNode(hf, 0, 0);
-    expect(heightfieldToLocal(hf, nw.lon, nw.lat, 1.5, 2).y).toBeCloseTo((2 / 300) * 1.5, 4);
+    expect(gridToLocal(hf, 0, 0, 1.5, 2).y).toBeCloseTo((2 / 300) * 1.5, 4);
+  });
+
+  it('takes the edge elevation outside the grid and extrapolates horizontally', () => {
+    const hf = tinyHeightfield();
+    const outside = gridToLocal(hf, -3, 1);
+    expect(outside.x).toBeCloseTo(-1.5); // a whole grid width west of the west edge
+    expect(outside.y).toBeCloseTo(gridToLocal(hf, 0, 1).y, 9);
   });
 });
 

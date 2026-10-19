@@ -27,6 +27,14 @@ This is the only place that owns application state and composes `components`, `t
 - Poster sizes and styles come from `src/poster/sizes.ts` and `src/poster/styles.ts`.
 - `Page.tsx`: the composition: `RunProvider`, the state machine, the header with the state's nav,
   the current state, and the About dialog. `App` renders it.
+- The wordmark goes home: in every state the header's "Vert" is a real link to `/` (`AppHeader`
+  `onHome`, accessible name "Vert, home", the first Tab stop). A plain primary click is handled in
+  the page (`isPlainClick`: button 0, no modifier key; the browser does not follow the link): from
+  View and Poster mode it goes to Upload through `newFile`, exactly as New file (a no-op while a
+  load is in flight); on Upload it changes nothing but scrolls to the top (instantly with reduced
+  motion) and focuses the h1. During an export it does nothing, as Back to the run is disabled
+  then: the link stays focusable, `aria-disabled`. Cmd/Ctrl/Shift/Alt and middle clicks are the
+  browser's (open `/` in a new tab or window).
 - `UploadState/`: the Upload state (h1, intro, Dropzone, note, and the sample preview: a button
   named by its chip). It takes `dragOver` and `dropzoneRef` from the page (see "Dropping a file").
 - Dropping a file: `useWindowFileDrop.ts`, mounted once in `Page.tsx`, listens on `window` on

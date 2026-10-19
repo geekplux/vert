@@ -55,11 +55,11 @@ Each component: `src/components/<Name>/<Name>.tsx`, `<Name>.stories.tsx`, `<Name
 | `SizePicker` | `sizes`, `value`, `onChange` | 2×2 grid of 44px-min buttons; each shows name 14/600 and "print · 5400 × 7200" in 11 mono. Selected = ink bg. |
 | `Checkbox` | `label`, `checked` | Native, `accent-color: var(--ink)`, 18px, row min-height 44. |
 | `Marker` (SVG) | `kind: "start" \| "summit" \| "scrub"` | start: circle r6 white fill, ink 2.5 stroke. summit: triangle ink fill. scrub: circle r5 route fill, white 2.5 stroke. Never distinguished by color alone. |
-| `Wordmark` | — | "VERT" 30/800/62% + optional tagline 12 mono muted. |
+| `Wordmark` | `tagline?`, `link?` (`href`, `label`, `onClick`, `disabled`) | "VERT" 30/800/62% + optional tagline 12 mono muted. With `link` the name (not the tagline) is an `<a>` drawn the same (no underline, cursor pointer), hit area 44 tall, focus ring 2px `--route` offset 2. |
 
 ## 3. The one page, four states (phase 2)
 
-Layout at 1440: header 20×40 padding, 1px rule bottom. Body = aside (300–380px, right 1px rule) + main (flex 1). At ≤ 900: aside stacks under main; at 390 everything is one column, terrain box is 4:3, profile height 100.
+Layout at 1440: header 20×40 padding, 1px rule bottom. In every state the wordmark's "Vert" links home (`href="/"`, name "Vert, home", first Tab stop): a plain click goes to Upload like New file (on Upload: scroll to top, focus the h1; during an export: nothing, like Back to the run); modified clicks open a tab. Body = aside (300–380px, right 1px rule) + main (flex 1). At ≤ 900: aside stacks under main; at 390 everything is one column, terrain box is 4:3, profile height 100.
 
 **01 Upload**: header (wordmark + tagline "DROP A GPX. GET A POSTER.", nav About / GitHub). Two columns: left = h1 "Your run, as terrain." 72/800/75%, paragraph 18 muted, Dropzone (card, error, sample line; 12 apart), note line in 12 mono ("GPX only · up to 20 MB · from Strava, Garmin, Coros, Suunto", describes the card); 24 between blocks. Right = 4:3 sample preview, a button: the sample terrain image and a "TRY THE SAMPLE RUN · 21.5 km · +1,102 m →" chip bottom-left that fills `--ink` on hover. A file can be dropped anywhere on the page: while one is dragged over it, the card shows its drag-over state and a 2px `--ink` frame is drawn 8px inside the viewport. Canvas frames `UploadV2`, `UploadStatesV2`, `UploadPhoneV2` (390 wide).
 

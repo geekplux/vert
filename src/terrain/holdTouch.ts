@@ -1,5 +1,4 @@
-/** How far one finger moves before its gesture counts as sideways, CSS px. */
-export const TOUCH_SLOP = 8;
+import { TOUCH_SLOP } from '../lib/touch';
 
 /**
  * Keeps a vertical one-finger swipe over the terrain from tilting the view, so on a phone it
@@ -10,7 +9,7 @@ export const TOUCH_SLOP = 8;
  *
  * Installed on an ancestor of the canvas, in the capture phase, it holds back (stops the
  * propagation of) each single finger's `pointermove`s until the gesture is clearly sideways (more
- * than `slop` px across, and more across than down); a gesture that goes down first stays held
+ * than {@link TOUCH_SLOP} px across, and more across than down); a gesture that goes down first stays held
  * until it ends. Everything else passes untouched: pointerdown, pointerup and pointercancel (so
  * the controls track and release the finger), every move once a second finger is down (pinch
  * zoom), and mouse and pen. OrbitControls listens for moves on the document while a pointer is
@@ -20,7 +19,7 @@ export const TOUCH_SLOP = 8;
  *
  * @returns the function that removes it.
  */
-export function holdVerticalTouch(target: EventTarget, slop = TOUCH_SLOP): () => void {
+export function holdVerticalTouch(target: EventTarget): () => void {
   const fingers = new Map<number, { x: number; y: number; pass: boolean; held: boolean }>();
   const onDown = (event: Event) => {
     const e = event as PointerEvent;
@@ -36,11 +35,11 @@ export function holdVerticalTouch(target: EventTarget, slop = TOUCH_SLOP): () =>
     if (!finger || finger.pass) return;
     const dx = Math.abs(e.clientX - finger.x);
     const dy = Math.abs(e.clientY - finger.y);
-    if (!finger.held && dx > slop && dx > dy) {
+    if (!finger.held && dx > TOUCH_SLOP && dx > dy) {
       finger.pass = true;
       return;
     }
-    if (dy > slop && dy >= dx) finger.held = true;
+    if (dy > TOUCH_SLOP && dy >= dx) finger.held = true;
     e.stopPropagation();
   };
   const onEnd = (event: Event) => {

@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react';
-import { TOUCH_SLOP } from '../../terrain/holdTouch';
+import { TOUCH_SLOP } from '../../lib/touch';
 import styles from './ElevationProfile.module.css';
 import {
   VIEW_H,
@@ -214,16 +214,6 @@ export function ElevationProfile({
     commit(((clientX - current.left) / current.width) * total);
   };
 
-  const capture = (element: HTMLDivElement, pointerId: number) => {
-    if (!('setPointerCapture' in element)) return;
-    try {
-      element.setPointerCapture(pointerId);
-    } catch {
-      // The pointer may already be gone (or the environment lacks capture); dragging still works
-      // while the pointer stays over the plot.
-    }
-  };
-
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const element = event.currentTarget;
@@ -240,7 +230,14 @@ export function ElevationProfile({
     };
     // A finger waits: a tap or a sideways drag sets the position, a vertical swipe scrolls.
     if (touch) return;
-    capture(element, event.pointerId);
+    if ('setPointerCapture' in element) {
+      try {
+        element.setPointerCapture(event.pointerId);
+      } catch {
+        // The pointer may already be gone (or the environment lacks capture); dragging still works
+        // while the pointer stays over the plot.
+      }
+    }
     commitFromPointer(event.clientX);
   };
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { holdVerticalTouch, TOUCH_SLOP } from './holdTouch';
+import { TOUCH_SLOP } from '../lib/touch';
+import { holdVerticalTouch } from './holdTouch';
 
 /**
  * A wrapper with the filter and a canvas inside; `seen` lists the moves that reach the canvas and

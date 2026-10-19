@@ -24,6 +24,7 @@ import {
   type Bounds,
   type LatLon,
 } from '../../src/lib/geo';
+import { formatNumber } from '../../src/lib/format';
 import { withTerrainElevation } from '../../src/gpx/terrainElevation';
 import { trimTrack } from '../../src/gpx/trim';
 import type { Run, RunTrack } from '../../src/page/types';
@@ -57,6 +58,9 @@ import { MAX_IN_FLIGHT, type TileSource, type TileStats } from './tiles';
 /** The poster's "Hide start and end" default, metres off each end. */
 export const DEFAULT_TRIM_M = 200;
 
+/** Largest `--trim`, metres. */
+export const MAX_TRIM_M = 10_000;
+
 export interface BakeSceneOptions {
   readonly id: string;
   /** The id was given with `--id` (see `checkIdPrivacy`); false for one made from a file name. */
@@ -76,6 +80,11 @@ export interface BakedScene {
   readonly sidecarText: string;
   /** Where the run's elevations came from (`Run.elevationSource`). */
   readonly elevationSource: Run['elevationSource'];
+  /**
+   * The file's elevations minus the terrain's along the drawn route, whole metres: the mean
+   * (weighted by distance) and the range. Null when the elevations are not all the file's own.
+   */
+  readonly elevationOffset: ElevationOffset | null;
   readonly tiles: Readonly<TileStats>;
   /** Tiles of the scene grid that were missing upstream and filled from their neighbours. */
   readonly sceneMissingTiles: number;
@@ -86,6 +95,13 @@ export interface BakedScene {
 
 /** The real start or finish closer than this to the drawn route earns a warning, metres. */
 export const NEAR_END_WARNING_M = 100;
+
+/** File minus terrain elevation along the drawn route, whole metres. */
+export interface ElevationOffset {
+  readonly mean: number;
+  readonly min: number;
+  readonly max: number;
+}
 
 /**
  * The bounds of a run's track (or a stretch of it), in the track's own longitudes. A run's
@@ -129,28 +145,118 @@ export function distanceToTrack(point: LatLon, track: Pick<RunTrack, 'lat' | 'lo
   return best;
 }
 
+/** Whether `point` lies at least {@link NEAR_END_WARNING_M} from the route drawn with `trim`. */
+function clearAt(track: RunTrack, point: LatLon, trim: number): boolean {
+  const drawn = trimTrack(track, trim);
+  return drawn !== null && distanceToTrack(point, drawn) >= NEAR_END_WARNING_M;
+}
+
+/**
+ * The smallest `--trim` (in whole tens of metres, up to {@link MAX_TRIM_M}) whose drawn route
+ * stays {@link NEAR_END_WARNING_M} clear of `point`, or null when none does (the route passes it
+ * again too far from either end). A larger trim draws a sub-stretch of a smaller one's, so being
+ * clear only ever turns on as the trim grows: a binary search finds the first.
+ */
+export function clearingTrim(track: RunTrack, point: LatLon, from: number): number | null {
+  const total = track.cumulative[track.cumulative.length - 1] ?? 0;
+  let lo = Math.floor(from / 10) + 1;
+  let hi = Math.floor(Math.min(MAX_TRIM_M, total / 2) / 10);
+  if (lo > hi || !clearAt(track, point, hi * 10)) return null;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (clearAt(track, point, mid * 10)) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo * 10;
+}
+
+/**
+ * Where along the whole route (its own metres) it passes within {@link NEAR_END_WARNING_M} of
+ * `point` farthest from both ends: the pass a trim would have to reach. Null when no recorded
+ * point is that close (only a step between two points is).
+ */
+function deepestPass(track: RunTrack, point: LatLon): number | null {
+  const total = track.cumulative[track.cumulative.length - 1] ?? 0;
+  let best: number | null = null;
+  for (let i = 0; i < track.lat.length; i++) {
+    const m = localMetres(point, { lat: track.lat[i] ?? 0, lon: track.lon[i] ?? 0 });
+    if (Math.hypot(m.x, m.y) >= NEAR_END_WARNING_M) continue;
+    const along = track.cumulative[i] ?? 0;
+    if (best === null || Math.min(along, total - along) > Math.min(best, total - best)) {
+      best = along;
+    }
+  }
+  return best;
+}
+
+const km = (metres: number) => `km ${formatNumber(metres / 1000, 1)}`;
+
 /**
  * Warnings for a real start or finish that lies near the drawn route (a loop or laps pass it
- * again after the trim): distances rounded to tens of metres, never a coordinate.
+ * again after the trim): how near (tens of metres), where along the route (km, one decimal), and
+ * the smallest `--trim` that hides it or that none does. Distances along the route only, never a
+ * coordinate.
  */
 function nearEndWarnings(track: RunTrack, drawn: RunTrack, trim: number): string[] {
   if (!(trim > 0)) return [];
   const n = track.lat.length;
+  const total = track.cumulative[n - 1] ?? 0;
   const ends = [
     ['start', 0],
     ['finish', n - 1],
   ] as const;
   const warnings: string[] = [];
   for (const [name, i] of ends) {
-    const d = distanceToTrack({ lat: track.lat[i] ?? 0, lon: track.lon[i] ?? 0 }, drawn);
+    const point = { lat: track.lat[i] ?? 0, lon: track.lon[i] ?? 0 };
+    const d = distanceToTrack(point, drawn);
     if (d >= NEAR_END_WARNING_M) continue;
-    const where = d < 10 ? 'within 10 m of' : `about ${String(Math.round(d / 10) * 10)} m from`;
+    const near = d < 10 ? 'within 10 m of' : `about ${String(Math.round(d / 10) * 10)} m from`;
+    const pass = deepestPass(track, point);
+    const where = pass === null ? '' : ` at ${km(pass)} of ${formatNumber(total / 1000, 1)}`;
+    const clearing = clearingTrim(track, point, trim);
     warnings.push(
-      `The run's real ${name} lies ${where} the drawn route (a loop or laps pass it again), ` +
-        'so the trim does not hide it; a larger --trim hides more.',
+      clearing === null
+        ? `The run's real ${name} lies ${near} the drawn route${where}: the route passes its ` +
+            `${name} again, so no --trim hides it.`
+        : `The run's real ${name} lies ${near} the drawn route${where} (a loop or laps pass it ` +
+            `again), so the trim does not hide it; a --trim of ${formatNumber(clearing)} m does.`,
     );
   }
   return warnings;
+}
+
+/**
+ * File minus terrain elevation at each point of the drawn route (the terrain sampled from the
+ * scene grid, bilinear): the distance-weighted mean and the range, whole metres. Null without a
+ * finite sample.
+ */
+export function elevationOffset(drawn: RunTrack, grid: Heightfield): ElevationOffset | null {
+  const { ele, cumulative } = drawn;
+  if (!ele) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  let weighted = 0;
+  let length = 0;
+  let previous: number | null = null;
+  for (let i = 0; i < ele.length; i++) {
+    const offset = (ele[i] ?? NaN) - elevationAt(grid, drawn.lon[i] ?? 0, drawn.lat[i] ?? 0);
+    if (!Number.isFinite(offset)) {
+      previous = null;
+      continue;
+    }
+    min = Math.min(min, offset);
+    max = Math.max(max, offset);
+    if (previous !== null) {
+      const step = (cumulative[i] ?? 0) - (cumulative[i - 1] ?? 0);
+      weighted += ((previous + offset) / 2) * step;
+      length += step;
+    }
+    previous = offset;
+  }
+  if (!Number.isFinite(min)) return null;
+  // A route with no length (all points in one place): the plain mean of its ends.
+  const mean = length > 0 ? weighted / length : (min + max) / 2;
+  return { mean: Math.round(mean), min: Math.round(min), max: Math.round(max) };
 }
 
 /** Latitude of a heightfield's centre row (Web Mercator midpoint of its bounds). */
@@ -258,6 +364,8 @@ export async function bakeScene(input: BakeInput, options: BakeSceneOptions): Pr
     elevationSource: run.elevationSource,
     tiles: tiles.stats,
     sceneMissingTiles: sceneGrid.failedTiles.length,
+    // Only when every elevation is the file's own (a mixed run's gaps came from this terrain).
+    elevationOffset: run.elevationSource === 'gpx' ? elevationOffset(drawn, sceneGrid) : null,
     privacy: { findings: 0, pitchHidden },
     warnings: [
       ...nearEndWarnings(run.track, drawn, trim),

@@ -150,6 +150,9 @@ describe('node scripts/bake.ts', () => {
     expect(scene.summary.trim).toEqual({ start: 200, end: 200 });
     expect(result.stdout).toMatch(/^Baked test-run\n/);
     expect(result.stdout).toMatch(/elevation from the file/);
+    expect(result.stdout).toMatch(
+      /^ {2}offset {3}file − terrain elevation [+−]?\d+ m on average, [+−]?\d+ m to [+−]?\d+ m along the drawn route$/m,
+    );
     expect(result.stdout).toMatch(/tiles {4}\d+ fetched, 0 from cache, 0 missing/);
     expect(result.stdout).toMatch(/privacy {2}clean/);
     expectNoCoordinates(result.stdout);
@@ -252,6 +255,7 @@ describe('node scripts/bake.ts', () => {
     );
     expect(result.code).toBe(0);
     expect(result.stdout).toMatch(/elevation from the terrain/);
+    expect(result.stdout).not.toMatch(/offset/);
     const { sidecar } = outputs(out, 'no-ele');
     expect(
       (JSON.parse(sidecar) as { summary: { climb: number | null } }).summary.climb,
@@ -392,7 +396,11 @@ describe('node scripts/bake.ts', () => {
       /^vert-bake: warning: The run's real start lies .* the drawn route/m,
     );
     expect(result.stderr).toMatch(/^vert-bake: warning: The run's real finish/m);
-    expect(result.stderr).not.toMatch(/\d\.\d/);
+    // Three laps: the start is passed again a lap in; a trim of a little over a lap hides it.
+    expect(result.stderr).toMatch(
+      /real start lies within 10 m of the drawn route at km \d+\.\d of \d+\.\d \(a loop or laps pass it again\), so the trim does not hide it; a --trim of 1,\d{3} m does\.$/m,
+    );
+    expectNoCoordinates(result.stderr);
   });
 
   it('a sidecar that cannot be written: exit 1, and no scene written either', async () => {

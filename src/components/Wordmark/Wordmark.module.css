@@ -17,6 +17,39 @@
   color: var(--ink);
 }
 
+/* The name as a link (the header's home): drawn like the plain name, no underline. */
+.link {
+  position: relative;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* 44px-tall hit area without moving the drawn word: it grows into the header's 20px padding. */
+.link::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: var(--touch);
+  transform: translate(-50%, -50%);
+}
+
+/*
+ * Inert (during an export): greyed like the disabled header button beside it, in that button's
+ * --muted, but at full opacity (5.06:1 on --bg; the button's 0.8 gives 3.39:1). Still focusable,
+ * with its focus ring.
+ */
+.link[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--route);
+  outline-offset: 2px;
+}
+
 .tagline {
   font-family: var(--font-mono);
   font-size: 12px;

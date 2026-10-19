@@ -134,7 +134,8 @@ everything.
 - **Marker**: renders an inline `<svg>` (default 18px). With `label` it is `role="img"` +
   `aria-label`; without, `aria-hidden`. Shapes per spec; never told apart by color alone.
 - **Wordmark**: "VERT" 30/800/62%, `letter-spacing: 0.04em`; optional tagline per the type
-  details above, baseline-aligned with a 14px gap.
+  details above, baseline-aligned with a 14px gap. In the page header the name links home
+  ("Public release").
 
 ## Page (phase 2)
 
@@ -236,7 +237,8 @@ everything.
   where they are; one-line and Latin-only titles are unchanged.
 - Style A at the social sizes (4:5, 9:16) uses the share-card layout (frame "Style A · share card
   4:5"); print sizes use the Trail Sign layout.
-- No invented data: poster A's "VERT № 014" becomes "VERT"; footer URL is VERT.GEEKPLUX.COM.
+- No invented data: poster A's "VERT № 014" becomes "VERT"; footer URL is VERT.GEEKPLUX.COM (VERT.GEEKPLUX.ORG
+  since "Public release").
   Night Ridge's sunrise line appears only when the GPX has timestamps (solar position computed in
   `src/lib`); its top nav (RUNS / COMPARE / UPLOAD) is mockup decoration and is omitted.
 - Terrain look, style A (View and poster): oblique 3D, `--surface` fill, 1px ink ridge lines along
@@ -755,7 +757,8 @@ On the three phase 4 items in PROGRESS.md "Needs Sean", Sean chose to follow the
 recommendations:
 
 - **Vendoring waits for the policy check.** `dist-lib/` is not committed to geekplux/activities
-  (public) until BlackRock's outside-activity and IP check is done.
+  (public) until BlackRock's outside-activity and IP check is done. _Superseded the same day:_ Sean
+  made Vert's repository public, so vendoring no longer waits ("Public release", below).
 - **Embedding is approved.** Activities may replace its `TerrainSlot` placeholder with Vert's
   TerrainView (reversing its "Vert: link out" decision) and add `three` as an exact runtime
   dependency. Activities records both in its own `docs/DECISIONS.md` when that work starts there;
@@ -766,3 +769,30 @@ recommendations:
   of the run (a lap session, a loop from home), that activity gets no scene, unless its start is a
   public place (a race start, a trailhead, a public track). The terrain fingerprint stays an
   accepted risk for every scene published.
+
+## Public release (2026-10-19)
+
+Sean made the repository public and bound **vert.geekplux.org** to the Worker. He asked for the
+project's presentation to be redone without changing what Vert does.
+
+- **The domain is vert.geekplux.org** (the plan said vert.geekplux.com, which never served Vert).
+  Posters print `VERT.GEEKPLUX.ORG` in the footer; `pnpm bake` defaults to its `/tiles/`; the tile
+  proxy's User-Agent names it. `vert.fum.workers.dev` still answers as the Worker's own address.
+- **The wordmark links home.** In phase 2 the wordmark was plain text (there is no routing). With
+  a landing section below the fold, the top-left name is where people expect "home". A plain click takes the
+  same path as New file (no reload, no-op while a load is in flight); a modified click opens `/` in
+  a new tab; on Upload it scrolls to the top (instantly with reduced motion) and focuses the h1.
+  During an export it does nothing, like "Back to the run": the link stays focusable, carries
+  `aria-disabled="true"` and is drawn muted. The link's name is "Vert, home"; the tagline stays
+  text.
+- **Poster examples on the landing page.** Upload gains a static "poster styles" band below the
+  hero: the three styles drawn from the sample run, as images, not controls. They show what Vert
+  makes before a file is chosen, without adding a gallery feature. The hero is unchanged: at ≥ 900
+  px the band is placed from main's bottom edge, so main still fills the first screen and centres
+  the hero, and it never overlaps it (checked at 11 viewports, in the error and busy states). The
+  images are WebP from the app's own origin (about 155 KB together), marked `loading="lazy"`;
+  the band is near enough to the fold that Chrome fetches them on first load anyway, which is
+  accepted. `pnpm posters` regenerates them.
+- **Sharing metadata.** `index.html` carries Open Graph and Twitter card tags and a canonical URL,
+  with a 1280 × 640 card (`public/og-image.png`) that can also serve as GitHub's social preview
+  (uploaded by hand in the repository settings). The page makes no extra request for them.

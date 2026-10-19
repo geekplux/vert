@@ -67,7 +67,7 @@ describe('TrailSignPoster', () => {
     render(<TrailSignPoster content={content} size={posterSizeById('18x24')} figure={null} />);
     const root = screen.getByRole('img', { name: /^Poster: / });
     expect(root.querySelector('[data-slot="footer"]')?.textContent).toBe(
-      'ELEVATION FROM TERRAIN DATA · ELEVATION ×1.6VERT.GEEKPLUX.COM',
+      'ELEVATION FROM TERRAIN DATA · ELEVATION ×1.6VERT.GEEKPLUX.ORG',
     );
   });
 
@@ -89,9 +89,9 @@ describe('TrailSignPoster', () => {
       view.unmount();
       return text;
     };
-    expect(footer(SAMPLE_RUN)).toBe('SAMPLE DATAVERT.GEEKPLUX.COM');
-    expect(footer(SAMPLE_RUN, 'Vogel SP')).toBe('SAMPLE DATA · Vogel SPVERT.GEEKPLUX.COM');
-    expect(footer({ ...SAMPLE_RUN, isSample: false })).toBe('VERT.GEEKPLUX.COM');
+    expect(footer(SAMPLE_RUN)).toBe('SAMPLE DATAVERT.GEEKPLUX.ORG');
+    expect(footer(SAMPLE_RUN, 'Vogel SP')).toBe('SAMPLE DATA · Vogel SPVERT.GEEKPLUX.ORG');
+    expect(footer({ ...SAMPLE_RUN, isSample: false })).toBe('VERT.GEEKPLUX.ORG');
   });
 
   it('draws a flat run as a flat band, not full-height mountains (minimum span)', () => {
@@ -144,7 +144,7 @@ describe('TrailSignPoster', () => {
       expect(slot('stats')).not.toBeNull();
       expect(slot('profile')?.getAttribute('viewBox')).toBe('0 0 1000 120');
       expect(slot('profile')?.querySelector('path')?.getAttribute('d')).toMatch(/^M0,120 L/);
-      expect(slot('footer')?.textContent).toBe('SAMPLE DATA · ELEVATION ×1.6VERT.GEEKPLUX.COM');
+      expect(slot('footer')?.textContent).toBe('SAMPLE DATA · ELEVATION ×1.6VERT.GEEKPLUX.ORG');
       expect(slot('headline')).toBeNull();
       unmount();
     }

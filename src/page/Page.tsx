@@ -135,12 +135,25 @@ function PageContent({
     if (screenKey === 'upload') dropzoneRef.current?.takeFiles(pending.files);
   }, [screenKey]);
 
+  // The wordmark (a link to "/"), on a plain click. It goes where New file goes: Upload, through
+  // `newFile` (a no-op while a load is in flight). On Upload it returns to the top and its h1.
+  // During an export it does nothing, like Back to the run (disabled then): AppHeader is told
+  // `homeDisabled`, keeps the link focusable and ignores the click.
+  const goHome = () => {
+    if (screen.name === 'upload') {
+      returnToTop(headingRef);
+      return;
+    }
+    if (screen.name === 'exporting') return;
+    newFile();
+  };
+
   return (
     <div
       className={[styles.page, isPosterMode(screen) && styles.posterMode].filter(Boolean).join(' ')}
     >
       {screen.name === 'upload' ? (
-        <AppHeader state="upload">
+        <AppHeader state="upload" onHome={goHome}>
           <UploadNav
             aboutRef={aboutRef}
             onAbout={() => {
@@ -149,7 +162,7 @@ function PageContent({
           />
         </AppHeader>
       ) : screen.name === 'view' ? (
-        <AppHeader state="view">
+        <AppHeader state="view" onHome={goHome}>
           <ViewNav
             units={prefs.units}
             onUnitsChange={(units) => {
@@ -164,7 +177,12 @@ function PageContent({
           />
         </AppHeader>
       ) : (
-        <AppHeader state="poster" routeName={run?.name ?? ''}>
+        <AppHeader
+          state="poster"
+          routeName={run?.name ?? ''}
+          onHome={goHome}
+          homeDisabled={screen.name === 'exporting'}
+        >
           <PosterNav
             // The state machine ignores BACK_TO_RUN while exporting; the button says so.
             disabled={screen.name === 'exporting'}
@@ -254,6 +272,18 @@ function PageContent({
       />
     </div>
   );
+}
+
+/**
+ * The wordmark on Upload: no state change; back to the top of the page (instantly with reduced
+ * motion) and focus on the h1, as when Upload opens.
+ */
+function returnToTop(headingRef: RefObject<HTMLElement | null>) {
+  const reduce =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reduce ? 'instant' : 'smooth' });
+  headingRef.current?.focus({ preventScroll: true });
 }
 
 /**

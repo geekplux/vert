@@ -46,11 +46,8 @@ in `docs/DECISIONS.md` ("Library for Activities") and `docs/SCENE.md` ("Forbidde
   format's defined fields (column 0 lies within about 5.6° east of 180°); the decoded-object scan
   still covers them.
 
-**Before vendoring into a public repository.** Vert's repository is private until BlackRock's
-outside-activity and IP policy has been checked (`CLAUDE.md`). `geekplux/activities` is public, so
-committing `dist-lib/` there publishes Vert's bundle, declarations and README. That waits for the
-check (Sean's ruling, 2026-10-19). Until Vert is public, the GitHub links to this guide (in the shipped
-README) are a 404 for anyone but its owner.
+**Vendoring into a public repository.** Vert's repository is public (since 2026-10-19, MIT), so a
+public host such as `geekplux/activities` may commit `dist-lib/`; keep Vert's `LICENSE` with it.
 
 **For Activities, the whole change**, each item explained below:
 
@@ -88,10 +85,10 @@ README) are a 404 for anyone but its owner.
 
 ## 2. Vendoring `dist-lib/`
 
-> **Not yet in a public repository.** Vendoring publishes Vert's bundle, declarations and README
-> wherever the host's repository is visible. Vert stays private until BlackRock's outside-activity
-> and IP policy has been checked, and `geekplux/activities` is public, so vendoring there waits for
-> that check and for Sean's decision.
+> **Vert is public.** Vendoring publishes Vert's bundle, declarations and README wherever the
+> host's repository is visible; since Vert's own repository is public (2026-10-19, MIT), a public
+> host such as `geekplux/activities` may vendor it. The MIT licence asks that its notice travel
+> with copies: vendor Vert's `LICENSE` next to the files.
 
 A host whose build cannot see Vert's repository (Activities' Cloudflare build clones only its own)
 copies the built files into its own repository and commits them.
@@ -375,15 +372,15 @@ pnpm bake <input> --out <dir> [--id <id>] [--trim <metres>] [--tiles <url-templa
 directly) and no installed packages: no `pnpm install` is needed in Vert to bake. It runs on the
 machine that has the activity, never in a host's build.
 
-| option    | default                                              | meaning                                                                                                                                                  |
-| --------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<input>` | (required)                                           | one `.gpx`, or one `.json` points file (below); relative to the current directory                                                                        |
-| `--out`   | (required)                                           | the directory to write `<id>.scene` and `<id>.scene.json` to; created if needed; relative to the current directory                                       |
-| `--id`    | from the input's file name                           | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                                     |
-| `--trim`  | `200`                                                | metres hidden at each end of the route, 0–10,000; `0` keeps the ends                                                                                     |
-| `--tiles` | `https://vert.fum.workers.dev/tiles/{z}/{x}/{y}.png` | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                                         |
-| `--cache` | Vert's `scripts/.cache/terrarium/`                   | the tile cache, `{z}/{x}/{y}.png`; the default sits beside the script, whatever the current directory. It holds tile numbers: never commit or publish it |
-| `-h`      |                                                      | the usage text                                                                                                                                           |
+| option    | default                                           | meaning                                                                                                                                                  |
+| --------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<input>` | (required)                                        | one `.gpx`, or one `.json` points file (below); relative to the current directory                                                                        |
+| `--out`   | (required)                                        | the directory to write `<id>.scene` and `<id>.scene.json` to; created if needed; relative to the current directory                                       |
+| `--id`    | from the input's file name                        | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                                     |
+| `--trim`  | `200`                                             | metres hidden at each end of the route, 0–10,000; `0` keeps the ends                                                                                     |
+| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png` | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                                         |
+| `--cache` | Vert's `scripts/.cache/terrarium/`                | the tile cache, `{z}/{x}/{y}.png`; the default sits beside the script, whatever the current directory. It holds tile numbers: never commit or publish it |
+| `-h`      |                                                   | the usage text                                                                                                                                           |
 
 **Exit codes**: `0` both files written; `1` the bake failed and nothing was written (unreadable or
 invalid input, an id that reads as a coordinate of the run, a route too short for the trim, a tile
@@ -520,7 +517,7 @@ Activities could wire it (not implemented):
 
 ## 5. Tile proxy policy for offline bakes
 
-The default `--tiles` is Vert's tile Worker, `https://vert.fum.workers.dev/tiles/{z}/{x}/{y}.png`
+The default `--tiles` is Vert's tile Worker, `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`
 (`worker/README.md`): a proxy for AWS Terrain Tiles (Terrarium PNGs), cached in R2, paid for by
 Vert's owner.
 

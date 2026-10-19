@@ -135,19 +135,27 @@ zero in `src/lib/format.ts`); hk-hilly's +569 m is the noisy-recorder vert alrea
 known limitation; each viewport resize redraws the terrain (~13 ms), which slows hosts' resize
 sweeps (Activities' 1 px sweep 2.2 s → 23 s) — rate-limit if it matters.
 
+## Public release (2026-10-19)
+
+Sean made the repository public and bound vert.geekplux.org to the Worker, and asked for the
+project's presentation to be redone without changing what Vert does. Rulings in DECISIONS.md
+"Public release". Same protocol: implementation sub-agent (own worktree) → independent
+verification sub-agent → fix → verify; branch `presentation`, one PR.
+
+| Done | Task                                                                   | Rounds | Verdict | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---- | ---------------------------------------------------------------------- | ------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x]  | Domain, wordmark home link, poster styles band, sharing metadata, docs | 2      | PASS    | Posters print VERT.GEEKPLUX.ORG; bake default and proxy User-Agent use vert.geekplux.org (Coosa still bakes byte-identical). The wordmark is a home link in every state (inert and muted during an export). Upload's poster styles band: no overlap with the hero at 11 viewports in the error and busy states; first screen pixel-identical to main except the band's rule; axe 0 at 1440 / 390; CLS 0. Open Graph / Twitter tags and a 1280 × 640 card. Gate: 1,879 unit, 44 e2e. R1 PASS with should-fixes (docs gaps, an unused 1 MB screenshot, no visual cue on the inert link). R2 PASS: screenshot dropped; inert link `--muted` (5.06:1), header at rest still pixel-identical. |
+
 ## Needs Sean
 
 - **Acceptance check 1**: put 10 of your own GPX files in `fixtures/gpx/` (git-ignored), export one
   poster from each, and judge whether at least 8 are worth printing. The agent pass is above.
-- **Keep the repo private** until BlackRock's outside-activity and IP policy check is done (CLAUDE.md).
-- **Phase 4, ruled 2026-10-19** (DECISIONS.md "Sean's rulings on embedding"): vendoring into
-  Activities waits for the policy check; embedding and `three` are approved (Activities records
-  them in its own DECISIONS.md); scenes are opt-in per activity, and a run whose start warning a
-  larger `--trim` cannot clear gets none unless its start is a public place.
-- **Name and domain**: check "Vert" for name collisions, and point `vert.geekplux.com` (the URL in
-  the posters' footer) at the Worker when you want it public.
-- **Disk**: the system volume was down to ~100 MB free during this phase (agents moved their temp
-  files to /Volumes/Extra); about 4 GB is free now.
+- **Phase 4, ruled 2026-10-19** (DECISIONS.md "Sean's rulings on embedding"): embedding and
+  `three` are approved (Activities records them in its own DECISIONS.md); scenes are opt-in per
+  activity, and a run whose start warning a larger `--trim` cannot clear gets none unless its start
+  is a public place. Vendoring no longer waits: the repository is public since 2026-10-19.
+- **GitHub social preview (optional)**: GitHub has no API for it; upload `public/og-image.png` in
+  the repository's Settings → General → Social preview.
 - **Cloudflare's network-error reports (optional)**: every response carries Cloudflare's
   `report-to` / `nel` headers, so a browser may report failed requests (URL only, i.e. tile z/x/y,
   never GPX data) to `a.nel.cloudflare.com`. Strictly that is a third-party request; Cloudflare's

@@ -72,7 +72,10 @@ the `previews` block in `wrangler.jsonc`, which points `TILES` at the bucket `ve
 (created on 2026-10-18), so a preview fills its own tile cache and never writes into production's.
 Without that block the preview build fails before it deploys anything.
 
+The Worker answers at https://vert.geekplux.org (a custom domain); `vert.fum.workers.dev`, the
+Worker's own address, still answers too.
+
 After a deploy, check:
-`curl -sI https://vert.fum.workers.dev/tiles/12/655/1582.png` twice (`X-Tile-Source: upstream`,
-then `r2` or `edge`), `curl -sI 'https://vert.fum.workers.dev/tiles/12/655/1582.png?a=1'` (400),
+`curl -sI https://vert.geekplux.org/tiles/12/655/1582.png` twice (`X-Tile-Source: upstream`,
+then `r2` or `edge`), `curl -sI 'https://vert.geekplux.org/tiles/12/655/1582.png?a=1'` (400),
 and that `/` still serves the app.

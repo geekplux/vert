@@ -14,7 +14,7 @@ const log = (what: string) => () => {
 };
 
 const Upload = () => (
-  <AppHeader state="upload">
+  <AppHeader state="upload" onHome={log('home')}>
     <UploadNav onAbout={log('about')} />
   </AppHeader>
 );
@@ -22,7 +22,7 @@ const Upload = () => (
 const View = () => {
   const [units, setUnits] = useState<Units>('metric');
   return (
-    <AppHeader state="view">
+    <AppHeader state="view" onHome={log('home')}>
       <ViewNav
         units={units}
         onUnitsChange={setUnits}
@@ -33,9 +33,15 @@ const View = () => {
   );
 };
 
-const Poster = () => (
-  <AppHeader state="poster" routeName="Coosa Backcountry Trail">
-    <PosterNav onBack={log('back')} />
+// While exporting, the wordmark stays a focusable link but a plain click does nothing.
+const Poster = ({ exporting = false }: { exporting?: boolean }) => (
+  <AppHeader
+    state="poster"
+    routeName="Coosa Backcountry Trail"
+    onHome={log('home')}
+    homeDisabled={exporting}
+  >
+    <PosterNav onBack={log('back')} disabled={exporting} />
   </AppHeader>
 );
 
@@ -62,3 +68,7 @@ Poster1440.meta = { width: 1440 };
 export const Poster390: Story = () => <Poster />;
 Poster390.storyName = 'Poster 390';
 Poster390.meta = { width: 390 };
+
+export const PosterExporting1440: Story = () => <Poster exporting />;
+PosterExporting1440.storyName = 'Poster, exporting 1440';
+PosterExporting1440.meta = { width: 1440 };

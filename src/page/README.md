@@ -122,4 +122,18 @@ This is the only place that owns application state and composes `components`, `t
   `Page` takes an `exporter` prop; tests pass one explicitly.
 - Focus: on a screen change `Page` focuses the new screen's h1 (DECISIONS "Focus on screen changes");
   starting an export focuses the progress label, ending it focuses the Download button used.
+- Opening a scene by URL (`sceneLink.ts`, DECISIONS "Page: open a scene by URL"): `App` passes
+  `?scene=` to `Page` (`sceneParam`), which on mount checks it (`parseSceneParam`: absolute
+  `https:`, or `http:` on localhost; no user name or password) and calls
+  `useRunChooser().chooseScene(url)`. Upload reads "Reading <id>.scene…" (`FILE_CHOSEN`), then the
+  View shows it (`RUN_LOADED`), or Upload shows "Could not open that scene: …" over the Dropzone
+  (`LOAD_FAILED`). `fetchScene` fetches with CORS, `credentials: 'omit'` and no referrer, refuses
+  more than `SCENE_MAX_BYTES` (the largest file the format's known sections can make, ~10.2 MB)
+  and decodes. `RunProvider` holds it as `useScene()` (a `LinkedScene`: scene, name, host) while
+  `useRun()` is null. The View is `ViewState/SceneViewState.tsx`: `ViewState`'s pieces (title,
+  climbs, exaggeration, elevation section) and `TerrainBox` with `scene` instead of terrain and
+  track; copy in `sceneCopy.ts`. No Make a poster (the posters need coordinates). Choosing a file
+  or the sample, New file and the wordmark take `?scene=` (and `&title=`) out of the address bar
+  (`forgetSceneParam`, `replaceState`). An optional `&title=` (`sceneTitle`: trimmed, whitespace
+  collapsed, ≤ 80 characters, text only) is the h1 and `document.title` instead of the file name.
 - `AboutDialog/`: the native modal `<dialog>` the header's About opens.

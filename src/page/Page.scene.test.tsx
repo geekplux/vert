@@ -120,6 +120,56 @@ describe('Page with ?scene=', () => {
     await expectNoAxeViolations(container);
   });
 
+  it('names the scene from &title= in the h1 and the tab, as text; the line keeps the host', async () => {
+    const loader = pendingLoader();
+    document.title = 'Vert · Drop a GPX. Get a poster.';
+    const { unmount } = render(
+      <Page
+        schedule={immediateSchedule}
+        sceneParam={LINK}
+        titleParam={'  Translantau   <b>50</b> '}
+        loadScene={loader.loadScene}
+      />,
+    );
+    await act(async () => {
+      loader.resolve(SCENE);
+      await Promise.resolve();
+    });
+    const heading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Translantau <b>50</b>',
+    });
+    expect(heading.querySelector('b')).toBeNull();
+    expect(screen.getByText('SCENE · ACTIVITIES.GEEKPLUX.ORG')).toBeDefined();
+    expect(document.title).toBe('Translantau <b>50</b> · Vert');
+    expect(screen.getByRole('img').getAttribute('aria-label')).toMatch(
+      /^3D terrain of Translantau <b>50<\/b>: /,
+    );
+    unmount();
+    expect(document.title).toBe('Vert · Drop a GPX. Get a poster.');
+  });
+
+  it('keeps the file name and the tab title when &title= is empty', async () => {
+    document.title = 'Vert · Drop a GPX. Get a poster.';
+    const loader = pendingLoader();
+    render(
+      <Page
+        schedule={immediateSchedule}
+        sceneParam={LINK}
+        titleParam="   "
+        loadScene={loader.loadScene}
+      />,
+    );
+    await act(async () => {
+      loader.resolve(SCENE);
+      await Promise.resolve();
+    });
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'coosa-backcountry' }),
+    ).toBeDefined();
+    expect(document.title).toBe('Vert · Drop a GPX. Get a poster.');
+  });
+
   it('scrubs the profile by keyboard, moving the terrain marker with it', async () => {
     await openLinked();
     const slider = screen.getByRole('slider', { name: 'Elevation profile' });

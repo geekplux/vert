@@ -944,10 +944,17 @@ The site changed, not the library: no version bump, no changelog entry.
   and the last 200 m of the run are not drawn."). The readout gives pace from the route's times
   (`scenePaceAt`, the run's 200 m window). Loop or not, and the summit, come from the markers the
   scene stores.
-- **Title.** The format carries no title (names are forbidden content), so the h1 is the file name
-  without `.scene` (Activities: the activity id), or the host when the path has no file name. The
-  mono line above it, where a run shows its date, reads `SCENE · <HOST>`, so a visitor sees where
-  the scene came from. `document.title` is unchanged, as for a GPX.
+- **Title: `&title=<text>`, optional.** The format carries no title (names are forbidden
+  content), and an h1 reading "8071241781" is not fit for a page Activities links to. So the link
+  may carry the session's name: decoded, control characters dropped, whitespace collapsed, trimmed,
+  cut at 80 characters (code points; `sceneTitle`), rendered as text only (React text and
+  `document.title`, never HTML). It is the h1 and the tab title ("Translantau 50 · Vert", restored
+  when the scene is left). Without it (or when nothing is left of it) the h1 is the file name
+  without `.scene`, or the host when the path has none, and `document.title` is unchanged, as for a
+  GPX. The mono line above the h1, where a run shows its date, stays `SCENE · <HOST>`, so a visitor
+  sees where the scene came from whatever the title says. Leaving the scene removes `&title=` from
+  the address bar with `?scene=`. The title is the host's text: the scene's privacy rules do not
+  apply to it, and Vert sends it nowhere.
 - **No poster for a scene.** Every poster style needs what a scene leaves out on purpose: the
   run's coordinates (Trail Sign's and the others' framing bounds, Night Ridge's and Survey Quad's
   tile-built grids, the sunrise along the route, the local date). Faking them would defeat the

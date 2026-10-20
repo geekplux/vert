@@ -65,8 +65,13 @@ export interface LinkedScene {
   /** Stable for one opened link; the View is keyed by it. */
   readonly id: string;
   readonly scene: Scene;
-  /** The h1: the file name without `.scene` (the format carries no title), else the host. */
+  /**
+   * The h1: the link's `&title=` (sanitised), else the file name without `.scene` (the format
+   * carries no title), else the host.
+   */
   readonly name: string;
+  /** Whether `name` came from `&title=` (it then also names the tab, `document.title`). */
+  readonly titled: boolean;
   /** The host it came from ("activities.geekplux.org"), for the line above the h1. */
   readonly host: string;
 }
@@ -239,7 +244,7 @@ interface RunContextValue {
    * Fetch and decode a scene from its URL and make it the current one (forgetting the run), as
    * `load` does for a file: it supersedes and is superseded by `load`, and `clear` forgets it.
    */
-  readonly openScene: (url: URL) => Promise<LinkedScene | null>;
+  readonly openScene: (url: URL, title?: string | null) => Promise<LinkedScene | null>;
   /** Forget the current run and cancel a pending load. */
   readonly clear: () => void;
   /** Whether a load is in flight right now (read at call time, not render time). */
@@ -412,7 +417,7 @@ export function RunProvider({
   );
 
   const openScene = useCallback(
-    (url: URL) =>
+    (url: URL, title: string | null = null) =>
       new Promise<LinkedScene | null>((resolve, reject) => {
         cancelPending();
         const controller = new AbortController();
@@ -436,7 +441,8 @@ export function RunProvider({
             const linked: LinkedScene = {
               id: `scene-${String(sceneCount.current)}`,
               scene: decoded,
-              name: sceneName(url),
+              name: title ?? sceneName(url),
+              titled: title !== null,
               host: url.hostname,
             };
             setRun(null);
@@ -540,7 +546,7 @@ function loadErrorMessage(error: unknown, generic = GENERIC_LOAD_ERROR): string 
 export function useRunChooser(dispatch: Dispatch<PageAction>): {
   chooseFile: (file: File) => void;
   chooseSample: () => void;
-  chooseScene: (url: URL) => void;
+  chooseScene: (url: URL, title?: string | null) => void;
   newFile: () => boolean;
 } {
   const { load, openScene, clear, isLoading } = useRunContext('useRunChooser');
@@ -571,12 +577,12 @@ export function useRunChooser(dispatch: Dispatch<PageAction>): {
         dispatch({ type: 'SAMPLE_CHOSEN' });
         settle(load({ kind: 'sample' }));
       },
-      chooseScene: (url: URL) => {
+      chooseScene: (url: URL, title: string | null = null) => {
         if (isLoading()) return;
         perfMark(PERF_MARKS.chosen);
         preloadTerrainView();
         dispatch({ type: 'FILE_CHOSEN', fileName: sceneFileName(url) });
-        openScene(url).then(
+        openScene(url, title).then(
           (linked) => {
             if (linked) dispatch({ type: 'RUN_LOADED', runId: linked.id });
           },

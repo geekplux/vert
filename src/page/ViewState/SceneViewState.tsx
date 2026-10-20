@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Ref } from 'react';
 import { StatGrid, StatTile } from '../../components';
 import { SceneElevationProfile } from '../../components/ElevationProfile/SceneElevationProfile';
@@ -39,8 +39,8 @@ export interface SceneViewStateProps {
  * The View state for a baked scene opened from a link (`?scene=`, DECISIONS "Page: open a scene by
  * URL"): the same layout, terrain box and profile as a run's View, fed from what the scene holds.
  *
- * - The mono line says where it came from ("SCENE · ACTIVITIES.GEEKPLUX.ORG"); the h1 is the file
- *   name, as the format carries no title.
+ * - The mono line says where it came from ("SCENE · ACTIVITIES.GEEKPLUX.ORG"); the h1 is the
+ *   link's `&title=`, else the file name (the format carries no title).
  * - Stats: the whole run's Distance and Vert (the scene's summary), the Drawn length and the drawn
  *   route's High point; a scene has no moving time. A line under them says which ends are hidden.
  * - Climbs, exaggeration, the terrain (Rotate, Flat map), the profile, its readout (with pace when
@@ -56,7 +56,16 @@ export function SceneViewState({
   headingRef,
   cameraRef,
 }: SceneViewStateProps) {
-  const { scene, name, host } = linked;
+  const { scene, name, host, titled } = linked;
+  // A link's `&title=` also names the tab while the scene is shown ("Translantau 50 · Vert").
+  useEffect(() => {
+    if (!titled) return undefined;
+    const previous = document.title;
+    document.title = `${name} · Vert`;
+    return () => {
+      document.title = previous;
+    };
+  }, [name, titled]);
   const profile = useMemo(() => sceneProfile(scene), [scene]);
   const { high } = useMemo(() => sceneElevationRange(scene), [scene]);
   // Local to the View; the page keys this component by scene, so a new one starts fresh.

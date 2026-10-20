@@ -133,6 +133,7 @@ This is the only place that owns application state and composes `components`, `t
   `useRun()` is null. The View is `ViewState/SceneViewState.tsx`: `ViewState`'s pieces (title,
   climbs, exaggeration, elevation section) and `TerrainBox` with `scene` instead of terrain and
   track; copy in `sceneCopy.ts`. No Make a poster (the posters need coordinates). Choosing a file
-  or the sample, New file and the wordmark take `?scene=` out of the address bar
-  (`forgetSceneParam`, `replaceState`).
+  or the sample, New file and the wordmark take `?scene=` (and `&title=`) out of the address bar
+  (`forgetSceneParam`, `replaceState`). An optional `&title=` (`sceneTitle`: trimmed, whitespace
+  collapsed, ≤ 80 characters, text only) is the h1 and `document.title` instead of the file name.
 - `AboutDialog/`: the native modal `<dialog>` the header's About opens.

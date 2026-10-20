@@ -10,6 +10,7 @@ import {
   parseSceneParam,
   sceneFileName,
   sceneName,
+  sceneTitle,
 } from './sceneLink';
 import type { FetchLike } from './sceneLink';
 
@@ -97,6 +98,33 @@ describe('sceneName and sceneFileName', () => {
     expect(sceneName(new URL('https://example.com/a/%E0%A4%A.scene'))).toBe('%E0%A4%A');
     expect(sceneName(new URL('https://example.com/'))).toBe('example.com');
     expect(sceneFileName(new URL('https://example.com/'))).toBe('example.com');
+  });
+});
+
+describe('sceneTitle', () => {
+  it('is null without a title or with only whitespace', () => {
+    expect(sceneTitle(null)).toBeNull();
+    expect(sceneTitle('')).toBeNull();
+    expect(sceneTitle(' \t\n ')).toBeNull();
+    expect(sceneTitle('\u0000\u0007')).toBeNull();
+  });
+
+  it('trims, collapses whitespace and drops control characters', () => {
+    expect(sceneTitle('  Translantau   50 ')).toBe('Translantau 50');
+    expect(sceneTitle('Lantau\n\t2 Peaks\u0000 Night')).toBe('Lantau 2 Peaks Night');
+    expect(sceneTitle('Sunset\u00a0Peak')).toBe('Sunset Peak');
+  });
+
+  it('keeps markup as plain text, unchanged', () => {
+    expect(sceneTitle('<b>bold</b> & <script>x</script>')).toBe('<b>bold</b> & <script>x</script>');
+  });
+
+  it('cuts at 80 characters (code points, so no half emoji), then trims', () => {
+    expect(sceneTitle('a'.repeat(100))).toBe('a'.repeat(80));
+    expect(sceneTitle(`${'a'.repeat(79)} b`)).toBe('a'.repeat(79));
+    const emoji = sceneTitle('⛰️'.repeat(60)) ?? '';
+    expect(Array.from(emoji)).toHaveLength(80);
+    expect(sceneTitle('🏔'.repeat(90))).toBe('🏔'.repeat(80));
   });
 });
 
@@ -218,7 +246,11 @@ describe('forgetSceneParam', () => {
   });
 
   it('takes ?scene= out of the address bar and keeps the rest, with no new history entry', () => {
-    window.history.replaceState(null, '', '/?units=mi&scene=https%3A%2F%2Fx.org%2Fa.scene#top');
+    window.history.replaceState(
+      null,
+      '',
+      '/?units=mi&scene=https%3A%2F%2Fx.org%2Fa.scene&title=Translantau%2050#top',
+    );
     const length = window.history.length;
     forgetSceneParam();
     expect(window.location.pathname + window.location.search + window.location.hash).toBe(

@@ -397,8 +397,11 @@ https://vert.geekplux.org/?scene=<absolute URL of the .scene file>
 ```ts
 const href = `https://vert.geekplux.org/?scene=${encodeURIComponent(
   new URL(`/terrain/${id}.scene`, location.origin).href,
-)}`;
+)}&title=${encodeURIComponent(activity.name)}`;
 ```
+
+`&title=` is optional: the session's name for Vert's h1 and tab ("Translantau 50 · Vert"), shown as
+plain text, trimmed, whitespace collapsed, at most 80 characters; without it the h1 is the file name.
 
 Encode the scene's URL as a query value (`encodeURIComponent`), so a `?v=<hash>` on it stays part
 of the value. Link only to scenes that exist: the build-time index of sidecars
@@ -411,8 +414,8 @@ largest file the format's five known sections can make; the Coosa sample is 43 K
 Then it shows the scene as it shows a dropped GPX: the terrain (Rotate view, Flat map), the profile
 and its keyboard scrub with the readout (pace when the scene has times), the climbs, the
 exaggeration, and the stats a scene carries: the whole run's distance and climb, the drawn length
-and the drawn route's high point (no moving time). The h1 is the file name without `.scene` (the
-format has no title); the line above it says `SCENE · <HOST>`. **No poster**: the poster styles need
+and the drawn route's high point (no moving time). The h1 is `&title=`, else the file name without
+`.scene` (the format has no title); the line above it says `SCENE · <HOST>`. **No poster**: the poster styles need
 the run's coordinates, which a scene leaves out. Nothing is stored or sent on; `?scene=` stays in the
 address bar until the visitor opens something else, so the link can be reloaded and shared. When the
 scene cannot be opened, Vert's Upload page says why over its drop zone: "Could not open that scene:

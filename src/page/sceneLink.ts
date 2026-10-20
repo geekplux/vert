@@ -24,6 +24,29 @@ import { RunLoadError } from './errors';
 /** The query parameter: `https://vert.geekplux.org/?scene=<absolute scene URL>`. */
 export const SCENE_PARAM = 'scene';
 
+/** The optional title: `&title=<text>`, the h1 and `document.title` instead of the file name. */
+export const TITLE_PARAM = 'title';
+
+/** Longest title shown, in characters (code points); longer ones are cut. */
+export const SCENE_TITLE_MAX = 80;
+
+/**
+ * `&title=` as the page received it (already percent-decoded), made fit to show: control
+ * characters dropped, whitespace collapsed to single spaces, trimmed, cut to `SCENE_TITLE_MAX`
+ * characters. `null` when nothing is left. It is plain text: React renders it as text and it is
+ * written to `document.title`, never parsed as HTML.
+ */
+export function sceneTitle(value: string | null): string | null {
+  if (value === null) return null;
+  const collapsed = value
+    // eslint-disable-next-line no-control-regex -- removing control characters is the point
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cut = Array.from(collapsed).slice(0, SCENE_TITLE_MAX).join('').trim();
+  return cut === '' ? null : cut;
+}
+
 /** Every message starts so; the reason follows in plain words. */
 export const SCENE_ERROR_PREFIX = 'Could not open that scene:';
 
@@ -226,13 +249,14 @@ export async function fetchScene(
 export const realLoadScene: LoadScene = (url, signal) => fetchScene(url, signal);
 
 /**
- * The address bar without `?scene=` (the page left the scene, or opened something else), so a
+ * The address bar without `?scene=` and `&title=` (the page left the scene, or opened something else), so a
  * reload does not open it again. Other parameters and the hash stay. No new history entry.
  */
 export function forgetSceneParam(): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
-  if (!url.searchParams.has(SCENE_PARAM)) return;
+  if (!url.searchParams.has(SCENE_PARAM) && !url.searchParams.has(TITLE_PARAM)) return;
   url.searchParams.delete(SCENE_PARAM);
+  url.searchParams.delete(TITLE_PARAM);
   window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }

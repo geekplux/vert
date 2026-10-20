@@ -189,6 +189,7 @@ version (0.2.0) are unchanged, so no changelog entry.
 | [x]  | `RunProvider` holds a `LinkedScene`; `chooseScene` drives the state machine  | Upload "Reading <id>.scene…", then View or "Could not open that scene: …".                 |
 | [x]  | `SceneViewState`, `TerrainBox` with `scene`; no Make a poster                | Shared View pieces exported from `ViewState.tsx`; copy in `sceneCopy.ts`.                  |
 | [x]  | Sample scene at `/samples/coosa-backcountry.scene`; `e2e/scene-link.spec.ts` | Terrain drawn, stats, keyboard scrub, no cookie or referrer, axe 0 at 1440 and 390.        |
+| [x]  | Optional `&title=` (h1 and `document.title`; sanitised, ≤ 80 characters)     | Unit tests for `sceneTitle`; e2e: "Translantau 50", and `<b>` renders literally.           |
 | [x]  | INTEGRATION.md "Link to Vert" (URL, CORS, content type), README, DECISIONS   |                                                                                            |
 
 ## Needs Sean

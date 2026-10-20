@@ -29,7 +29,7 @@ import { useWindowFileDrop } from './useWindowFileDrop';
 import type { TerrainCameraSource } from './ViewState/TerrainBox';
 import { ViewState } from './ViewState/ViewState';
 import { SceneViewState } from './ViewState/SceneViewState';
-import { forgetSceneParam, parseSceneParam } from './sceneLink';
+import { forgetSceneParam, parseSceneParam, sceneTitle } from './sceneLink';
 import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import styles from './Page.module.css';
 
@@ -48,6 +48,8 @@ export interface PageProps extends Omit<RunProviderProps, 'children'> {
    * null: the page then opens that scene at once (src/page/sceneLink.ts). Read on mount only.
    */
   sceneParam?: string | null;
+  /** The `&title=` parameter that goes with it (`sceneTitle` sanitises it), or null. */
+  titleParam?: string | null;
 }
 
 /**
@@ -59,6 +61,7 @@ export function Page({
   initialAboutOpen = false,
   exporter,
   sceneParam = null,
+  titleParam = null,
   ...runProps
 }: PageProps) {
   return (
@@ -68,6 +71,7 @@ export function Page({
         initialAboutOpen={initialAboutOpen}
         exporter={exporter}
         sceneParam={sceneParam}
+        titleParam={titleParam}
       />
     </RunProvider>
   );
@@ -78,11 +82,13 @@ function PageContent({
   initialAboutOpen,
   exporter,
   sceneParam,
+  titleParam,
 }: {
   initialState?: PageState;
   initialAboutOpen: boolean;
   exporter?: Exporter;
   sceneParam: string | null;
+  titleParam: string | null;
 }) {
   const { state, dispatch } = usePageState(initialState);
   // `newFile` is ignored while a load is in flight and forgets the run (hooks.ts).
@@ -135,12 +141,13 @@ function PageContent({
   // cannot be fetched says why there, above the Dropzone. (Under StrictMode the effect runs twice;
   // the second call is ignored while the first load is in flight.)
   const sceneParamRef = useRef(sceneParam);
+  const titleParamRef = useRef(titleParam);
   useEffect(() => {
     const parsed = parseSceneParam(sceneParamRef.current);
     sceneParamRef.current = null;
     if (!parsed) return;
     if ('error' in parsed) dispatch({ type: 'LOAD_FAILED', message: parsed.error });
-    else chooseScene(parsed.url);
+    else chooseScene(parsed.url, sceneTitle(titleParamRef.current));
   }, [chooseScene, dispatch]);
 
   const shownName = run?.name ?? linkedScene?.name ?? '';

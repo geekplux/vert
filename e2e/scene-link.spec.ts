@@ -128,6 +128,20 @@ test('?scene= draws the scene: terrain, stats, keyboard scrub, axe', async ({
   expect(new URL(page.url()).search).toBe('');
 });
 
+test('&title= names the scene in the h1 and the tab, as text only', async ({ page, baseURL }) => {
+  const scene = encodeURIComponent(sceneUrl(baseURL));
+  await page.goto(`/?scene=${scene}&title=Translantau%2050`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Translantau 50' })).toBeVisible();
+  await expect(page).toHaveTitle('Translantau 50 · Vert');
+  await expect(page.getByText('SCENE · LOCALHOST')).toBeVisible();
+
+  await page.goto(`/?scene=${scene}&title=${encodeURIComponent('Lantau <b>Night</b>')}`);
+  const heading = page.getByRole('heading', { level: 1, name: 'Lantau <b>Night</b>' });
+  await expect(heading).toBeVisible();
+  await expect(heading.locator('b')).toHaveCount(0);
+  await expect(page).toHaveTitle('Lantau <b>Night</b> · Vert');
+});
+
 test('?scene= with a link it will not open says why, over the Dropzone', async ({ page }) => {
   await page.goto(`/?scene=${encodeURIComponent('ftp://example.com/a.scene')}`);
   await expect(page.getByRole('alert')).toHaveText(

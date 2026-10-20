@@ -16,6 +16,7 @@ import {
   useRetryTerrain,
   useRun,
   useRunChooser,
+  useScene,
   useTerrain,
 } from './hooks';
 import type { RunProviderProps } from './hooks';
@@ -27,6 +28,8 @@ import { UploadState } from './UploadState/UploadState';
 import { useWindowFileDrop } from './useWindowFileDrop';
 import type { TerrainCameraSource } from './ViewState/TerrainBox';
 import { ViewState } from './ViewState/ViewState';
+import { SceneViewState } from './ViewState/SceneViewState';
+import { forgetSceneParam, parseSceneParam, sceneTitle } from './sceneLink';
 import { DEFAULT_VIEW_CAMERA } from '../terrain/camera';
 import styles from './Page.module.css';
 
@@ -40,19 +43,35 @@ export interface PageProps extends Omit<RunProviderProps, 'children'> {
   initialAboutOpen?: boolean;
   /** Renders and saves posters (tests, stories). Default: Poster mode's `defaultExporter`. */
   exporter?: Exporter;
+  /**
+   * The `?scene=` parameter the page was opened with (`App` reads it from the address bar), or
+   * null: the page then opens that scene at once (src/page/sceneLink.ts). Read on mount only.
+   */
+  sceneParam?: string | null;
+  /** The `&title=` parameter that goes with it (`sceneTitle` sanitises it), or null. */
+  titleParam?: string | null;
 }
 
 /**
  * The one page (DESIGN-SPEC §3): the header with the current state's controls, then the current
  * state. Owns the state machine (`usePageState`) inside `RunProvider`.
  */
-export function Page({ initialState, initialAboutOpen = false, exporter, ...runProps }: PageProps) {
+export function Page({
+  initialState,
+  initialAboutOpen = false,
+  exporter,
+  sceneParam = null,
+  titleParam = null,
+  ...runProps
+}: PageProps) {
   return (
     <RunProvider {...runProps}>
       <PageContent
         initialState={initialState}
         initialAboutOpen={initialAboutOpen}
         exporter={exporter}
+        sceneParam={sceneParam}
+        titleParam={titleParam}
       />
     </RunProvider>
   );
@@ -62,15 +81,36 @@ function PageContent({
   initialState,
   initialAboutOpen,
   exporter,
+  sceneParam,
+  titleParam,
 }: {
   initialState?: PageState;
   initialAboutOpen: boolean;
   exporter?: Exporter;
+  sceneParam: string | null;
+  titleParam: string | null;
 }) {
   const { state, dispatch } = usePageState(initialState);
   // `newFile` is ignored while a load is in flight and forgets the run (hooks.ts).
-  const { chooseFile, chooseSample, newFile } = useRunChooser(dispatch);
+  const chooser = useRunChooser(dispatch);
+  const { chooseScene } = chooser;
+  // Opening anything else, or leaving the scene, takes `?scene=` out of the address bar, so a
+  // reload shows what is on screen (DECISIONS "Page: open a scene by URL").
+  const chooseFile = (file: File) => {
+    forgetSceneParam();
+    chooser.chooseFile(file);
+  };
+  const chooseSample = () => {
+    forgetSceneParam();
+    chooser.chooseSample();
+  };
+  const newFile = () => {
+    const acted = chooser.newFile();
+    if (acted) forgetSceneParam();
+    return acted;
+  };
   const run = useRun();
+  const linkedScene = useScene();
   const terrain = useTerrain();
   const retryTerrain = useRetryTerrain();
   const loadFigureTerrain = useFigureTerrainLoader();
@@ -97,6 +137,27 @@ function PageContent({
     id: number;
     screenKey: ScreenKey;
   } | null>(null);
+  // `?scene=<url>`: open it on mount, as if the file had been chosen on Upload. A link that cannot
+  // be fetched says why there, above the Dropzone. The parameter is kept until the open has an
+  // answer: under StrictMode the provider's simulated unmount aborts the first fetch (its
+  // `chooseScene` resolves `false`) and the effect's second run opens it again.
+  const sceneParamRef = useRef(sceneParam);
+  const titleParamRef = useRef(titleParam);
+  useEffect(() => {
+    const parsed = parseSceneParam(sceneParamRef.current);
+    if (!parsed) return;
+    if ('error' in parsed) {
+      sceneParamRef.current = null;
+      dispatch({ type: 'LOAD_FAILED', message: parsed.error });
+      return;
+    }
+    void chooseScene(parsed.url, sceneTitle(titleParamRef.current)).then((answered) => {
+      if (answered) sceneParamRef.current = null;
+    });
+  }, [chooseScene, dispatch]);
+
+  const shownName = run?.name ?? linkedScene?.name ?? '';
+
   const { dragOver } = useWindowFileDrop({
     disabled:
       screen.name === 'exporting' || (screen.name === 'upload' && screen.busy.kind !== 'idle'),
@@ -169,11 +230,17 @@ function PageContent({
               dispatch({ type: 'SET_UNITS', units });
             }}
             onNewFile={newFile}
-            onMakePoster={() => {
-              // "Make a poster" uses the current camera (BRIEF): the View's, as the user left it.
-              const camera = cameraRef.current?.camera() ?? undefined;
-              dispatch(camera ? { type: 'MAKE_POSTER', camera } : { type: 'MAKE_POSTER' });
-            }}
+            // A scene from a link has no poster (no coordinates): no Make a poster.
+            onMakePoster={
+              run
+                ? () => {
+                    // "Make a poster" uses the current camera (BRIEF): the View's, as the user
+                    // left it.
+                    const camera = cameraRef.current?.camera() ?? undefined;
+                    dispatch(camera ? { type: 'MAKE_POSTER', camera } : { type: 'MAKE_POSTER' });
+                  }
+                : undefined
+            }
           />
         </AppHeader>
       ) : (
@@ -233,6 +300,19 @@ function PageContent({
             prefs.poster.camera === DEFAULT_VIEW_CAMERA ? undefined : prefs.poster.camera
           }
         />
+      ) : screen.name === 'view' && linkedScene ? (
+        // Keyed by scene: a new one starts with its own scrub position.
+        <SceneViewState
+          key={linkedScene.id}
+          linked={linkedScene}
+          headingRef={headingRef}
+          units={prefs.units}
+          exaggeration={prefs.exaggeration}
+          onExaggerationChange={(value) => {
+            dispatch({ type: 'SET_EXAGGERATION', value });
+          }}
+          cameraRef={cameraRef}
+        />
       ) : isPosterMode(screen) && run ? (
         // Exporting is poster mode with the export progress under the Download button.
         <PosterState
@@ -252,7 +332,7 @@ function PageContent({
         screen.name === 'upload' ? (
           <DropFrame />
         ) : (
-          <DropOverlay routeName={run?.name ?? ''} />
+          <DropOverlay routeName={shownName} />
         )
       ) : null}
       {/*
@@ -260,7 +340,7 @@ function PageContent({
        * changes (a status inserted with the overlay is often not announced).
        */}
       <p role="status" className={styles.visuallyHidden}>
-        {dragOver && screen.name !== 'upload' ? dropOverlayAnnouncement(run?.name ?? '') : ''}
+        {dragOver && screen.name !== 'upload' ? dropOverlayAnnouncement(shownName) : ''}
       </p>
 
       <AboutDialog

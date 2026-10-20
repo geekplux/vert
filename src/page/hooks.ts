@@ -22,6 +22,11 @@
  * `ready`, so the View never draws the route twice. Before that the elevation figures stay unknown
  * (`NaN`, shown as "–"). If the terrain fails, a file mostly recorded but with long gaps has them
  * interpolated (`withInterpolatedGaps`, `elevationSource: 'interpolated'`); any other stays unknown.
+ *
+ * A baked scene opened from a link (`?scene=`, src/page/sceneLink.ts) takes the run's place:
+ * `openScene` (through `useRunChooser().chooseScene`) fetches and decodes it with the injectable
+ * `loadScene`, and `useScene()` returns it while `useRun()` is null. Loading a run, opening a
+ * scene and `clear` each cancel the other's pending load; a scene builds no terrain.
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useRef, useState } from 'react';
@@ -45,6 +50,34 @@ import type { Run, Terrain } from './types';
 import { GENERIC_LOAD_ERROR, RunLoadError } from './errors';
 import { realLoadRun } from '../gpx/loadRun';
 import { withInterpolatedGaps, withTerrainElevation } from '../gpx/terrainElevation';
+import type { Scene } from '../scene/types';
+import { realLoadScene, sceneFileName, sceneName, SCENE_GENERIC_ERROR } from './sceneLink';
+import type { FetchedScene, LoadScene } from './sceneLink';
+
+export type { FetchedScene, LoadScene } from './sceneLink';
+
+/**
+ * A baked scene opened from a link (`?scene=`, src/page/sceneLink.ts): the decoded scene and what
+ * the View shows about where it came from. It stands in for a run: while it is current, `useRun()`
+ * is null and nothing builds terrain (the scene carries its own grid).
+ */
+export interface LinkedScene {
+  /** Stable for one opened link; the View is keyed by it. */
+  readonly id: string;
+  readonly scene: Scene;
+  /**
+   * The h1: the link's `&title=` (sanitised), else the file name without `.scene` (the format
+   * carries no title), else the host.
+   */
+  readonly name: string;
+  /** Whether `name` came from `&title=` (it then also names the tab, `document.title`). */
+  readonly titled: boolean;
+  /**
+   * The host that served it, after any redirect ("activities.geekplux.org"), for the line above
+   * the h1.
+   */
+  readonly host: string;
+}
 
 /** What to load: a file the user chose, or the built-in sample run. */
 export type RunSource =
@@ -199,6 +232,8 @@ interface TerrainResult {
 
 interface RunContextValue {
   readonly run: Run | null;
+  /** The scene opened from a link, or null; never both a run and a scene. */
+  readonly scene: LinkedScene | null;
   readonly terrain: Terrain;
   /** Build the current run's terrain again (after an error). */
   readonly retryTerrain: () => void;
@@ -208,6 +243,11 @@ interface RunContextValue {
    * error when the file cannot be read.
    */
   readonly load: (source: RunSource) => Promise<Run | null>;
+  /**
+   * Fetch and decode a scene from its URL and make it the current one (forgetting the run), as
+   * `load` does for a file: it supersedes and is superseded by `load`, and `clear` forgets it.
+   */
+  readonly openScene: (url: URL, title?: string | null) => Promise<LinkedScene | null>;
   /** Forget the current run and cancel a pending load. */
   readonly clear: () => void;
   /** Whether a load is in flight right now (read at call time, not render time). */
@@ -240,6 +280,11 @@ export interface RunProviderProps {
    */
   loadTerrain?: LoadTerrain;
   /**
+   * Fetches and decodes a scene from a link (`?scene=`). Defaults to `realLoadScene` (the
+   * browser's fetch, src/page/sceneLink.ts).
+   */
+  loadScene?: LoadScene;
+  /**
    * Builds the Night Ridge and Survey Quad figures' height grids. Defaults to
    * `realLoadFigureTerrain`, or in placeholder mode to `pendingLoadFigureTerrain` (stays loading).
    */
@@ -253,10 +298,13 @@ export function RunProvider({
   schedule,
   delayMs,
   loadTerrain,
+  loadScene = realLoadScene,
   loadFigureTerrain,
 }: RunProviderProps) {
   // The run as loaded; `run` below is this one with terrain elevations when the file had none.
   const [loadedRun, setRun] = useState<Run | null>(initialRun);
+  const [scene, setScene] = useState<LinkedScene | null>(null);
+  const sceneCount = useRef(0);
   const pending = useRef<AbortController | null>(null);
   const usePlaceholder = schedule !== undefined || delayMs !== undefined;
   const placeholder = useMemo(
@@ -357,6 +405,7 @@ export function RunProvider({
             if (signal.aborted) return;
             pending.current = null;
             perfMark(PERF_MARKS.parsed);
+            setScene(null);
             setRun(next);
             resolve(next);
           },
@@ -370,9 +419,54 @@ export function RunProvider({
     [cancelPending, loader],
   );
 
+  const openScene = useCallback(
+    (url: URL, title: string | null = null) =>
+      new Promise<LinkedScene | null>((resolve, reject) => {
+        cancelPending();
+        const controller = new AbortController();
+        const { signal } = controller;
+        pending.current = controller;
+        signal.addEventListener('abort', () => {
+          resolve(null);
+        });
+        let loading: Promise<FetchedScene>;
+        try {
+          loading = loadScene(url, signal);
+        } catch (error: unknown) {
+          loading = Promise.reject(error instanceof Error ? error : new Error(String(error)));
+        }
+        loading.then(
+          (fetched) => {
+            if (signal.aborted) return;
+            pending.current = null;
+            perfMark(PERF_MARKS.parsed);
+            sceneCount.current += 1;
+            const linked: LinkedScene = {
+              id: `scene-${String(sceneCount.current)}`,
+              scene: fetched.scene,
+              // `title` is already `sceneTitle`'d; `sceneName` sanitises the file name the same way.
+              name: title ?? sceneName(url),
+              titled: title !== null,
+              host: fetched.host,
+            };
+            setRun(null);
+            setScene(linked);
+            resolve(linked);
+          },
+          (error: unknown) => {
+            if (signal.aborted) return;
+            pending.current = null;
+            reject(error instanceof Error ? error : new Error(String(error)));
+          },
+        );
+      }),
+    [cancelPending, loadScene],
+  );
+
   const clear = useCallback(() => {
     cancelPending();
     setRun(null);
+    setScene(null);
   }, [cancelPending]);
 
   const isLoading = useCallback(() => pending.current !== null, []);
@@ -382,14 +476,16 @@ export function RunProvider({
   const value = useMemo<RunContextValue>(
     () => ({
       run,
+      scene,
       terrain,
       retryTerrain,
       load,
+      openScene,
       clear,
       isLoading,
       loadFigureTerrain: figureTerrainLoader,
     }),
-    [run, terrain, retryTerrain, load, clear, isLoading, figureTerrainLoader],
+    [run, scene, terrain, retryTerrain, load, openScene, clear, isLoading, figureTerrainLoader],
   );
   return createElement(RunContext, { value }, children);
 }
@@ -403,6 +499,11 @@ function useRunContext(hook: string): RunContextValue {
 /** The loaded run, or `null` before one has loaded. */
 export function useRun(): Run | null {
   return useRunContext('useRun').run;
+}
+
+/** The scene opened from a link (`?scene=`), or `null`. */
+export function useScene(): LinkedScene | null {
+  return useRunContext('useScene').scene;
 }
 
 /** The terrain under the loaded run: idle without a run, then loading, ready or error. */
@@ -427,8 +528,8 @@ export function useRunLoader(): Pick<RunContextValue, 'load' | 'clear'> {
 }
 
 /** The message the Upload screen shows for a failed load. */
-function loadErrorMessage(error: unknown): string {
-  return error instanceof RunLoadError && error.message ? error.message : GENERIC_LOAD_ERROR;
+function loadErrorMessage(error: unknown, generic = GENERIC_LOAD_ERROR): string {
+  return error instanceof RunLoadError && error.message ? error.message : generic;
 }
 
 /**
@@ -442,13 +543,20 @@ function loadErrorMessage(error: unknown): string {
  *   It does nothing while a load is in flight (Upload ignores `NEW_FILE`) and returns whether it
  *   acted. Offer it only where the state machine accepts `NEW_FILE` (View, Poster mode), not
  *   during an export.
+ * - `chooseScene` opens a scene from a link (`?scene=`) the same way: Upload reads
+ *   "Reading <id>.scene…" (`FILE_CHOSEN`), then `RUN_LOADED` (no poster text: a scene has no
+ *   poster) or `LOAD_FAILED` with "Could not open that scene: …". It resolves `true` once one of
+ *   those was sent, `false` when the choice was ignored (a load in flight) or superseded (another
+ *   choice, New file, or an unmount: StrictMode's simulated one included), so the page can try a
+ *   link again until it has an answer.
  */
 export function useRunChooser(dispatch: Dispatch<PageAction>): {
   chooseFile: (file: File) => void;
   chooseSample: () => void;
+  chooseScene: (url: URL, title?: string | null) => Promise<boolean>;
   newFile: () => boolean;
 } {
-  const { load, clear, isLoading } = useRunContext('useRunChooser');
+  const { load, openScene, clear, isLoading } = useRunContext('useRunChooser');
 
   return useMemo(() => {
     const settle = (loading: Promise<Run | null>) => {
@@ -476,6 +584,26 @@ export function useRunChooser(dispatch: Dispatch<PageAction>): {
         dispatch({ type: 'SAMPLE_CHOSEN' });
         settle(load({ kind: 'sample' }));
       },
+      chooseScene: (url: URL, title: string | null = null) => {
+        if (isLoading()) return Promise.resolve(false);
+        perfMark(PERF_MARKS.chosen);
+        preloadTerrainView();
+        dispatch({ type: 'FILE_CHOSEN', fileName: sceneFileName(url) });
+        return openScene(url, title).then(
+          (linked) => {
+            if (!linked) return false;
+            dispatch({ type: 'RUN_LOADED', runId: linked.id });
+            return true;
+          },
+          (error: unknown) => {
+            dispatch({
+              type: 'LOAD_FAILED',
+              message: loadErrorMessage(error, SCENE_GENERIC_ERROR),
+            });
+            return true;
+          },
+        );
+      },
       newFile: () => {
         if (isLoading()) return false;
         dispatch({ type: 'NEW_FILE' });
@@ -483,5 +611,5 @@ export function useRunChooser(dispatch: Dispatch<PageAction>): {
         return true;
       },
     };
-  }, [dispatch, load, clear, isLoading]);
+  }, [dispatch, load, openScene, clear, isLoading]);
 }

@@ -12,11 +12,14 @@ export interface ViewNavProps {
   onUnitsChange: (units: Units) => void;
   /** Back to the Upload state. */
   onNewFile: () => void;
-  /** Into Poster mode. A state change, not navigation, so a button (DECISIONS.md "Button"). */
-  onMakePoster: () => void;
+  /**
+   * Into Poster mode. A state change, not navigation, so a button (DECISIONS.md "Button"). Left
+   * out for a scene opened from a link, which cannot make a poster: no button then.
+   */
+  onMakePoster?: () => void;
 }
 
-/** View-state header controls (Main frame): units, New file, Make a poster. */
+/** View-state header controls (Main frame): units, New file, Make a poster (for a run). */
 export function ViewNav({ units, onUnitsChange, onNewFile, onMakePoster }: ViewNavProps) {
   return (
     <div className={styles.nav}>
@@ -24,9 +27,11 @@ export function ViewNav({ units, onUnitsChange, onNewFile, onMakePoster }: ViewN
       <Button variant="secondary" onClick={onNewFile}>
         New file
       </Button>
-      <Button variant="primary" onClick={onMakePoster}>
-        Make a poster
-      </Button>
+      {onMakePoster ? (
+        <Button variant="primary" onClick={onMakePoster}>
+          Make a poster
+        </Button>
+      ) : null}
     </div>
   );
 }

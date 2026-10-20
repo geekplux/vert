@@ -10,7 +10,6 @@
  *   decodes it. Every failure is a `RunLoadError` whose message is one plain sentence, "Could not
  *   open that scene: …", which the Upload screen shows above its Dropzone.
  */
-import { decodeScene } from '../scene/decode';
 import { SceneError } from '../scene/error';
 import {
   CLIMB_BYTES,
@@ -213,6 +212,8 @@ export async function fetchScene(
     if (error instanceof RunLoadError || isAbort(error, signal)) throw error;
     throw new RunLoadError(sentence('the download was interrupted.'));
   }
+  // The decoder loads only when a link is opened, so Upload's first load stays as light as it was.
+  const { decodeScene } = await import('../scene/decode');
   try {
     return decodeScene(bytes);
   } catch (error: unknown) {

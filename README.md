@@ -74,6 +74,11 @@ pnpm dev
 Open the URL Vite prints and click **Try the sample run**, or drop any `.gpx` file onto the page.
 Files from Strava, Garmin, Coros and Suunto all work, up to 20 MB.
 
+A site that publishes baked scenes can link straight to one:
+`https://vert.geekplux.org/?scene=<absolute URL of a .scene file>` opens it in the 3D view
+([try it](https://vert.geekplux.org/?scene=https://vert.geekplux.org/samples/coosa-backcountry.scene);
+[how to link](docs/INTEGRATION.md#link-to-vert)).
+
 **Requirements:** Node.js ≥ 22.18 (see `.nvmrc`) and pnpm. In development, elevation tiles are
 proxied straight to the public AWS bucket, so you don't need a Cloudflare account to run Vert
 locally.
@@ -121,6 +126,8 @@ Vert is built so that it can't leak your location:
 - The only requests that depend on your run are elevation tiles, and they carry `z/x/y` and nothing
   else: no query strings, no cookies, no referrer.
 - There are no analytics and no third-party CDN. Fonts are self-hosted.
+- A `?scene=` link makes the page fetch that one file from the host it names, with no cookies and
+  no referrer. A scene holds no coordinates, and nothing about it is stored or sent on.
 - Posters hide the first and last stretch of the route (200 m by default).
 - Scenes baked for embedding are checked before they are written. Automated scanners look for
   coordinates, tile numbers and timestamps, and run regression attacks that try to recover the

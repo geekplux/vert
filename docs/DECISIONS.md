@@ -902,3 +902,61 @@ of vendoring `dist-lib/`. Sean's rule: simple and easy to use, not over-engineer
 - **Not done, on purpose:** changesets or any release tool, CI publishing with a token, a CommonJS
   build, `main`/`types` fallbacks, a `./bake` export, minifying the bin, a separate package for the
   bake, and an OS cache folder for the bin's default.
+
+## Page: open a scene by URL (2026-10-19)
+
+Activities' "Open in Vert ↗" landed on Vert's home page and showed nothing of the session.
+Activities publishes baked scenes at `https://<host>/terrain/<id>.scene` and links to
+`https://vert.geekplux.org/?scene=<absolute scene URL>`. Sean's rule: simple, not over-engineered.
+The site changed, not the library: no version bump, no changelog entry.
+
+- **One query parameter, read once on load.** `App` passes `?scene=` to `Page`, which opens it as if
+  the file had been chosen on Upload: "Reading <id>.scene…" (`FILE_CHOSEN`), then the View
+  (`RUN_LOADED`), or Upload with the reason over the Dropzone (`LOAD_FAILED`). The state machine is
+  unchanged: no new screen, no new event. No UI to type a URL (the Dropzone stays as it is), no
+  history of opened scenes.
+- **Which URLs.** Absolute `https:` only; `http:` only for `localhost`, `127.0.0.1` and `[::1]`
+  (development and the e2e). A user name or password in the URL is refused (the browser would refuse
+  it as a network error otherwise). Anything else is refused before any request, with a sentence.
+- **The fetch.** `mode: 'cors'`, `credentials: 'omit'` (no cookie, no HTTP authentication),
+  `referrerPolicy: 'no-referrer'`. The URL goes nowhere else; nothing is stored. The host sees one
+  GET for the file, as for any link.
+- **Size cap: the format's own maximum.** `SCENE_MAX_BYTES` (src/page/sceneLink.ts) is the largest
+  version-1 file of the five known sections: every size at its limit and every stream value
+  escaped (56 bits) = 10,158,154 bytes. A declared `Content-Length` over it is refused unread; a body
+  is also counted while it streams and cancelled once it passes the cap. Unknown sections (which the
+  format allows) beyond that are refused with the rest: such a file would be at least 200 times the
+  size of any scene the bake writes.
+- **Errors in one sentence**, "Could not open that scene: <reason>.": not a full web address; only
+  https links; a user name or password; the server could not be reached or does not let other sites
+  read the file (CORS; a browser reports both as one `TypeError`, so Vert cannot tell them apart);
+  the server answered <status>; larger than a scene can be; not a Vert scene (`magic`: the SPA
+  fallback page, say); a newer scene format (`version`); damaged (any other `SceneError`); the
+  download was interrupted. Anything unexpected: "Could not open that scene." Shown in the Upload
+  screen's existing error state, with the Dropzone; never a blank page.
+- **The View for a scene** (`SceneViewState`): the run View's layout and pieces (`ViewTitle`,
+  `ClimbList`, `ExaggerationSlider`, `ElevationSection`, now exported from `ViewState.tsx`) and
+  `TerrainBox`, which takes `scene` in place of `terrain` / `onRetry` / `track` (the view's chunk
+  can still fail and be retried; no tiles are fetched). The profile is `SceneElevationProfile`, the
+  same slider. Stats: Distance and Vert are the whole run's (the scene's summary), then **Drawn** (the
+  drawn length) in Moving time's place (a scene has no moving time) and High point (the drawn
+  route's highest elevation). A line under the stats says which ends are hidden ("The first 200 m
+  and the last 200 m of the run are not drawn."). The readout gives pace from the route's times
+  (`scenePaceAt`, the run's 200 m window). Loop or not, and the summit, come from the markers the
+  scene stores.
+- **Title.** The format carries no title (names are forbidden content), so the h1 is the file name
+  without `.scene` (Activities: the activity id), or the host when the path has no file name. The
+  mono line above it, where a run shows its date, reads `SCENE · <HOST>`, so a visitor sees where
+  the scene came from. `document.title` is unchanged, as for a GPX.
+- **No poster for a scene.** Every poster style needs what a scene leaves out on purpose: the
+  run's coordinates (Trail Sign's and the others' framing bounds, Night Ridge's and Survey Quad's
+  tile-built grids, the sunrise along the route, the local date). Faking them would defeat the
+  format, so the View has no Make a poster button and the help line says "To make a poster, drop a
+  GPX file of your own run."
+- **The address bar.** `?scene=` stays while the scene is shown (a reload or a shared link opens it
+  again). Choosing a file or the sample, New file and the wordmark remove it (`replaceState`, no new
+  history entry), so a reload shows what is on screen. After a failure it stays, so a reload tries
+  again.
+- **The sample scene is served** at `/samples/coosa-backcountry.scene`: a copy of the library's
+  fixture (a unit test keeps them byte-identical), for the e2e (same origin) and as a public
+  example link.

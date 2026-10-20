@@ -385,6 +385,65 @@ What Activities built (its `scripts/import/sceneGuard.ts`, `scripts/deploy/check
   below ran under Activities' policy (`default-src`, `script-src`, `connect-src` and `img-src` as
   in its `_headers`) with no violation.
 
+### Link to Vert
+
+A page that shows a scene can also link to Vert's own page for it, a bigger view with nothing to
+install (Activities' "Open in Vert ↗"):
+
+```text
+https://vert.geekplux.org/?scene=<absolute URL of the .scene file>
+```
+
+```ts
+const href = `https://vert.geekplux.org/?scene=${encodeURIComponent(
+  new URL(`/terrain/${id}.scene`, location.origin).href,
+)}`;
+```
+
+Encode the scene's URL as a query value (`encodeURIComponent`), so a `?v=<hash>` on it stays part
+of the value. Link only to scenes that exist: the build-time index of sidecars
+([Where to keep them](#where-to-keep-them)) answers that.
+
+**What Vert does with it.** On load the page checks the URL (`https:` only, `http:` only for
+`localhost`; no user name or password in it), fetches it once with `mode: 'cors'`,
+`credentials: 'omit'` and `referrerPolicy: 'no-referrer'`, refuses a body over about 10.2 MB (the
+largest file the format's five known sections can make; the Coosa sample is 43 KB) and decodes it.
+Then it shows the scene as it shows a dropped GPX: the terrain (Rotate view, Flat map), the profile
+and its keyboard scrub with the readout (pace when the scene has times), the climbs, the
+exaggeration, and the stats a scene carries: the whole run's distance and climb, the drawn length
+and the drawn route's high point (no moving time). The h1 is the file name without `.scene` (the
+format has no title); the line above it says `SCENE · <HOST>`. **No poster**: the poster styles need
+the run's coordinates, which a scene leaves out. Nothing is stored or sent on; `?scene=` stays in the
+address bar until the visitor opens something else, so the link can be reloaded and shared. When the
+scene cannot be opened, Vert's Upload page says why over its drop zone: "Could not open that scene:
+the server answered 404." (or: not reachable or no CORS, not a Vert scene, a newer format, damaged,
+too large, not an https link).
+
+**What the scene's host must serve.**
+
+- **CORS** on the scenes: `Access-Control-Allow-Origin` for `/terrain/*` (Activities; `/scenes/*` in
+  this guide's examples). `*` is right: the fetch carries no credentials, and a fixed value needs no
+  `Vary: Origin`. Without it the browser keeps the bytes from Vert ("the server could not be
+  reached, or it does not let other sites read the file (CORS)"). The request is a plain GET with no
+  custom headers, so there is no preflight. In `public/_headers`:
+
+  ```text
+  /terrain/*
+    Access-Control-Allow-Origin: *
+  ```
+
+  It adds no `Cache-Control` rule, so Activities' one-rule-per-path check still holds.
+
+- **Content-Type** `application/octet-stream` for `*.scene`, as in
+  [Serving](#serving-type-caching-compression). Vert reads the bytes whatever the type and checks the
+  magic, so a missing scene answered with the SPA's `index.html` and 200 reads "the file is not a
+  Vert scene."
+- **Caching** stays as it is (`no-cache` revalidates; a `?v=` URL may be `immutable`).
+
+To try a link locally, `pnpm dev` in Vert and
+`http://localhost:5173/?scene=http://localhost:5173/samples/coosa-backcountry.scene` (Vert serves its
+sample scene at `/samples/`).
+
 ## 4. Baking
 
 ```sh

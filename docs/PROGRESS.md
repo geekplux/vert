@@ -177,7 +177,26 @@ change, branch `npm-package`.
 | [x]  | GitHub Actions: `check.yml`, `release.yml` (trusted publishing)              | `docs/PUBLISH.md`: the first publish by hand, then a tag per release.                   |
 | [x]  | INTEGRATION.md §2 "Installing" (npm first, vendoring after), §4, changelog   | README "Use it in your site"; SCENE.md and the library README name `vert-bake`.         |
 
+## Page: open a scene by URL (2026-10-19)
+
+`https://vert.geekplux.org/?scene=<absolute scene URL>` opens a baked scene in the View (rulings in
+DECISIONS.md "Page: open a scene by URL"); branch `scene-url`. Site only: the library and its
+version (0.2.0) are unchanged, so no changelog entry.
+
+| Done | Item                                                                         | Notes                                                                                      |
+| ---- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [x]  | `src/page/sceneLink.ts`: parse `?scene=`, fetch (CORS, no credentials), cap  | Unit tests: URL rules; fetch ok, 404, CORS `TypeError`, not a scene, newer, cut, oversize. |
+| [x]  | `RunProvider` holds a `LinkedScene`; `chooseScene` drives the state machine  | Upload "Reading <id>.scene…", then View or "Could not open that scene: …".                 |
+| [x]  | `SceneViewState`, `TerrainBox` with `scene`; no Make a poster                | Shared View pieces exported from `ViewState.tsx`; copy in `sceneCopy.ts`.                  |
+| [x]  | Sample scene at `/samples/coosa-backcountry.scene`; `e2e/scene-link.spec.ts` | Terrain drawn, stats, keyboard scrub, no cookie or referrer, axe 0 at 1440 and 390.        |
+| [x]  | INTEGRATION.md "Link to Vert" (URL, CORS, content type), README, DECISIONS   |                                                                                            |
+
 ## Needs Sean
+
+- **Activities' scene host needs CORS** for "Open in Vert ↗" to show the scene:
+  `Access-Control-Allow-Origin: *` on `/terrain/*` in its `public/_headers`
+  (INTEGRATION.md "Link to Vert"). Without it Vert says "the server could not be reached, or it does
+  not let other sites read the file (CORS)".
 
 - **Publish 0.2.0** (`docs/PUBLISH.md`): merge the `npm-package` PR, `npm login` and
   `pnpm publish` from a clean `main` once, add the trusted publisher on npmjs.com; later releases

@@ -14,6 +14,11 @@ It is real terrain with synthetic timing:
 - **Times**: synthetic sample data from a grade-dependent trail-running pace model, starting
   Saturday 2026-10-03 at 07:10 America/New_York. Not anyone's actual run.
 
+`coosa-backcountry.scene` is the same run baked into a scene (`docs/SCENE.md`): a byte-for-byte
+copy of the library's fixture (`src/scene/fixtures/`, a unit test keeps them equal), served so
+that `/?scene=https://vert.geekplux.org/samples/coosa-backcountry.scene` opens it and the e2e
+can test `?scene=` against its own origin.
+
 ## Regenerate
 
 ```sh

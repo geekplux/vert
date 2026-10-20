@@ -415,7 +415,7 @@ Then it shows the scene as it shows a dropped GPX: the terrain (Rotate view, Fla
 and its keyboard scrub with the readout (pace when the scene has times), the climbs, the
 exaggeration, and the stats a scene carries: the whole run's distance and climb, the drawn length
 and the drawn route's high point (no moving time). The h1 is `&title=`, else the file name without
-`.scene` (the format has no title); the line above it says `SCENE · <HOST>`. **No poster**: the poster styles need
+`.scene` (the format has no title); the line above it says `SCENE · <HOST>` (the host that served the file, after any redirect). **No poster**: the poster styles need
 the run's coordinates, which a scene leaves out. Nothing is stored or sent on; `?scene=` stays in the
 address bar until the visitor opens something else, so the link can be reloaded and shared. When the
 scene cannot be opened, Vert's Upload page says why over its drop zone: "Could not open that scene:

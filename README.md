@@ -76,7 +76,7 @@ Files from Strava, Garmin, Coros and Suunto all work, up to 20 MB.
 
 A site that publishes baked scenes can link straight to one:
 `https://vert.geekplux.org/?scene=<absolute URL of a .scene file>` opens it in the 3D view
-([try it](https://vert.geekplux.org/?scene=https://vert.geekplux.org/samples/coosa-backcountry.scene);
+([try it](https://vert.geekplux.org/?scene=https%3A%2F%2Fvert.geekplux.org%2Fsamples%2Fcoosa-backcountry.scene&title=Coosa%20Backcountry);
 [how to link](docs/INTEGRATION.md#link-to-vert)).
 
 **Requirements:** Node.js ≥ 22.18 (see `.nvmrc`) and pnpm. In development, elevation tiles are

@@ -946,15 +946,22 @@ The site changed, not the library: no version bump, no changelog entry.
   scene stores.
 - **Title: `&title=<text>`, optional.** The format carries no title (names are forbidden
   content), and an h1 reading "8071241781" is not fit for a page Activities links to. So the link
-  may carry the session's name: decoded, control characters dropped, whitespace collapsed, trimmed,
-  cut at 80 characters (code points; `sceneTitle`), rendered as text only (React text and
-  `document.title`, never HTML). It is the h1 and the tab title ("Translantau 50 · Vert", restored
-  when the scene is left). Without it (or when nothing is left of it) the h1 is the file name
-  without `.scene`, or the host when the path has none, and `document.title` is unchanged, as for a
-  GPX. The mono line above the h1, where a run shows its date, stays `SCENE · <HOST>`, so a visitor
-  sees where the scene came from whatever the title says. Leaving the scene removes `&title=` from
-  the address bar with `?scene=`. The title is the host's text: the scene's privacy rules do not
-  apply to it, and Vert sends it nowhere.
+  may carry the session's name. `sceneTitle` makes it fit to show: control characters become
+  spaces, format characters (`\p{Cf}`: bidi overrides such as U+202E, zero-width spaces and joiners)
+  are dropped so nothing can reverse or hide text, whitespace collapses, trimmed, cut at 80
+  characters (code points). It is rendered as text only (React text and `document.title`, never
+  HTML) and is the h1 and the tab title ("Translantau 50 · Vert", restored when the scene is left).
+  Without it (or when nothing is left of it) the h1 is the file name without `.scene`, sanitised the
+  same way, or the host when nothing is left of that either, and `document.title` is unchanged, as
+  for a GPX. The mono line above the h1, where a run shows its date, stays `SCENE · <HOST>`, with the
+  host that served the file after any redirect (`response.url`), so a visitor sees where the scene
+  came from whatever the title says. Leaving the scene removes `&title=` from the address bar with
+  `?scene=`. The title is the host's text: the scene's privacy rules do not apply to it, and Vert
+  sends it nowhere.
+- **StrictMode.** The page keeps `?scene=` until the open has an answer (`chooseScene` resolves
+  `true` once it sent `RUN_LOADED` or `LOAD_FAILED`): in development, StrictMode's simulated unmount
+  aborts the first fetch through `RunProvider`'s cleanup, and the effect's second run opens the link
+  again. Clearing it on the first run left `pnpm dev` on "Reading …" for good.
 - **No poster for a scene.** Every poster style needs what a scene leaves out on purpose: the
   run's coordinates (Trail Sign's and the others' framing bounds, Night Ridge's and Survey Quad's
   tile-built grids, the sunrise along the route, the local date). Faking them would defeat the

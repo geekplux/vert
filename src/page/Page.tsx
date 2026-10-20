@@ -137,17 +137,23 @@ function PageContent({
     id: number;
     screenKey: ScreenKey;
   } | null>(null);
-  // `?scene=<url>`: open it once, on mount, as if the file had been chosen on Upload. A link that
-  // cannot be fetched says why there, above the Dropzone. (Under StrictMode the effect runs twice;
-  // the second call is ignored while the first load is in flight.)
+  // `?scene=<url>`: open it on mount, as if the file had been chosen on Upload. A link that cannot
+  // be fetched says why there, above the Dropzone. The parameter is kept until the open has an
+  // answer: under StrictMode the provider's simulated unmount aborts the first fetch (its
+  // `chooseScene` resolves `false`) and the effect's second run opens it again.
   const sceneParamRef = useRef(sceneParam);
   const titleParamRef = useRef(titleParam);
   useEffect(() => {
     const parsed = parseSceneParam(sceneParamRef.current);
-    sceneParamRef.current = null;
     if (!parsed) return;
-    if ('error' in parsed) dispatch({ type: 'LOAD_FAILED', message: parsed.error });
-    else chooseScene(parsed.url, sceneTitle(titleParamRef.current));
+    if ('error' in parsed) {
+      sceneParamRef.current = null;
+      dispatch({ type: 'LOAD_FAILED', message: parsed.error });
+      return;
+    }
+    void chooseScene(parsed.url, sceneTitle(titleParamRef.current)).then((answered) => {
+      if (answered) sceneParamRef.current = null;
+    });
   }, [chooseScene, dispatch]);
 
   const shownName = run?.name ?? linkedScene?.name ?? '';

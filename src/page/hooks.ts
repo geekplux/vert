@@ -52,9 +52,9 @@ import { realLoadRun } from '../gpx/loadRun';
 import { withInterpolatedGaps, withTerrainElevation } from '../gpx/terrainElevation';
 import type { Scene } from '../scene/types';
 import { realLoadScene, sceneFileName, sceneName, SCENE_GENERIC_ERROR } from './sceneLink';
-import type { LoadScene } from './sceneLink';
+import type { FetchedScene, LoadScene } from './sceneLink';
 
-export type { LoadScene } from './sceneLink';
+export type { FetchedScene, LoadScene } from './sceneLink';
 
 /**
  * A baked scene opened from a link (`?scene=`, src/page/sceneLink.ts): the decoded scene and what
@@ -72,7 +72,10 @@ export interface LinkedScene {
   readonly name: string;
   /** Whether `name` came from `&title=` (it then also names the tab, `document.title`). */
   readonly titled: boolean;
-  /** The host it came from ("activities.geekplux.org"), for the line above the h1. */
+  /**
+   * The host that served it, after any redirect ("activities.geekplux.org"), for the line above
+   * the h1.
+   */
   readonly host: string;
 }
 
@@ -426,24 +429,25 @@ export function RunProvider({
         signal.addEventListener('abort', () => {
           resolve(null);
         });
-        let loading: Promise<Scene>;
+        let loading: Promise<FetchedScene>;
         try {
           loading = loadScene(url, signal);
         } catch (error: unknown) {
           loading = Promise.reject(error instanceof Error ? error : new Error(String(error)));
         }
         loading.then(
-          (decoded) => {
+          (fetched) => {
             if (signal.aborted) return;
             pending.current = null;
             perfMark(PERF_MARKS.parsed);
             sceneCount.current += 1;
             const linked: LinkedScene = {
               id: `scene-${String(sceneCount.current)}`,
-              scene: decoded,
+              scene: fetched.scene,
+              // `title` is already `sceneTitle`'d; `sceneName` sanitises the file name the same way.
               name: title ?? sceneName(url),
               titled: title !== null,
-              host: url.hostname,
+              host: fetched.host,
             };
             setRun(null);
             setScene(linked);
@@ -541,12 +545,15 @@ function loadErrorMessage(error: unknown, generic = GENERIC_LOAD_ERROR): string 
  *   during an export.
  * - `chooseScene` opens a scene from a link (`?scene=`) the same way: Upload reads
  *   "Reading <id>.scene…" (`FILE_CHOSEN`), then `RUN_LOADED` (no poster text: a scene has no
- *   poster) or `LOAD_FAILED` with "Could not open that scene: …".
+ *   poster) or `LOAD_FAILED` with "Could not open that scene: …". It resolves `true` once one of
+ *   those was sent, `false` when the choice was ignored (a load in flight) or superseded (another
+ *   choice, New file, or an unmount: StrictMode's simulated one included), so the page can try a
+ *   link again until it has an answer.
  */
 export function useRunChooser(dispatch: Dispatch<PageAction>): {
   chooseFile: (file: File) => void;
   chooseSample: () => void;
-  chooseScene: (url: URL, title?: string | null) => void;
+  chooseScene: (url: URL, title?: string | null) => Promise<boolean>;
   newFile: () => boolean;
 } {
   const { load, openScene, clear, isLoading } = useRunContext('useRunChooser');
@@ -578,19 +585,22 @@ export function useRunChooser(dispatch: Dispatch<PageAction>): {
         settle(load({ kind: 'sample' }));
       },
       chooseScene: (url: URL, title: string | null = null) => {
-        if (isLoading()) return;
+        if (isLoading()) return Promise.resolve(false);
         perfMark(PERF_MARKS.chosen);
         preloadTerrainView();
         dispatch({ type: 'FILE_CHOSEN', fileName: sceneFileName(url) });
-        openScene(url, title).then(
+        return openScene(url, title).then(
           (linked) => {
-            if (linked) dispatch({ type: 'RUN_LOADED', runId: linked.id });
+            if (!linked) return false;
+            dispatch({ type: 'RUN_LOADED', runId: linked.id });
+            return true;
           },
           (error: unknown) => {
             dispatch({
               type: 'LOAD_FAILED',
               message: loadErrorMessage(error, SCENE_GENERIC_ERROR),
             });
+            return true;
           },
         );
       },

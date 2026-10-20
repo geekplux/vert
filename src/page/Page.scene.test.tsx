@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { StrictMode } from 'react';
 import { join } from 'node:path';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,9 +29,14 @@ function pendingLoader() {
   let settle!: { resolve: (scene: Scene) => void; reject: (error: Error) => void };
   const loadScene = vi.fn<LoadScene>(
     (url) =>
-      new Promise<Scene>((resolve, reject) => {
+      new Promise((resolve, reject) => {
         urls.push(url.href);
-        settle = { resolve, reject };
+        settle = {
+          resolve: (scene) => {
+            resolve({ scene, host: url.hostname });
+          },
+          reject,
+        };
       }),
   );
   return {
@@ -168,6 +174,47 @@ describe('Page with ?scene=', () => {
       await screen.findByRole('heading', { level: 1, name: 'coosa-backcountry' }),
     ).toBeDefined();
     expect(document.title).toBe('Vert · Drop a GPX. Get a poster.');
+  });
+
+  it('opens the link under StrictMode too (the simulated unmount aborts the first fetch)', async () => {
+    const signals: AbortSignal[] = [];
+    const loadScene = vi.fn<LoadScene>((url, signal) => {
+      signals.push(signal);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({ scene: SCENE, host: url.hostname });
+        }, 10);
+      });
+    });
+    render(
+      <StrictMode>
+        <Page schedule={immediateSchedule} sceneParam={LINK} loadScene={loadScene} />
+      </StrictMode>,
+    );
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'coosa-backcountry' }),
+    ).toBeDefined();
+    // The first fetch was aborted by StrictMode's simulated unmount; the second one opened it.
+    expect(loadScene).toHaveBeenCalledTimes(2);
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
+  });
+
+  it('sanitises a file-name h1 as a title: no line breaks, at most 80 characters', async () => {
+    const segment = encodeURIComponent(`${'x'.repeat(100)}\n\u000b\u202e${'y'.repeat(110)}`);
+    const loader = pendingLoader();
+    render(
+      <Page
+        schedule={immediateSchedule}
+        sceneParam={`https://example.org/terrain/${segment}.scene`}
+        loadScene={loader.loadScene}
+      />,
+    );
+    await act(async () => {
+      loader.resolve(SCENE);
+      await Promise.resolve();
+    });
+    const heading = await screen.findByRole('heading', { level: 1 });
+    expect(heading.textContent).toBe('x'.repeat(80));
   });
 
   it('scrubs the profile by keyboard, moving the terrain marker with it', async () => {

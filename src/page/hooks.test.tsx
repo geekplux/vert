@@ -453,7 +453,9 @@ describe('RunProvider scenes (?scene=)', () => {
   }
 
   it('opens a scene as the current one: no run, no terrain build; a run then replaces it', async () => {
-    const loadScene = vi.fn<LoadScene>(() => Promise.resolve(SCENE));
+    const loadScene = vi.fn<LoadScene>(() =>
+      Promise.resolve({ scene: SCENE, host: 'cdn.example.org' }),
+    );
     const loadTerrain = vi.fn<LoadTerrain>(pendingLoadTerrain);
     const { result } = renderHook(useBoth, {
       wrapper: ({ children }: { children: ReactNode }) => (
@@ -463,12 +465,17 @@ describe('RunProvider scenes (?scene=)', () => {
       ),
     });
     await act(async () => {
-      result.current.chooseScene(URL_A);
+      void result.current.chooseScene(URL_A);
       await Promise.resolve();
     });
     expect(loadScene).toHaveBeenCalledTimes(1);
     expect(loadScene.mock.calls[0]?.[0].href).toBe(URL_A.href);
-    expect(result.current.scene).toMatchObject({ name: 'a', host: 'example.org', scene: SCENE });
+    // The host is the one that served it (after redirects), not the link's.
+    expect(result.current.scene).toMatchObject({
+      name: 'a',
+      host: 'cdn.example.org',
+      scene: SCENE,
+    });
     expect(result.current.run).toBeNull();
     expect(result.current.terrain.status).toBe('idle');
     expect(loadTerrain).not.toHaveBeenCalled();
@@ -481,7 +488,7 @@ describe('RunProvider scenes (?scene=)', () => {
   });
 
   it('a scene that is superseded by a file choice never becomes current', async () => {
-    let finish!: (scene: typeof SCENE) => void;
+    let finish!: (fetched: { scene: typeof SCENE; host: string }) => void;
     const loadScene = vi.fn<LoadScene>(
       () =>
         new Promise((resolve) => {
@@ -496,13 +503,13 @@ describe('RunProvider scenes (?scene=)', () => {
       ),
     });
     act(() => {
-      result.current.chooseScene(URL_A);
+      void result.current.chooseScene(URL_A);
     });
     await act(async () => {
       await result.current.load({ kind: 'sample' });
     });
     await act(async () => {
-      finish(SCENE);
+      finish({ scene: SCENE, host: 'example.org' });
       await Promise.resolve();
     });
     expect(result.current.scene).toBeNull();

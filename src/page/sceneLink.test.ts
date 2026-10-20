@@ -97,6 +97,10 @@ describe('sceneName and sceneFileName', () => {
     expect(sceneName(new URL('https://example.com/a/b/Mont%20Blanc.scene?v=1'))).toBe('Mont Blanc');
     expect(sceneName(new URL('https://example.com/a/%E0%A4%A.scene'))).toBe('%E0%A4%A');
     expect(sceneName(new URL('https://example.com/'))).toBe('example.com');
+    // Sanitised as a title: whitespace and controls collapse, 80 characters at most.
+    const long = encodeURIComponent(`a\nb\u000bc\u202e${'d'.repeat(200)}`);
+    expect(sceneName(new URL(`https://example.com/${long}.scene`))).toBe(`a b c${'d'.repeat(75)}`);
+    expect(sceneName(new URL('https://example.com/%20%0A.scene'))).toBe('example.com');
     expect(sceneFileName(new URL('https://example.com/'))).toBe('example.com');
   });
 });
@@ -113,6 +117,12 @@ describe('sceneTitle', () => {
     expect(sceneTitle('  Translantau   50 ')).toBe('Translantau 50');
     expect(sceneTitle('Lantau\n\t2 Peaks\u0000 Night')).toBe('Lantau 2 Peaks Night');
     expect(sceneTitle('Sunset\u00a0Peak')).toBe('Sunset Peak');
+  });
+
+  it('drops format characters, so nothing can reverse or hide text', () => {
+    expect(sceneTitle('Lantau\u202e50')).toBe('Lantau50');
+    expect(sceneTitle('Tai\u200bMo\u200dShan\u2066x\u2069')).toBe('TaiMoShanx');
+    expect(sceneTitle('\u200b\u202e')).toBeNull();
   });
 
   it('keeps markup as plain text, unchanged', () => {
@@ -139,8 +149,10 @@ describe('SCENE_MAX_BYTES', () => {
 describe('fetchScene', () => {
   it('fetches with CORS, no credentials and no referrer, and decodes the scene', async () => {
     const fetch = fakeFetch(okResponse(FIXTURE));
-    const scene = await fetchScene(SCENE_URL, new AbortController().signal, fetch);
+    const { scene, host } = await fetchScene(SCENE_URL, new AbortController().signal, fetch);
     expect(scene.summary).toEqual(decodeScene(FIXTURE).summary);
+    // A Response built in a test has no url: the link's host.
+    expect(host).toBe('activities.geekplux.org');
     expect(fetch).toHaveBeenCalledTimes(1);
     const [input, init] = fetch.mock.calls[0] ?? [];
     expect(input).toBe(SCENE_URL.href);
@@ -152,6 +164,15 @@ describe('fetchScene', () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(init?.method).toBeUndefined();
     expect(init?.body).toBeUndefined();
+  });
+
+  it('names the host that served the file after a redirect', async () => {
+    const response = okResponse(FIXTURE);
+    Object.defineProperty(response, 'url', {
+      value: 'https://cdn.example.net/x/coosa-backcountry.scene',
+    });
+    const { host } = await fetchScene(SCENE_URL, new AbortController().signal, fakeFetch(response));
+    expect(host).toBe('cdn.example.net');
   });
 
   it('says what the server answered for an HTTP error', async () => {

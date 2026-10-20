@@ -31,16 +31,18 @@ export const TITLE_PARAM = 'title';
 export const SCENE_TITLE_MAX = 80;
 
 /**
- * `&title=` as the page received it (already percent-decoded), made fit to show: control
- * characters dropped, whitespace collapsed to single spaces, trimmed, cut to `SCENE_TITLE_MAX`
- * characters. `null` when nothing is left. It is plain text: React renders it as text and it is
- * written to `document.title`, never parsed as HTML.
+ * `&title=` as the page received it (already percent-decoded), or the file-name fallback, made fit
+ * to show: control characters become spaces, format characters (`\p{Cf}`: bidi overrides such as
+ * U+202E, zero-width spaces) are dropped so nothing can reverse or hide text, whitespace collapses
+ * to single spaces, trimmed, cut to `SCENE_TITLE_MAX` characters. `null` when nothing is left. It
+ * is plain text: React renders it as text and it is written to `document.title`, never parsed as
+ * HTML.
  */
 export function sceneTitle(value: string | null): string | null {
   if (value === null) return null;
   const collapsed = value
-    // eslint-disable-next-line no-control-regex -- removing control characters is the point
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/\p{Cf}/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
   const cut = Array.from(collapsed).slice(0, SCENE_TITLE_MAX).join('').trim();
@@ -115,8 +117,9 @@ export function parseSceneParam(value: string | null): SceneParam | null {
 }
 
 /**
- * The scene's name for its h1: the file name without `.scene` ("coosa-backcountry"), else the
- * host. The format carries no title (names are forbidden content, docs/SCENE.md).
+ * The scene's name for its h1 without `&title=`: the file name without `.scene`
+ * ("coosa-backcountry"), sanitised as a title is (`sceneTitle`), else the host. The format carries
+ * no title (names are forbidden content, docs/SCENE.md).
  */
 export function sceneName(url: URL): string {
   const last = url.pathname.split('/').filter(Boolean).at(-1) ?? '';
@@ -126,8 +129,7 @@ export function sceneName(url: URL): string {
   } catch {
     // A malformed escape: keep the segment as it is.
   }
-  name = name.replace(/\.scene$/i, '').trim();
-  return name === '' ? url.hostname : name;
+  return sceneTitle(name.replace(/\.scene$/i, '')) ?? url.hostname;
 }
 
 /** The file name the Upload screen shows while it reads ("Reading coosa-backcountry.scene…"). */
@@ -138,8 +140,23 @@ export function sceneFileName(url: URL): string {
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
+/** A fetched scene and the host that served it (after any redirect). */
+export interface FetchedScene {
+  readonly scene: Scene;
+  readonly host: string;
+}
+
 /** Fetches and decodes a scene from its URL (`LoadScene` in hooks.ts). */
-export type LoadScene = (url: URL, signal: AbortSignal) => Promise<Scene>;
+export type LoadScene = (url: URL, signal: AbortSignal) => Promise<FetchedScene>;
+
+/** The host the response came from (`response.url` follows redirects), else the link's. */
+function servedHost(response: Response, url: URL): string {
+  try {
+    return response.url ? new URL(response.url).hostname : url.hostname;
+  } catch {
+    return url.hostname;
+  }
+}
 
 function isAbort(error: unknown, signal: AbortSignal): boolean {
   return signal.aborted || (error instanceof DOMException && error.name === 'AbortError');
@@ -202,7 +219,7 @@ export async function fetchScene(
   url: URL,
   signal: AbortSignal,
   fetchImpl: FetchLike = (input, init) => fetch(input, init),
-): Promise<Scene> {
+): Promise<FetchedScene> {
   let response: Response;
   try {
     response = await fetchImpl(url.href, {
@@ -238,7 +255,7 @@ export async function fetchScene(
   // The decoder loads only when a link is opened, so Upload's first load stays as light as it was.
   const { decodeScene } = await import('../scene/decode');
   try {
-    return decodeScene(bytes);
+    return { scene: decodeScene(bytes), host: servedHost(response, url) };
   } catch (error: unknown) {
     if (error instanceof SceneError) throw new RunLoadError(decodeError(error));
     throw error;

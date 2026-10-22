@@ -293,7 +293,7 @@ describe('NightRidgePoster', () => {
       );
       const root = screen.getByRole('img', { name: /^Poster: / });
       expect(root.querySelector('[data-slot="footer"]')?.textContent).toBe(
-        'ELEVATION FROM TERRAIN DATA · ELEVATION ×2.4VERT.GEEKPLUX.ORG',
+        'ELEVATION FROM TERRAIN DATA · ELEVATION ×2.4VERT.GEEKPLUX.COM',
       );
       expect(root.getAttribute('aria-label')).toContain('Elevation from terrain data.');
     });
@@ -308,14 +308,14 @@ describe('NightRidgePoster', () => {
 
   it('puts the subtitle before the exaggeration in the footer', () => {
     const { slot } = renderPoster('18x24', { poster: { subtitle: 'Vogel SP' } });
-    expect(slot('footer')?.textContent).toBe('Vogel SP · ELEVATION ×2.4VERT.GEEKPLUX.ORG');
+    expect(slot('footer')?.textContent).toBe('Vogel SP · ELEVATION ×2.4VERT.GEEKPLUX.COM');
   });
 
   it('prints the exaggeration the ridges are drawn at, from the one function', () => {
     // Setting ×2 → drawn (and printed) ×3, in the footer and in the accessible name.
     const { root, slot } = renderPoster('18x24', { prefs: { exaggeration: 2 } });
     expect(ridgeExaggeration(2)).toBe(3);
-    expect(slot('footer')?.textContent).toBe('ELEVATION ×3.0VERT.GEEKPLUX.ORG');
+    expect(slot('footer')?.textContent).toBe('ELEVATION ×3.0VERT.GEEKPLUX.COM');
     expect(root.getAttribute('aria-label')).toMatch(/ Elevation ×3\.0\.$/);
   });
 
@@ -326,7 +326,7 @@ describe('NightRidgePoster', () => {
       figureFailed: true,
       poster: { subtitle: 'Vogel SP' },
     });
-    expect(slot('footer')?.textContent).toBe('Vogel SPVERT.GEEKPLUX.ORG');
+    expect(slot('footer')?.textContent).toBe('Vogel SPVERT.GEEKPLUX.COM');
     expect(root.getAttribute('aria-label')).not.toMatch(/Elevation ×/);
     expect(slot('figure')?.textContent).toBe('The terrain couldn’t be drawn.');
   });

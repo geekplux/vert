@@ -21,7 +21,7 @@ import {
 import type { Scene } from '../scene/types';
 import { RunLoadError } from './errors';
 
-/** The query parameter: `https://vert.geekplux.org/?scene=<absolute scene URL>`. */
+/** The query parameter: `https://vert.geekplux.com/?scene=<absolute scene URL>`. */
 export const SCENE_PARAM = 'scene';
 
 /** The optional title: `&title=<text>`, the h1 and `document.title` instead of the file name. */

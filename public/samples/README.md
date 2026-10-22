@@ -16,7 +16,7 @@ It is real terrain with synthetic timing:
 
 `coosa-backcountry.scene` is the same run baked into a scene (`docs/SCENE.md`): a byte-for-byte
 copy of the library's fixture (`src/scene/fixtures/`, a unit test keeps them equal), served so
-that `/?scene=https://vert.geekplux.org/samples/coosa-backcountry.scene` opens it and the e2e
+that `/?scene=https://vert.geekplux.com/samples/coosa-backcountry.scene` opens it and the e2e
 can test `?scene=` against its own origin.
 
 ## Regenerate

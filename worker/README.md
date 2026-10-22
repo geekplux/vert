@@ -72,9 +72,10 @@ the `previews` block in `wrangler.jsonc`, which points `TILES` at the bucket `ve
 (created on 2026-10-18), so a preview fills its own tile cache and never writes into production's.
 Without that block the preview build fails before it deploys anything.
 
-The Worker answers at https://vert.geekplux.com, the main custom domain, and at
-https://vert.geekplux.org, a second custom domain on the same Worker; `vert.fum.workers.dev`, the
-Worker's own address, still answers too.
+The Worker answers at https://vert.geekplux.com (a custom domain); `vert.fum.workers.dev`, the
+Worker's own address, still answers too. https://vert.geekplux.org is also a custom domain on the
+Worker, but an account-level Bulk Redirect sends every request on it to the same path on `.com`
+(301) before the Worker runs; the custom domain stays only to keep its DNS record and certificate.
 
 After a deploy, check:
 `curl -sI https://vert.geekplux.com/tiles/12/655/1582.png` twice (`X-Tile-Source: upstream`,

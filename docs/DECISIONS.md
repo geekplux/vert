@@ -979,17 +979,23 @@ The site changed, not the library: no version bump, no changelog entry.
 ## Main domain: vert.geekplux.com (2026-10-21)
 
 Sean bound **vert.geekplux.com** to the Worker as the main domain. **vert.geekplux.org** stays
-bound and keeps serving the same app and `/tiles/`, so links already out there (Activities' "Open
-in Vert ↗", shared `?scene=` links, posters printed before today) keep working. Neither redirects
-to the other.
+bound, but an account-level Bulk Redirect answers it first: every request, http or https, gets a
+301 to the same path and query string on `.com`, before it reaches the Worker. Links already out
+there (Activities' "Open in Vert ↗", shared `?scene=` links, posters printed before today) land on
+the same page; `/tiles/` requests are redirected too, and `fetch` follows them.
 
 - Everything Vert prints or links names `.com`: the poster footer (`VERT.GEEKPLUX.COM`), the
   canonical URL and Open Graph tags, the social card, the README, `package.json`'s `homepage`, the
   GitHub repository's website, `pnpm bake`'s default `--tiles`, and the tile proxy's User-Agent.
-- The canonical tag points search engines at `.com`, so the two hosts are not indexed as
-  duplicates.
+- One origin, not two: browser storage (Vert's saved preferences) lives per origin, and search
+  engines see one site. A visitor's preferences saved on `.org` stay there; they start fresh on
+  `.com`.
+- The `.org` custom domain stays on the Worker: it keeps the hostname's DNS record and
+  certificate, which the redirect needs. Removing the Bulk Redirect rule restores `.org` at once.
+- A redirect response carries no CORS header, so a `?scene=` URL that itself points at a
+  redirected host (`https://activities.geekplux.org/terrain/…`) cannot be read; link the scene's
+  final URL (INTEGRATION.md "Link to Vert"). Activities builds the link from its own origin, so new
+  links name `.com`.
 - Posters are the app's own HTML and carry the URL as text, so the change needs no new fonts or
   layout; the showcase images, the Upload band's WebP and the social card are recaptured with
   `pnpm posters`.
-- A scene link is cross-origin across the two hosts (`.com` page, `.org` sample), and the static
-  samples send no CORS header; link the sample on the same host as the page.

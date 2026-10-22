@@ -194,16 +194,16 @@ version (0.2.0) are unchanged, so no changelog entry.
 
 ## Main domain: vert.geekplux.com (2026-10-21)
 
-Sean bound vert.geekplux.com as the main domain; vert.geekplux.org keeps serving the same Worker
-(DECISIONS.md "Main domain: vert.geekplux.com"); branch `domain-com`. The library's code is
+Sean bound vert.geekplux.com as the main domain; vert.geekplux.org 301-redirects to it through an
+account-level Bulk Redirect (DECISIONS.md "Main domain: vert.geekplux.com"); branch `domain-com`. The library's code is
 unchanged; `package.json`'s `homepage` reaches npm with the next release.
 
-| Done | Item                                                                    | Notes                                                                     |
-| ---- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [x]  | Poster footer `VERT.GEEKPLUX.COM`; canonical, Open Graph, `homepage`    | Unit tests updated. Gate: 1,951 unit, 54 e2e.                             |
-| [x]  | `pnpm bake` default `--tiles`, tile proxy User-Agent                    | Both hosts answer `/tiles/` (checked with curl).                          |
-| [x]  | `pnpm posters`: README posters, Upload band WebP, `public/og-image.png` | `view.png` and `view-phone.png` came out byte-identical (no URL in them). |
-| [x]  | README, CLAUDE.md, PLAN, INTEGRATION, SCENE, worker README, GitHub site |                                                                           |
+| Done | Item                                                                    | Notes                                                                       |
+| ---- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [x]  | Poster footer `VERT.GEEKPLUX.COM`; canonical, Open Graph, `homepage`    | Unit tests updated. Gate: 1,951 unit, 54 e2e.                               |
+| [x]  | `pnpm bake` default `--tiles`, tile proxy User-Agent                    | `.org` (page, `/tiles/`, http and https) 301s to `.com`; checked with curl. |
+| [x]  | `pnpm posters`: README posters, Upload band WebP, `public/og-image.png` | `view.png` and `view-phone.png` came out byte-identical (no URL in them).   |
+| [x]  | README, CLAUDE.md, PLAN, INTEGRATION, SCENE, worker README, GitHub site |                                                                             |
 
 ## Needs Sean
 

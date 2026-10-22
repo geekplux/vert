@@ -176,6 +176,6 @@ describe('posterAriaLabel', () => {
   });
 
   it('has a site URL for posters without a signature', () => {
-    expect(POSTER_URL).toBe('VERT.GEEKPLUX.ORG');
+    expect(POSTER_URL).toBe('VERT.GEEKPLUX.COM');
   });
 });

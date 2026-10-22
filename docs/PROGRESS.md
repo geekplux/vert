@@ -192,6 +192,19 @@ version (0.2.0) are unchanged, so no changelog entry.
 | [x]  | Optional `&title=` (h1 and `document.title`; sanitised, ≤ 80 characters)     | Unit tests for `sceneTitle`; e2e: "Translantau 50", and `<b>` renders literally.           |
 | [x]  | INTEGRATION.md "Link to Vert" (URL, CORS, content type), README, DECISIONS   |                                                                                            |
 
+## Main domain: vert.geekplux.com (2026-10-21)
+
+Sean bound vert.geekplux.com as the main domain; vert.geekplux.org keeps serving the same Worker
+(DECISIONS.md "Main domain: vert.geekplux.com"); branch `domain-com`. The library's code is
+unchanged; `package.json`'s `homepage` reaches npm with the next release.
+
+| Done | Item                                                                    | Notes                                                                     |
+| ---- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [x]  | Poster footer `VERT.GEEKPLUX.COM`; canonical, Open Graph, `homepage`    | Unit tests updated. Gate: 1,951 unit, 54 e2e.                             |
+| [x]  | `pnpm bake` default `--tiles`, tile proxy User-Agent                    | Both hosts answer `/tiles/` (checked with curl).                          |
+| [x]  | `pnpm posters`: README posters, Upload band WebP, `public/og-image.png` | `view.png` and `view-phone.png` came out byte-identical (no URL in them). |
+| [x]  | README, CLAUDE.md, PLAN, INTEGRATION, SCENE, worker README, GitHub site |                                                                           |
+
 ## Needs Sean
 
 - **Activities' scene host needs CORS** for "Open in Vert ↗" to show the scene:
@@ -209,7 +222,8 @@ version (0.2.0) are unchanged, so no changelog entry.
   activity, and a run whose start warning a larger `--trim` cannot clear gets none unless its start
   is a public place. Vendoring no longer waits: the repository is public since 2026-10-19.
 - **GitHub social preview (optional)**: GitHub has no API for it; upload `public/og-image.png` in
-  the repository's Settings → General → Social preview.
+  the repository's Settings → General → Social preview (again since 2026-10-21: the card now says
+  VERT.GEEKPLUX.COM).
 - **Cloudflare's network-error reports (optional)**: every response carries Cloudflare's
   `report-to` / `nel` headers, so a browser may report failed requests (URL only, i.e. tile z/x/y,
   never GPX data) to `a.nel.cloudflare.com`. Strictly that is a third-party request; Cloudflare's

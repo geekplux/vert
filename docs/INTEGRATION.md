@@ -391,11 +391,11 @@ A page that shows a scene can also link to Vert's own page for it, a bigger view
 install (Activities' "Open in Vert ↗"):
 
 ```text
-https://vert.geekplux.org/?scene=<absolute URL of the .scene file>
+https://vert.geekplux.com/?scene=<absolute URL of the .scene file>
 ```
 
 ```ts
-const href = `https://vert.geekplux.org/?scene=${encodeURIComponent(
+const href = `https://vert.geekplux.com/?scene=${encodeURIComponent(
   new URL(`/terrain/${id}.scene`, location.origin).href,
 )}&title=${encodeURIComponent(activity.name)}`;
 ```
@@ -466,7 +466,7 @@ host's build.
 | `--out`   | (required)                                                                                                                | the directory to write `<id>.scene` and `<id>.scene.json` to; created if needed; relative to the current directory                            |
 | `--id`    | from the input's file name (required with `-`)                                                                            | the files' base name: 1–64 of `a-z`, `0-9`, `_`, `-`, starting with a letter or digit; used as typed                                          |
 | `--trim`  | `200`                                                                                                                     | metres hidden at each end of the route, 0–10,000; `0` keeps the ends                                                                          |
-| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`                                                                         | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                              |
+| `--tiles` | `https://vert.geekplux.com/tiles/{z}/{x}/{y}.png`                                                                         | elevation tile URL template, http(s) with `{z}`, `{x}`, `{y}` ([policy](#5-tile-proxy-policy-for-offline-bakes))                              |
 | `--cache` | `node_modules/.cache/vert-bake/` in the current directory (`vert-bake`); Vert's `scripts/.cache/terrarium/` (`pnpm bake`) | the tile cache, `{z}/{x}/{y}.png`. It holds tile numbers: never commit or publish it                                                          |
 | `-v`      |                                                                                                                           | the version (`VERT_LIB_VERSION` for `vert-bake`, `package.json`'s for `pnpm bake`)                                                            |
 | `-h`      |                                                                                                                           | the usage text                                                                                                                                |
@@ -638,7 +638,7 @@ standard input as a stream, so any size up to the 128 MB limit goes through a pi
 
 ## 5. Tile proxy policy for offline bakes
 
-The default `--tiles` is Vert's tile Worker, `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`
+The default `--tiles` is Vert's tile Worker, `https://vert.geekplux.com/tiles/{z}/{x}/{y}.png`
 (`worker/README.md`): a proxy for AWS Terrain Tiles (Terrarium PNGs), cached in R2, paid for by
 Vert's owner.
 

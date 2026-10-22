@@ -494,7 +494,7 @@ Integrating the files into a host page is `docs/INTEGRATION.md`'s subject.
 | `--out`   | (required)                                           | the directory to write to (created if needed)                                                   |
 | `--id`    | the input's file name, lower-cased, other runs → `-` | the files' base name: `a-z`, `0-9`, `_`, `-`, at most 64, given ids as typed; required with `-` |
 | `--trim`  | 200                                                  | metres hidden at each end of the route (the poster's default); `0` keeps them                   |
-| `--tiles` | `https://vert.geekplux.org/tiles/{z}/{x}/{y}.png`    | elevation tile URL template (the tile Worker, or anything with its answers)                     |
+| `--tiles` | `https://vert.geekplux.com/tiles/{z}/{x}/{y}.png`    | elevation tile URL template (the tile Worker, or anything with its answers)                     |
 | `--cache` | `scripts/.cache/terrarium` (git-ignored)             | the tile cache, `{z}/{x}/{y}.png`                                                               |
 
 **What is checked in an id** (`scripts/bake/id.ts`). The id becomes a published file name, so:

@@ -62,7 +62,7 @@ export interface PosterContent {
 export const SIGNATURE_MAX = 40;
 
 /** The site URL a poster shows when it has no signature (DECISIONS: no invented data). */
-export const POSTER_URL = 'VERT.GEEKPLUX.ORG';
+export const POSTER_URL = 'VERT.GEEKPLUX.COM';
 
 /** The preferences a poster reads. */
 export type PosterContentPrefs = Pick<Prefs, 'units' | 'exaggeration'> & {

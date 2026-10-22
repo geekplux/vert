@@ -4,7 +4,7 @@
   "description": "3D terrain of a GPX run for a React page: a scene viewer, an elevation profile, and an offline bake that keeps coordinates out of the browser.",
   "license": "MIT",
   "author": "Sean G",
-  "homepage": "https://vert.geekplux.org",
+  "homepage": "https://vert.geekplux.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/geekplux/vert.git"

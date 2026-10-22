@@ -19,7 +19,7 @@ Links
 | Stack | Vite + TypeScript + React, Vitest, Playwright. pnpm. |
 | Hosting | Cloudflare Pages (app) + one Worker (tile proxy) + R2 (tile cache). |
 | Poster styles in v1 | A Trail Sign, B Night Ridge, E Survey Quad. |
-| Domain | vert.geekplux.org (planned as vert.geekplux.com; bound to the Worker on 2026-10-19) |
+| Domain | vert.geekplux.com, main (bound 2026-10-21); vert.geekplux.org still serves it (bound 2026-10-19) |
 | Name | "Vert" — check npm, GitHub and the domain for collisions before publishing. |
 
 ## Phases

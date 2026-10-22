@@ -437,6 +437,10 @@ too large, not an https link).
 
   It adds no `Cache-Control` rule, so Activities' one-rule-per-path check still holds.
 
+  A redirect on the way needs the header too: an old hostname that 301s to a new one (as
+  activities.geekplux.org does to `.com`) answers without it, and the browser stops there. Link the
+  scene's final URL.
+
 - **Content-Type** `application/octet-stream` for `*.scene`, as in
   [Serving](#serving-type-caching-compression). Vert reads the bytes whatever the type and checks the
   magic, so a missing scene answered with the SPA's `index.html` and 200 reads "the file is not a

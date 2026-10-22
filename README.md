@@ -7,9 +7,9 @@
 Vert turns one GPX file into a 3D terrain view of your run, ride or hike, then into a print-ready
 poster. Everything happens in your browser: your track never leaves your device.
 
-### [**Open Vert → vert.geekplux.org**](https://vert.geekplux.org)
+### [**Open Vert → vert.geekplux.com**](https://vert.geekplux.com)
 
-[![Website](https://img.shields.io/badge/website-vert.geekplux.org-D9480F.svg)](https://vert.geekplux.org)
+[![Website](https://img.shields.io/badge/website-vert.geekplux.com-D9480F.svg)](https://vert.geekplux.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1B2A3A.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-1B2A3A.svg?logo=typescript&logoColor=white)](tsconfig.json)
 [![React 19](https://img.shields.io/badge/React-19-1B2A3A.svg?logo=react&logoColor=white)](package.json)
@@ -58,7 +58,7 @@ much of the start and end to hide (0 to 500 m).
 
 ## Try it
 
-The quickest way is the website: open **[vert.geekplux.org](https://vert.geekplux.org)**, click
+The quickest way is the website: open **[vert.geekplux.com](https://vert.geekplux.com)**, click
 **Try the sample run** or drop a `.gpx` file onto the page. Nothing is uploaded, so it works the same
 as running it yourself.
 
@@ -75,8 +75,8 @@ Open the URL Vite prints and click **Try the sample run**, or drop any `.gpx` fi
 Files from Strava, Garmin, Coros and Suunto all work, up to 20 MB.
 
 A site that publishes baked scenes can link straight to one:
-`https://vert.geekplux.org/?scene=<absolute URL of a .scene file>` opens it in the 3D view
-([try it](https://vert.geekplux.org/?scene=https%3A%2F%2Fvert.geekplux.org%2Fsamples%2Fcoosa-backcountry.scene&title=Coosa%20Backcountry);
+`https://vert.geekplux.com/?scene=<absolute URL of a .scene file>` opens it in the 3D view
+([try it](https://vert.geekplux.com/?scene=https%3A%2F%2Fvert.geekplux.com%2Fsamples%2Fcoosa-backcountry.scene&title=Coosa%20Backcountry);
 [how to link](docs/INTEGRATION.md#link-to-vert)).
 
 **Requirements:** Node.js ≥ 22.18 (see `.nvmrc`) and pnpm. In development, elevation tiles are

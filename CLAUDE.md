@@ -27,8 +27,8 @@ and PNG renders).
 - The GPX is parsed, rendered and exported in the browser. It never leaves the client.
 - No network request carries GPX data or coordinates, except elevation tile requests, which carry
   tile z/x/y only. No analytics, no CDN at runtime (fonts are self-hosted in `public/fonts`).
-- The repository is public (since 2026-10-19) and the site is live at https://vert.geekplux.org:
-  write code, docs and commits for outside readers, and never commit personal GPX files or paths.
+- The repository is public (since 2026-10-19) and the site is live at https://vert.geekplux.com
+  (vert.geekplux.org also serves it; `.com` is the one to print and link): write code, docs and commits for outside readers, and never commit personal GPX files or paths.
 
 ## Dependencies
 

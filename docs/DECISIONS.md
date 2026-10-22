@@ -238,7 +238,7 @@ everything.
 - Style A at the social sizes (4:5, 9:16) uses the share-card layout (frame "Style A · share card
   4:5"); print sizes use the Trail Sign layout.
 - No invented data: poster A's "VERT № 014" becomes "VERT"; footer URL is VERT.GEEKPLUX.COM (VERT.GEEKPLUX.ORG
-  since "Public release").
+  from "Public release" until "Main domain: vert.geekplux.com").
   Night Ridge's sunrise line appears only when the GPX has timestamps (solar position computed in
   `src/lib`); its top nav (RUNS / COMPARE / UPLOAD) is mockup decoration and is omitted.
 - Terrain look, style A (View and poster): oblique 3D, `--surface` fill, 1px ink ridge lines along
@@ -775,7 +775,8 @@ recommendations:
 the maintainer made the repository public and bound **vert.geekplux.org** to the Worker. He asked for the
 project's presentation to be redone without changing what Vert does.
 
-- **The domain is vert.geekplux.org** (the plan said vert.geekplux.com, which never served Vert).
+- **The domain is vert.geekplux.org** (the plan said vert.geekplux.com, which never served Vert;
+  superseded by "Main domain: vert.geekplux.com").
   Posters print `VERT.GEEKPLUX.ORG` in the footer; `pnpm bake` defaults to its `/tiles/`; the tile
   proxy's User-Agent names it. `vert.fum.workers.dev` still answers as the Worker's own address.
 - **The wordmark links home.** In phase 2 the wordmark was plain text (there is no routing). With
@@ -974,3 +975,21 @@ The site changed, not the library: no version bump, no changelog entry.
 - **The sample scene is served** at `/samples/coosa-backcountry.scene`: a copy of the library's
   fixture (a unit test keeps them byte-identical), for the e2e (same origin) and as a public
   example link.
+
+## Main domain: vert.geekplux.com (2026-10-21)
+
+the maintainer bound **vert.geekplux.com** to the Worker as the main domain. **vert.geekplux.org** stays
+bound and keeps serving the same app and `/tiles/`, so links already out there (Activities' "Open
+in Vert ↗", shared `?scene=` links, posters printed before today) keep working. Neither redirects
+to the other.
+
+- Everything Vert prints or links names `.com`: the poster footer (`VERT.GEEKPLUX.COM`), the
+  canonical URL and Open Graph tags, the social card, the README, `package.json`'s `homepage`, the
+  GitHub repository's website, `pnpm bake`'s default `--tiles`, and the tile proxy's User-Agent.
+- The canonical tag points search engines at `.com`, so the two hosts are not indexed as
+  duplicates.
+- Posters are the app's own HTML and carry the URL as text, so the change needs no new fonts or
+  layout; the showcase images, the Upload band's WebP and the social card are recaptured with
+  `pnpm posters`.
+- A scene link is cross-origin across the two hosts (`.com` page, `.org` sample), and the static
+  samples send no CORS header; link the sample on the same host as the page.

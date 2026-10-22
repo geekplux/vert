@@ -27,7 +27,7 @@ export const TILE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 /** A tile the bucket does not have; short, in case that is a transient upstream state. */
 export const NOT_FOUND_CACHE_CONTROL = 'public, max-age=3600';
 
-export const USER_AGENT = 'vert-tile-proxy/1.0 (+https://vert.geekplux.org)';
+export const USER_AGENT = 'vert-tile-proxy/1.0 (+https://vert.geekplux.com)';
 
 type Source = 'edge' | 'r2' | 'upstream';
 

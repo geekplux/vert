@@ -12,7 +12,8 @@ test('the app loads without requesting anything from another origin', async ({ p
   ).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
 
-  // Privacy and self-hosting: no CDN, no analytics, no third-party fonts.
+  // Privacy and self-hosting: no CDN, no third-party fonts. Google Analytics loads on
+  // vert.geekplux.com only (src/page/analytics.ts), never here.
   expect(foreign).toEqual([]);
 });
 

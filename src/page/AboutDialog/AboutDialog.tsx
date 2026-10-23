@@ -69,7 +69,7 @@ export function AboutDialog({ open, onClose, returnFocusRef }: AboutDialogProps)
           </h3>
           <p className={styles.text}>
             Your file is read in this browser. Nothing is uploaded. Only elevation tiles are
-            fetched, by tile number.
+            fetched, by tile number. Google Analytics counts page views; it never sees your run.
           </p>
         </section>
         <section className={styles.section} aria-labelledby={`${titleId}-credits`}>

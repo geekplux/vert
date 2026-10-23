@@ -34,7 +34,7 @@ describe('AboutDialog', () => {
 
     expect(dialog.textContent).toContain('one GPX file into 3D terrain, then into a poster');
     expect(dialog.textContent).toContain(
-      'Your file is read in this browser. Nothing is uploaded. Only elevation tiles are fetched, by tile number.',
+      'Your file is read in this browser. Nothing is uploaded. Only elevation tiles are fetched, by tile number. Google Analytics counts page views; it never sees your run.',
     );
     expect(dialog.textContent).toContain(
       'Elevation: AWS Terrain Tiles / Mapzen (various sources).',

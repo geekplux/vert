@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './page/App';
+import { startAnalytics } from './page/analytics';
 import './styles/tokens.css';
 import './styles/base.css';
 
@@ -12,3 +13,5 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+startAnalytics();

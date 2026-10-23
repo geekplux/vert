@@ -38,7 +38,7 @@ in a style you would hang on a wall.
   The poster is rendered in tiles in your browser, so large sizes don't crash the tab.
 - **Privacy built in.** Parsing, rendering and export all happen on your device. The poster hides
   the first and last 200 m of the route by default, so it doesn't show where you live.
-- **No account.** No sign-up, no saved history, no analytics.
+- **No account.** No sign-up, no saved history.
 - **Embeddable.** A small library (about 30 KB gzipped, plus three.js) puts the terrain view and
   profile on any React page from a pre-baked scene file that contains no coordinates.
 
@@ -125,7 +125,10 @@ Vert is built so that it can't leak your location:
 - Your GPX file is read, rendered and exported in the browser. Nothing is uploaded.
 - The only requests that depend on your run are elevation tiles, and they carry `z/x/y` and nothing
   else: no query strings, no cookies, no referrer.
-- There are no analytics and no third-party CDN. Fonts are self-hosted.
+- There is no third-party CDN. Fonts are self-hosted.
+- The live site (vert.geekplux.com, and nowhere else) loads Google Analytics to count page views.
+  It is told the page's origin and path and its fixed title: no query string (so no `?scene=`
+  address), no run name, no events from the app. Google signals and ad personalisation are off.
 - A `?scene=` link makes the page fetch that one file from the host it names, with no cookies and
   no referrer. A scene holds no coordinates, and nothing about it is stored or sent on.
 - Posters hide the first and last stretch of the route (200 m by default).

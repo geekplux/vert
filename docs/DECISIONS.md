@@ -999,3 +999,20 @@ the same page; `/tiles/` requests are redirected too, and `fetch` follows them.
 - Posters are the app's own HTML and carry the URL as text, so the change needs no new fonts or
   layout; the showcase images, the Upload band's WebP and the social card are recaptured with
   `pnpm posters`.
+
+## Google Analytics (2026-10-22)
+
+Sean asked for Google Analytics (`G-CN7CN5MXMR`) on the live site. It overrules "no analytics" in
+CLAUDE.md, the README and the About dialog, which now say what is sent. `src/page/analytics.ts`:
+
+- **Live host only.** gtag.js loads when `location.hostname` is `vert.geekplux.com`. Local dev, the
+  e2e run (so `e2e/smoke.spec.ts` still sees no foreign request) and branch Previews never load
+  it. The library (`dist-lib/`) does not include it: host pages are unaffected.
+- **Page views only.** The app sends no events. The page view's `page_location` is origin + path
+  (a `?scene=<url>&title=` link's query string stays out) and `page_title` is the fixed title (a
+  scene's name renames the tab). Google signals and ad personalisation are off.
+- **Set in the GA property:** turn off Enhanced measurement's "Page changes based on browser
+  history events" (Vert is one URL; leaving a scene `replaceState`s the address, which GA would
+  count as a page view with the current title) and "Site search".
+- Not a coordinate or GPX leak: the GPX still never leaves the browser, and tile requests still
+  carry `z/x/y` only.

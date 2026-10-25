@@ -756,9 +756,8 @@ installs `three` from npm.
 On the three phase 4 items in PROGRESS.md "Needs the maintainer", the maintainer chose to follow the main agent's
 recommendations:
 
-- **Vendoring waits for the public launch.** `dist-lib/` is not committed to the host site repo
-  (public) until the public launch. _Superseded the same day:_ the maintainer
-  made Vert's repository public, so vendoring no longer waits ("Public release", below).
+- **Vendoring is allowed.** `dist-lib/` may be committed to the host site repo; Vert's repository
+  is public ("Public release", below).
 - **Embedding is approved.** Activities may replace its `TerrainSlot` placeholder with Vert's
   TerrainView (reversing its "Vert: link out" decision) and add `three` as an exact runtime
   dependency. Activities records both in its own `docs/DECISIONS.md` when that work starts there;

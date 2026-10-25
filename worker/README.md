@@ -13,6 +13,7 @@ long ones (about 8 past 100 km); 6 leaves headroom.
 | any query string (even a bare `?`)           | 400 JSON                                                                      |
 | bad path, z outside 6–15, x/y out of range   | 400 JSON                                                                      |
 | method other than GET/HEAD                   | 405 JSON, `Allow: GET, HEAD`                                                  |
+| over `TILE_LIMIT` (600 a minute per IP)      | 429 JSON, `Retry-After: 60`                                                   |
 | outside `/tiles/`                            | 404 JSON (never reached in production: assets are served first)               |
 
 `X-Tile-Source` says where the tile came from: `edge`, `r2` or `upstream`.
@@ -28,6 +29,19 @@ long ones (about 8 past 100 km); 6 leaves headroom.
    PNG the body is teed: one branch streams to the client, the other goes to R2 through
    `ctx.waitUntil`. R2 needs a stream of known length; S3 always sends `Content-Length`, so the
    teed branch qualifies. A failed write is logged and the client still gets the tile.
+
+## Abuse limits
+
+The proxy is public, and every new tile is an R2 write (a paid Class A operation) plus storage.
+Two rate-limit bindings in `wrangler.jsonc` bound that:
+
+- `TILE_LIMIT`: 600 tile requests a minute per client IP; over it, 429. A terrain view needs at
+  most a few dozen tiles. The IP is only the limiter's key; it is never stored, logged or forwarded.
+- `STORE_LIMIT`: 300 R2 writes a minute for the whole site; over it, a new tile is streamed from
+  upstream but not stored, so a scraper cannot grow the bucket without bound.
+
+Counts are per Cloudflare location and approximate. Both bindings are optional in code, so unit
+tests run without them.
 
 Two concurrent misses for the same tile both fetch upstream and both write R2. Accepted: tiles are
 immutable, the writes are identical, and a lock would cost more than the rare duplicate fetch.

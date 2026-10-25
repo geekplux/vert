@@ -49,6 +49,9 @@ describe('AboutDialog', () => {
     expect(credit.hasAttribute('target')).toBe(false);
     expect(dialog.textContent).toContain('Sample route: © OpenStreetMap contributors, ODbL.');
     expect(dialog.textContent).toContain('Type: Archivo and IBM Plex Mono (SIL OFL).');
+    expect(dialog.textContent).toContain(
+      'Tiles pass through Vert’s own cache, which limits requests per visitor so the site stays free to run.',
+    );
     const github = within(dialog).getByRole('link', { name: 'geekplux on GitHub' });
     expect(github.getAttribute('href')).toBe('https://github.com/geekplux');
   });

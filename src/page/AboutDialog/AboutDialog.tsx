@@ -84,6 +84,11 @@ export function AboutDialog({ open, onClose, returnFocusRef }: AboutDialogProps)
             . Sample route: © OpenStreetMap contributors, ODbL. Type: Archivo and IBM Plex Mono (SIL
             OFL).
           </p>
+          {/* The limits live in wrangler.jsonc (TILE_LIMIT, STORE_LIMIT); see worker/src/proxy.ts. */}
+          <p className={styles.text}>
+            Tiles pass through Vert&rsquo;s own cache, which limits requests per visitor so the site
+            stays free to run.
+          </p>
         </section>
         <p className={styles.text}>
           Made by{' '}

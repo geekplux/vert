@@ -49,7 +49,6 @@ Every session and sub-agent in this build runs on Opus 5.5 (`claude-opus-5-5`): 
 
 - Accessibility: every piece of information carried by color is also carried by shape, position or a label. Sean is color-weak. Keyboard operable. Contrast ≥ 4.5:1 for text.
 - Privacy: no network request carries GPX data or coordinates except elevation tile requests (tile x/y/z only).
-- Keep the repo private until BlackRock's outside-activity and IP policy has been checked. (Done: Sean made it public on 2026-10-19.)
 - No dependencies beyond the approved list without asking: react, react-dom, three, @react-three/fiber (optional), vite, typescript, vitest, @testing-library/react, axe-core, @playwright/test, @ladle/react, eslint, prettier, wrangler. No map library, no PMTiles.
 
 ## How to run this with Claude Code

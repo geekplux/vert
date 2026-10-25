@@ -757,7 +757,7 @@ On the three phase 4 items in PROGRESS.md "Needs Sean", Sean chose to follow the
 recommendations:
 
 - **Vendoring waits for the policy check.** `dist-lib/` is not committed to geekplux/activities
-  (public) until BlackRock's outside-activity and IP check is done. _Superseded the same day:_ Sean
+  (public) until a pre-release check is done. _Superseded the same day:_ Sean
   made Vert's repository public, so vendoring no longer waits ("Public release", below).
 - **Embedding is approved.** Activities may replace its `TerrainSlot` placeholder with Vert's
   TerrainView (reversing its "Vert: link out" decision) and add `three` as an exact runtime

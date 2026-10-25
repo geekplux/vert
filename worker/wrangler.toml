@@ -18,3 +18,14 @@ invocation_logs = false
 [[r2_buckets]]
 binding = "TILES"
 bucket_name = "vert-tiles"
+
+# Abuse limits, as in ../wrangler.jsonc (see worker/src/proxy.ts).
+[[ratelimits]]
+name = "TILE_LIMIT"
+namespace_id = "3001"
+simple = { limit = 600, period = 60 }
+
+[[ratelimits]]
+name = "STORE_LIMIT"
+namespace_id = "3002"
+simple = { limit = 300, period = 60 }

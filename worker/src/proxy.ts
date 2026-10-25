@@ -14,6 +14,15 @@
  * tiles are immutable, so the writes are identical and the last one wins; a lock would cost more
  * than the rare duplicate fetch.
  *
+ * Abuse limits (bindings in wrangler.jsonc; both optional, so tests and a bare `wrangler dev` run
+ * without them). Anyone can call this public proxy, and every new tile is an R2 write (a paid
+ * Class A operation) plus storage, so:
+ * - `TILE_LIMIT` caps requests per client IP (a terrain view needs at most a few dozen tiles); over
+ *   it the answer is 429. The IP is only the limiter's key: it is not stored, logged or forwarded.
+ * - `STORE_LIMIT` caps R2 writes for the whole site (one shared key). Over it, a missing tile is
+ *   still streamed from upstream but not stored, so a scraper walking the globe cannot grow the
+ *   bucket or the write bill without bound.
+ *
  * Privacy: the request may carry nothing but z/x/y. A query string is rejected, and the upstream
  * request is built from scratch, so no client header (cookie, referrer, IP, user agent) is
  * forwarded. Logs carry the zoom, source and status, never x/y, IPs or headers.
@@ -30,6 +39,16 @@ export const NOT_FOUND_CACHE_CONTROL = 'public, max-age=3600';
 export const USER_AGENT = 'vert-tile-proxy/1.0 (+https://vert.geekplux.com)';
 
 type Source = 'edge' | 'r2' | 'upstream';
+
+/** `Env` with the rate-limit bindings optional: unit tests and a bare `wrangler dev` omit them. */
+export type ProxyEnv = Omit<Env, 'TILE_LIMIT' | 'STORE_LIMIT'> &
+  Partial<Pick<Env, 'TILE_LIMIT' | 'STORE_LIMIT'>>;
+
+/** The rate limiters' window, in seconds (wrangler.jsonc `simple.period`). */
+export const LIMIT_PERIOD_S = 60;
+
+/** The one key every R2 write is counted under: STORE_LIMIT is a site-wide budget. */
+const STORE_KEY = 'r2-writes';
 
 function log(fields: Record<string, string | number>): void {
   console.log(JSON.stringify({ service: 'vert-tiles', ...fields }));
@@ -124,7 +143,7 @@ async function putEdge(cache: Cache, key: Request, response: Response): Promise<
   }
 }
 
-async function putR2(env: Env, key: string, body: ReadableStream, z: number): Promise<void> {
+async function putR2(env: ProxyEnv, key: string, body: ReadableStream, z: number): Promise<void> {
   try {
     await env.TILES.put(key, body, { httpMetadata: { contentType: 'image/png' } });
     log({ event: 'tile_stored', z });
@@ -141,7 +160,7 @@ function r2Conditions(request: Request): { onlyIf: Headers } | undefined {
 
 export async function handleRequest(
   request: Request,
-  env: Env,
+  env: ProxyEnv,
   ctx: ExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -168,6 +187,15 @@ export async function handleRequest(
     );
   }
 
+  if (env.TILE_LIMIT) {
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'local';
+    if (!(await env.TILE_LIMIT.limit({ key: ip })).success) {
+      return reject(429, 'too_many_requests', 'Too many tile requests; try again in a minute.', {
+        'Retry-After': String(LIMIT_PERIOD_S),
+      });
+    }
+  }
+
   const started = Date.now();
   const response = await serveTile(request, env, ctx, tile, url.origin);
   log({
@@ -183,7 +211,7 @@ export async function handleRequest(
 
 async function serveTile(
   request: Request,
-  env: Env,
+  env: ProxyEnv,
   ctx: ExecutionContext,
   tile: Tile,
   origin: string,
@@ -260,8 +288,12 @@ async function serveTile(
     });
   }
 
+  const headers = tileHeaders(upstream.headers.get('ETag'));
+  if (env.STORE_LIMIT && !(await env.STORE_LIMIT.limit({ key: STORE_KEY })).success) {
+    log({ event: 'tile_store_skipped', z: tile.z });
+    return answer(request, new Response(upstream.body, { headers }), 'upstream');
+  }
   const [toClient, toR2] = upstream.body.tee();
   ctx.waitUntil(putR2(env, key, toR2, tile.z));
-  const headers = tileHeaders(upstream.headers.get('ETag'));
   return answer(request, new Response(toClient, { headers }), 'upstream');
 }

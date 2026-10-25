@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   etagMatches,
   handleRequest,
+  LIMIT_PERIOD_S,
   NOT_FOUND_CACHE_CONTROL,
+  type ProxyEnv,
   TILE_CACHE_CONTROL,
   USER_AGENT,
 } from './proxy';
@@ -80,9 +82,23 @@ class FakeCache {
 let r2: FakeR2;
 let pending: Promise<unknown>[];
 let fetchMock: ReturnType<typeof vi.fn>;
+let limits: Pick<ProxyEnv, 'TILE_LIMIT' | 'STORE_LIMIT'>;
 
-function env(): Env {
-  return { TILES: r2 as unknown as R2Bucket };
+function env(): ProxyEnv {
+  return { TILES: r2 as unknown as R2Bucket, ...limits };
+}
+
+/** A rate limiter that allows `allowed` calls per key, recording the keys it saw. */
+function fakeLimit(allowed: number) {
+  const seen: string[] = [];
+  const limiter = {
+    seen,
+    limit: ({ key }: { key: string }) => {
+      seen.push(key);
+      return Promise.resolve({ success: seen.filter((k) => k === key).length <= allowed });
+    },
+  };
+  return limiter as typeof limiter & RateLimit;
 }
 
 function ctx(): ExecutionContext {
@@ -121,6 +137,7 @@ async function bytes(response: Response) {
 
 beforeEach(() => {
   r2 = new FakeR2();
+  limits = {};
   pending = [];
   fetchMock = vi.fn(() => Promise.resolve(upstreamPng()));
   vi.stubGlobal('fetch', fetchMock);
@@ -397,5 +414,41 @@ describe('edge cache in front of R2', () => {
     await settle();
     expect(cache.entries.size).toBe(0);
     expect((await request(TILE_PATH)).status).toBe(200);
+  });
+});
+
+describe('abuse limits', () => {
+  it('answers 429 with Retry-After once a client IP passes TILE_LIMIT, before any lookup', async () => {
+    const tileLimit = fakeLimit(1);
+    limits = { TILE_LIMIT: tileLimit };
+    const headers = { 'CF-Connecting-IP': '203.0.113.7' };
+    expect((await request(TILE_PATH, { headers })).status).toBe(200);
+    await settle();
+    const gets = r2.gets.length;
+    const limited = await request(TILE_PATH, { headers });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBe(String(LIMIT_PERIOD_S));
+    expect(r2.gets).toHaveLength(gets);
+    expect(tileLimit.seen).toEqual(['203.0.113.7', '203.0.113.7']);
+  });
+
+  it('past STORE_LIMIT streams a new tile from upstream without writing R2', async () => {
+    const storeLimit = fakeLimit(0);
+    limits = { STORE_LIMIT: storeLimit };
+    const response = await request(TILE_PATH);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Tile-Source')).toBe('upstream');
+    expect(await bytes(response)).toEqual(PNG);
+    await settle();
+    expect(r2.puts).toEqual([]);
+    expect(storeLimit.seen).toEqual(['r2-writes']);
+  });
+
+  it('counts R2 writes, not R2 hits, against STORE_LIMIT', async () => {
+    r2.seed(KEY, PNG);
+    const storeLimit = fakeLimit(0);
+    limits = { STORE_LIMIT: storeLimit };
+    expect((await request(TILE_PATH)).headers.get('X-Tile-Source')).toBe('r2');
+    expect(storeLimit.seen).toEqual([]);
   });
 });

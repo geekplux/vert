@@ -756,9 +756,8 @@ installs `three` from npm.
 On the three phase 4 items in PROGRESS.md "Needs Sean", Sean chose to follow the main agent's
 recommendations:
 
-- **Vendoring waits for the policy check.** `dist-lib/` is not committed to geekplux/activities
-  (public) until a pre-release check is done. _Superseded the same day:_ Sean
-  made Vert's repository public, so vendoring no longer waits ("Public release", below).
+- **Vendoring is allowed.** `dist-lib/` may be committed to geekplux/activities; Vert's repository
+  is public ("Public release", below).
 - **Embedding is approved.** Activities may replace its `TerrainSlot` placeholder with Vert's
   TerrainView (reversing its "Vert: link out" decision) and add `three` as an exact runtime
   dependency. Activities records both in its own `docs/DECISIONS.md` when that work starts there;

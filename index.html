@@ -8,7 +8,8 @@
     <title>Vert · Drop a GPX. Get a poster.</title>
     <link rel="canonical" href="https://vert.geekplux.com/" />
     <!-- Link previews (Open Graph, X). Read by the sites that unfurl the link; the page fetches
-         nothing for them. The card is public/og-image.png (`pnpm posters`). -->
+         nothing for them. The card is public/og.jpg and its moving version public/og.mp4;
+         public/og-image.png (`pnpm posters`) stays as the GitHub social preview. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Vert" />
     <meta property="og:title" content="Vert · Drop a GPX. Get a poster." />
@@ -17,13 +18,20 @@
       content="Drop a GPX. Get a poster. Vert turns one run into terrain."
     />
     <meta property="og:url" content="https://vert.geekplux.com/" />
-    <meta property="og:image" content="https://vert.geekplux.com/og-image.png" />
-    <meta property="og:image:width" content="1280" />
-    <meta property="og:image:height" content="640" />
+    <meta property="og:image" content="https://vert.geekplux.com/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Vert: Drop a GPX. Get a poster. Three posters of one trail run: Night Ridge, Trail Sign and Survey Quad."
+      content="Vert: your run, as terrain. A trail run drawn on its 3D terrain, the route in orange from start to summit."
     />
+    <!-- og:video: the same card, moving (1200 × 630, silent H.264). Platforms that play it
+         (iMessage, Discord) show it; the rest show og:image. -->
+    <meta property="og:video" content="https://vert.geekplux.com/og.mp4" />
+    <meta property="og:video:secure_url" content="https://vert.geekplux.com/og.mp4" />
+    <meta property="og:video:type" content="video/mp4" />
+    <meta property="og:video:width" content="1200" />
+    <meta property="og:video:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin />

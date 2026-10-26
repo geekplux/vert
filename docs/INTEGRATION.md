@@ -1,7 +1,7 @@
 # Integrating Vert into a host site
 
 This guide is for a site that shows Vert's 3D terrain of a run on one of its own pages. The first
-host is [Activities](https://activities.geekplux.org) (repo the host site repo), whose Activity
+host is [Activities](https://activities.geekplux.com) (repo the host site repo), whose Activity
 page has a `TerrainSlot` placeholder for it, so its examples are written for that page; nothing in
 it is specific to Activities otherwise.
 

@@ -5,7 +5,7 @@ it, the drawn stretch of the route, its markers and climbs, and a few totals. It
 georeference**: no latitude or longitude, no bounding box, no map-tile numbers, no timestamps, no
 names. Positions are metres in the grid's own frame.
 
-The file exists so a host site (first of all [Activities](https://activities.geekplux.org), which
+The file exists so a host site (first of all [Activities](https://activities.geekplux.com), which
 publishes no coordinates anywhere) can show Vert's terrain view without its build or its pages ever
 seeing a coordinate. Everything georeferenced happens offline in `pnpm bake`; the browser only
 decodes the scene.

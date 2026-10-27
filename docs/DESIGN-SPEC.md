@@ -1,7 +1,7 @@
 # Vert — design spec (text version of the canvas)
 
-Canvas: (design canvas)
-Frames: `00 Tokens and components`, `01 Upload`, `02 View`, `03 Poster mode + export`, then the three poster styles and the share card. If you can open the canvas, the frames win over this file on any visual detail. If you cannot, this file is sufficient to build.
+Canvas: the frames' HTML source and PNG renders are in `docs/design/`.
+Frames: `00 Tokens and components`, `01 Upload`, `02 View`, `03 Poster mode + export`, then the three poster styles and the share card. The frames win over this file on any visual detail; this file alone is sufficient to build.
 
 ## 1. Tokens (app chrome = style A, "Trail Sign")
 
@@ -82,7 +82,7 @@ All styles share the same data and the same slots: title, subtitle, date, stats 
 | Terrain | oblique 3D, flat `--surface` facets, 1px ink edges, route 4px with 9px white halo, ○ start, ▲ summit | oblique ridge lines (front rows brighter), route glow halo at 35% + 3px core | top-down contours, 20 m interval, every 5th index line 1.6px, route 3.5px dashed with white halo, legend, scale bar, "CONTOUR INTERVAL 20 METRES" |
 | Layout | number row above figure, stats under a 2px rule, footer mono | left text column over figure, profile strip bottom | map in a 2px frame left (900px of 1440), stats and legend column right |
 
-Sizes and pixel targets: 18×24 in → 5400×7200; A3 → 3508×4961; 4:5 → 1080×1350; 9:16 → 1080×1920. Print sizes are 300 dpi. Browser canvases are commonly capped around 8192–16384 px per side (unverified; measure on the maintainer's Mac mini in phase 3), so render print sizes as tiles of ≤ 4096 px and stitch in an OffscreenCanvas.
+Sizes and pixel targets: 18×24 in → 5400×7200; A3 → 3508×4961; 4:5 → 1080×1350; 9:16 → 1080×1920. Print sizes are 300 dpi. Browser canvases are commonly capped around 8192–16384 px per side (Vert measures the real limit at run time, `src/poster/export/canvasLimits.ts`), so render print sizes as tiles of ≤ 4096 px and stitch in an OffscreenCanvas.
 
 ## 5. Accessibility rules (apply everywhere)
 

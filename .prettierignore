@@ -8,11 +8,8 @@ test-results/
 .wrangler/
 public/fonts/
 worker/worker-configuration.d.ts
-# Plan documents are authored outside this repo; keep them byte-for-byte.
-docs/BRIEF.md
+# The design spec and the canvas export follow the design canvas; keep them as written.
 docs/DESIGN-SPEC.md
-docs/PLAN.md
-docs/prompts/
 docs/design/
 docs/verify/
 .claude/

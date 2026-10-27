@@ -5,10 +5,10 @@ import type { Page, Request } from '@playwright/test';
 import { serveSyntheticTiles } from './tiles';
 
 /**
- * The live terrain in the View (phase 3): the three.js chunk stays out of the Upload state, a run
- * reaches its first terrain frame within the 5 s budget (BRIEF), only same-origin assets and tile
- * z/x/y requests are made (CLAUDE.md "Privacy"), and below 600px the legend and buttons sit under
- * the terrain instead of over it (DECISIONS "Terrain overlays").
+ * The live terrain in the View: the three.js chunk stays out of the Upload state, a run reaches
+ * its first terrain frame within the 5 s budget (a 20 km GPX from drop to 3D view), only
+ * same-origin assets and tile z/x/y requests are made (CLAUDE.md "Privacy"), and below 600px the
+ * legend and buttons sit under the terrain instead of over it (DECISIONS "Terrain overlays").
  */
 
 const SAMPLE_GPX = fileURLToPath(

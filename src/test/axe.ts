@@ -3,8 +3,8 @@ import { expect } from 'vitest';
 
 /**
  * Runs axe on a rendered component and fails with a readable list of violations.
- * Contrast is not checked here: jsdom has no layout or computed colours. Verifiers measure contrast
- * in a real browser.
+ * Contrast is not checked here: jsdom has no layout or computed colours. The e2e axe checks measure
+ * contrast in a real browser.
  */
 export async function expectNoAxeViolations(container: Element): Promise<void> {
   const results = await axe.run(container, {

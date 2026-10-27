@@ -1,7 +1,7 @@
 # Vert — design spec (text version of the canvas)
 
-Canvas: (design canvas)
-Frames: `00 Tokens and components`, `01 Upload`, `02 View`, `03 Poster mode + export`, then the three poster styles and the share card. If you can open the canvas, the frames win over this file on any visual detail. If you cannot, this file is sufficient to build.
+Canvas: the frames' HTML source and PNG renders are in `docs/design/`.
+Frames: `00 Tokens and components`, `01 Upload`, `02 View`, `03 Poster mode + export`, then the three poster styles and the share card. The frames win over this file on any visual detail; this file alone is sufficient to build.
 
 ## 1. Tokens (app chrome = style A, "Trail Sign")
 
@@ -38,7 +38,7 @@ Type scale
 
 Fonts from Google Fonts: `Archivo:wdth,wght@62..125,400..800` and `IBM+Plex+Mono:wght@400;500`. Self-host them in `/public/fonts` for the production build (the poster export must not depend on a CDN).
 
-## 2. Components (phase 1)
+## 2. Components
 
 Each component: `src/components/<Name>/<Name>.tsx`, `<Name>.stories.tsx`, `<Name>.test.tsx`. Props typed. No global state inside components.
 
@@ -57,7 +57,7 @@ Each component: `src/components/<Name>/<Name>.tsx`, `<Name>.stories.tsx`, `<Name
 | `Marker` (SVG) | `kind: "start" \| "summit" \| "scrub"` | start: circle r6 white fill, ink 2.5 stroke. summit: triangle ink fill. scrub: circle r5 route fill, white 2.5 stroke. Never distinguished by color alone. |
 | `Wordmark` | `tagline?`, `link?` (`href`, `label`, `onClick`, `disabled`) | "VERT" 30/800/62% + optional tagline 12 mono muted. With `link` the name (not the tagline) is an `<a>` drawn the same (no underline, cursor pointer), hit area 44 tall, focus ring 2px `--route` offset 2; `disabled` (during an export) keeps it focusable with `aria-disabled`, drawn `--muted` with `cursor: not-allowed`. |
 
-## 3. The one page, four states (phase 2)
+## 3. The one page, four states
 
 Layout at 1440: header 20×40 padding, 1px rule bottom. In every state the wordmark's "Vert" links home (`href="/"`, name "Vert, home", first Tab stop): a plain click goes to Upload like New file (on Upload: scroll to top, focus the h1; during an export: nothing, like Back to the run); modified clicks open a tab. Body = aside (300–380px, right 1px rule) + main (flex 1). At ≤ 900: aside stacks under main; at 390 everything is one column, terrain box is 4:3, profile height 100.
 
@@ -69,7 +69,7 @@ Layout at 1440: header 20×40 padding, 1px rule bottom. In every state the wordm
 
 **04 Exporting** (overlay on 03): a progress bar in `--ink` over `--rule` under the Download button, label "Rendering tile 4 of 12", cancel as Quiet button. On completion the browser download starts and the label reads "Saved <filename>".
 
-## 4. Poster styles (phase 3)
+## 4. Poster styles
 
 All styles share the same data and the same slots: title, subtitle, date, stats row, signature, terrain figure, elevation profile strip. Only palette, type and terrain treatment change.
 
@@ -82,7 +82,7 @@ All styles share the same data and the same slots: title, subtitle, date, stats 
 | Terrain | oblique 3D, flat `--surface` facets, 1px ink edges, route 4px with 9px white halo, ○ start, ▲ summit | oblique ridge lines (front rows brighter), route glow halo at 35% + 3px core | top-down contours, 20 m interval, every 5th index line 1.6px, route 3.5px dashed with white halo, legend, scale bar, "CONTOUR INTERVAL 20 METRES" |
 | Layout | number row above figure, stats under a 2px rule, footer mono | left text column over figure, profile strip bottom | map in a 2px frame left (900px of 1440), stats and legend column right |
 
-Sizes and pixel targets: 18×24 in → 5400×7200; A3 → 3508×4961; 4:5 → 1080×1350; 9:16 → 1080×1920. Print sizes are 300 dpi. Browser canvases are commonly capped around 8192–16384 px per side (unverified; measure on the maintainer's Mac mini in phase 3), so render print sizes as tiles of ≤ 4096 px and stitch in an OffscreenCanvas.
+Sizes and pixel targets: 18×24 in → 5400×7200; A3 → 3508×4961; 4:5 → 1080×1350; 9:16 → 1080×1920. Print sizes are 300 dpi. Browser canvases are commonly capped around 8192–16384 px per side (Vert measures the real limit at run time, `src/poster/export/canvasLimits.ts`), so render print sizes as tiles of ≤ 4096 px and stitch in an OffscreenCanvas.
 
 ## 5. Accessibility rules (apply everywhere)
 

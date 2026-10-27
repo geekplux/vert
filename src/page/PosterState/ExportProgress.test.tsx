@@ -472,8 +472,8 @@ describe('Exporting overlay', () => {
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  // The simulator is passed explicitly: this test is about `simulateExport`, and must not change
-  // when phase 3 points `defaultExporter` at the real pipeline.
+  // The simulator is passed explicitly: this test is about `simulateExport`, not about
+  // `defaultExporter` (the real pipeline).
   it('runs end to end with the simulated exporter, without downloading', async () => {
     vi.useFakeTimers();
     // A download would click a link (or open a window); the simulation must do neither.

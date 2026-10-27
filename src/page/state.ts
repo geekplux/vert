@@ -131,7 +131,7 @@ export interface MakePoster {
   readonly type: 'MAKE_POSTER';
   /**
    * The View's terrain camera as the user left it (`TerrainViewHandle.camera()`): the poster's
-   * terrain figure uses it (BRIEF "Make a poster uses the current camera"). Missing (no terrain
+   * terrain figure uses it ("Make a poster" uses the current camera). Missing (no terrain
    * drawn yet) keeps the poster's camera as it was.
    */
   readonly camera?: ViewCamera;

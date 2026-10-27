@@ -226,7 +226,7 @@ src/vert-lib    the embeddable library's entry and public types
 scripts/bake    the headless scene bake (Node, no DOM)
 worker/         Cloudflare Worker: the /tiles proxy with an R2 cache
 e2e/            Playwright tests
-docs/           plan, design spec, decisions, scene format, integration guide
+docs/           design spec and canvas, decisions, scene format, integration and release guides
 ```
 
 ## Documentation
@@ -237,8 +237,12 @@ docs/           plan, design spec, decisions, scene format, integration guide
 - [`docs/SCENE.md`](docs/SCENE.md): the binary scene format, the bake and its privacy model
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md): how a host page embeds Vert
 - [`docs/PUBLISH.md`](docs/PUBLISH.md): how a release reaches npm
-- [`docs/PLAN.md`](docs/PLAN.md) and [`docs/PROGRESS.md`](docs/PROGRESS.md): how Vert was built,
-  phase by phase
+- [`docs/design/`](docs/design): the design canvas's frames, as HTML source and PNG renders
+- A `README.md` in each main folder says how that part works: [`src/page`](src/page/README.md),
+  [`src/components`](src/components/README.md), [`src/gpx`](src/gpx/README.md),
+  [`src/terrain`](src/terrain/README.md), [`src/poster`](src/poster/README.md),
+  [`src/lib`](src/lib/README.md), [`src/vert-lib`](src/vert-lib/README.md) and
+  [`worker`](worker/README.md)
 
 ## Contributing
 

@@ -40,7 +40,7 @@ export const FLAT_POLAR = 1e-4;
 
 /**
  * Where the camera looks from, relative to the model's fit: what "Make a poster uses the current
- * camera" (BRIEF) carries from the View to the poster's terrain figure. The distance is not
+ * camera" carries from the View to the poster's terrain figure. The distance is not
  * stored: each box fits the model itself, and `zoom` scales that fit (1 = fitted, < 1 closer).
  */
 export interface ViewCamera {

@@ -1,6 +1,6 @@
 /**
- * `performance.mark` names for the drop-to-terrain budget (BRIEF: a 20 km GPX from drop to 3D view
- * in ≤ 5 s). Read them in DevTools' Performance panel or with
+ * `performance.mark` names for the drop-to-terrain budget (a 20 km GPX from drop to 3D view in
+ * ≤ 5 s). Read them in DevTools' Performance panel or with
  * `performance.getEntriesByType('mark')`:
  *
  * - `vert:chosen`: a file (or the sample) was chosen; earlier `vert:*` marks are cleared.

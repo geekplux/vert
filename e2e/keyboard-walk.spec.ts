@@ -4,10 +4,10 @@ import type { Locator, Page } from '@playwright/test';
 import { serveSyntheticTiles } from './tiles';
 
 /**
- * Phase 2 task (g): walk all four states (Upload, View, Poster mode, Exporting) with the keyboard
- * only. After `page.goto('/')` nothing is clicked: Tab, Shift+Tab, Enter, Space, arrows, Escape
- * and typing. The DOM is read to assert focus, names and values (CLAUDE.md "Everything is keyboard
- * operable; focus is always visible"; DECISIONS "Focus on screen changes").
+ * Walk all four states (Upload, View, Poster mode, Exporting) with the keyboard only. After
+ * `page.goto('/')` nothing is clicked: Tab, Shift+Tab, Enter, Space, arrows, Escape and typing.
+ * The DOM is read to assert focus, names and values (CLAUDE.md "Everything is keyboard operable;
+ * focus is always visible"; DECISIONS "Focus on screen changes").
  */
 
 const AXE_PATH = createRequire(import.meta.url).resolve('axe-core/axe.min.js');

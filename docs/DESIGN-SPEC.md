@@ -38,7 +38,7 @@ Type scale
 
 Fonts from Google Fonts: `Archivo:wdth,wght@62..125,400..800` and `IBM+Plex+Mono:wght@400;500`. Self-host them in `/public/fonts` for the production build (the poster export must not depend on a CDN).
 
-## 2. Components (phase 1)
+## 2. Components
 
 Each component: `src/components/<Name>/<Name>.tsx`, `<Name>.stories.tsx`, `<Name>.test.tsx`. Props typed. No global state inside components.
 
@@ -57,7 +57,7 @@ Each component: `src/components/<Name>/<Name>.tsx`, `<Name>.stories.tsx`, `<Name
 | `Marker` (SVG) | `kind: "start" \| "summit" \| "scrub"` | start: circle r6 white fill, ink 2.5 stroke. summit: triangle ink fill. scrub: circle r5 route fill, white 2.5 stroke. Never distinguished by color alone. |
 | `Wordmark` | `tagline?`, `link?` (`href`, `label`, `onClick`, `disabled`) | "VERT" 30/800/62% + optional tagline 12 mono muted. With `link` the name (not the tagline) is an `<a>` drawn the same (no underline, cursor pointer), hit area 44 tall, focus ring 2px `--route` offset 2; `disabled` (during an export) keeps it focusable with `aria-disabled`, drawn `--muted` with `cursor: not-allowed`. |
 
-## 3. The one page, four states (phase 2)
+## 3. The one page, four states
 
 Layout at 1440: header 20×40 padding, 1px rule bottom. In every state the wordmark's "Vert" links home (`href="/"`, name "Vert, home", first Tab stop): a plain click goes to Upload like New file (on Upload: scroll to top, focus the h1; during an export: nothing, like Back to the run); modified clicks open a tab. Body = aside (300–380px, right 1px rule) + main (flex 1). At ≤ 900: aside stacks under main; at 390 everything is one column, terrain box is 4:3, profile height 100.
 
@@ -69,7 +69,7 @@ Layout at 1440: header 20×40 padding, 1px rule bottom. In every state the wordm
 
 **04 Exporting** (overlay on 03): a progress bar in `--ink` over `--rule` under the Download button, label "Rendering tile 4 of 12", cancel as Quiet button. On completion the browser download starts and the label reads "Saved <filename>".
 
-## 4. Poster styles (phase 3)
+## 4. Poster styles
 
 All styles share the same data and the same slots: title, subtitle, date, stats row, signature, terrain figure, elevation profile strip. Only palette, type and terrain treatment change.
 

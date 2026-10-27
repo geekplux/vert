@@ -14,10 +14,10 @@ import {
 import { serveSyntheticTiles } from './tiles';
 
 /**
- * The real export (phase 3, task 6), driven by keyboard through Poster mode: the files' sizes,
- * resolution and contents (terrain and text both drawn), the PDF's page, a Latin Extended title
- * drawn with the right glyphs, Cancel, and the network log (CLAUDE.md "Privacy": only same-origin
- * assets and tile z/x/y). The posters are large, so this runs once, at 1440.
+ * The real export, driven by keyboard through Poster mode: the files' sizes, resolution and
+ * contents (terrain and text both drawn), the PDF's page, a Latin Extended title drawn with the
+ * right glyphs, Cancel, and the network log (CLAUDE.md "Privacy": only same-origin assets and tile
+ * z/x/y). The posters are large, so this runs once, at 1440.
  */
 
 test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'Exports run once, at 1440.');

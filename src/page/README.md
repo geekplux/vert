@@ -117,7 +117,7 @@ This is the only place that owns application state and composes `components`, `t
   rejecting with an `ExportError` shows its message, anything else a generic one. `useExport`
   turns that into EXPORT_STARTED / EXPORT_PROGRESS / EXPORT_DONE / EXPORT_FAILED /
   EXPORT_CANCELLED. `defaultExporter` is what the app uses: `posterExporter`
-  (`PosterState/posterExporter.ts`, see `src/poster/README.md` "Export"). The phase 2 simulator
+  (`PosterState/posterExporter.ts`, see `src/poster/README.md` "Export"). The simulator
   (`simulateExport.ts`: 12 tiles, 150 ms a step, no download) stays for stories and tests.
   `Page` takes an `exporter` prop; tests pass one explicitly.
 - Focus: on a screen change `Page` focuses the new screen's h1 (DECISIONS "Focus on screen changes");

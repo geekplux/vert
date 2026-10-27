@@ -234,8 +234,7 @@ function PageContent({
             onMakePoster={
               run
                 ? () => {
-                    // "Make a poster" uses the current camera (BRIEF): the View's, as the user
-                    // left it.
+                    // "Make a poster" uses the current camera: the View's, as the user left it.
                     const camera = cameraRef.current?.camera() ?? undefined;
                     dispatch(camera ? { type: 'MAKE_POSTER', camera } : { type: 'MAKE_POSTER' });
                   }

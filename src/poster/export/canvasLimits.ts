@@ -183,7 +183,7 @@ export interface CanvasDiagnostics {
   readonly failing: readonly string[];
 }
 
-/** The canvas sizes verified so far in this session (for diagnostics and PROGRESS.md). */
+/** The canvas sizes verified so far in this session (for diagnostics). */
 export function canvasDiagnostics(): CanvasDiagnostics {
   const failing: string[] = [];
   for (const [size, count] of failures) {

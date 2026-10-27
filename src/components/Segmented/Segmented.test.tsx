@@ -73,7 +73,7 @@ describe('Segmented', () => {
 
   // jsdom has no tab order and does not move native radio selection with arrow keys. What makes the
   // group one tab stop with arrow-key movement is that every radio is native, focusable and shares
-  // one name; a browser verifier checks Tab and arrow keys for real.
+  // one name; e2e/keyboard-walk.spec.ts checks Tab and arrow keys in a real browser.
   it('builds one native radio group: shared name, focusable, no tabindex overrides', () => {
     render(<Segmented label="Units" options={units} value="metric" onChange={vi.fn()} />);
     const radios = screen.getAllByRole<HTMLInputElement>('radio');

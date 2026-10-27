@@ -1,9 +1,8 @@
-# Vert — main-agent decisions
+# Vert — design and engineering decisions
 
-Rulings the main agent made where the sources disagree or are silent. Implementation and
-verification sub-agents treat this file as part of the spec: **DECISIONS.md > canvas frames >
-DESIGN-SPEC.md text**, except that the accessibility and privacy non-negotiables in CLAUDE.md beat
-everything.
+Rulings made where the sources disagree or are silent. Treat this file as part of the spec:
+**DECISIONS.md > canvas frames > DESIGN-SPEC.md text**, except that the accessibility and privacy
+non-negotiables in CLAUDE.md beat everything.
 
 ## Design sources in the repo
 
@@ -35,7 +34,7 @@ everything.
 - Taglines: Upload "DROP A GPX. GET A POSTER."; View "TRAIL RUNS AS TERRAIN"; Poster mode
   "POSTER · <ROUTE NAME>".
 
-## Components (phase 1)
+## Components
 
 - **Button**: `size: "md"` (default; 15/600, padding 12×18, min-height 44) and `"lg"` (16/600,
   padding 14×18, min-height 48; the poster Download PNG button). Quiet padding is 12×10. Icon is
@@ -91,10 +90,10 @@ everything.
     frame 8px inside the viewport (radius 8, no pointer events). Files dropped outside the
     Dropzone go through its `ref` (`takeFiles`), so they are checked and their errors shown in the
     same place.
-  - Overruled on 2026-10-18 by Sean: this entry used to say "The whole zone is not a clickable div:
-    the buttons are the controls" (the card held "or choose a file · or try a sample run" as two
-    link buttons, and drops worked on the zone only). Sean asked for the whole card to be the
-    button and for drops anywhere on the page. The card is a real `<button>`, not a clickable div,
+  - Changed on 2026-10-18: this entry used to say "The whole zone is not a clickable div: the
+    buttons are the controls" (the card held "or choose a file · or try a sample run" as two link
+    buttons, and drops worked on the zone only). Now the whole card is the button and drops work
+    anywhere on the page. The card is a real `<button>`, not a clickable div,
     so keyboard and assistive tech get the same control.
 - **Upload sample preview** (v2): the right column's 4 : 3 preview is a `<button>` that loads the
   sample, named by its chip "TRY THE SAMPLE RUN · 21.5 km · +1,102 m" (units follow the
@@ -137,7 +136,7 @@ everything.
   details above, baseline-aligned with a 14px gap. In the page header the name links home
   ("Public release").
 
-## Page (phase 2)
+## Page
 
 - Below 600px wide the elevation profile is 100px tall (DESIGN-SPEC §3). `Main-390.png` is the fluid
   View frame rendered at 390 for reference; the canvas has no designed phone frame, so the spec wins.
@@ -178,7 +177,7 @@ everything.
   them first (next entry); a GPX makes it leave the run (`newFile`; the file is kept only if it
   really leaves, not when it is a no-op during a load) and hands it, once, to Upload's Dropzone
   when it mounts, so every file is read by exactly the code a drop on the Dropzone uses.
-- **A wrong file dropped on a run stays on the run** (Sean, 2026-10-18; the first build left the
+- **A wrong file dropped on a run stays on the run** (2026-10-18; the first build left the
   run and showed the error on Upload). On View and Poster mode the page runs `pickGpxFile` before
   it leaves the run: a wrong extension or an oversize file never leaves the screen, and the reason
   shows in `DropAlert`, a bar in flow right under the header (`--surface`, the header's padding,
@@ -206,7 +205,7 @@ everything.
   out of the terrain box into a row under it, so nothing covers the model on phones. TerrainView
   takes `insets` so the page reserves room for any overlay that stays on top.
 
-## Posters (phase 3)
+## Posters
 
 - **Sticky Download block shadow** (PosterModeV2): side by side (≥ 900px), the block shows a top
   shadow `0 -12px 24px -12px` of `--ink` at 22% only while aside content is scrolled under it. A
@@ -362,12 +361,12 @@ everything.
   +1,102 m, 3:04:58), the loaded sample's own figures; a test parses `coosa-backcountry.gpx` with
   the worker's handler and fails if they drift. The placeholder `SAMPLE_RUN` (tests and stories) carries the same totals.
 
-## Running-app files (Sean's GPX, Hong Kong)
+## Running-app files
 
-Sean's 25 runs (running_page / gpxpy exports, Hong Kong waterfront and Island, 1–18 km) loaded
-without an error message but showed broken terrain and junk elevation. Rulings:
+A set of 25 running-app exports (running_page / gpxpy, along a harbour waterfront and its hills,
+1–18 km) loaded without an error message but showed broken terrain and junk elevation. Rulings:
 
-- **Terrain spikes removed.** Terrarium has seam artefacts along the Hong Kong coast: one-pixel
+- **Terrain spikes removed.** Terrarium has seam artefacts along that coast: one-pixel
   lines of −1,000 to −8,600 m at z14 (8–425 samples below −50 m in each z14 grid there) and ringing of
   −1,256 to +6,431 m at z12. They drew the terrain as a needle-thin wall thousands of metres deep in
   the View and on all three posters (a Night Ridge route plunging off the page, Survey Quad index
@@ -376,7 +375,7 @@ without an error message but showed broken terrain and junk elevation. Rulings:
   5 × 5 neighbourhood clears by more than max(100 m, 5 pixel widths) (z14: 100 m, z10 in the Alps:
   525 m) with the neighbourhood's median (`removeSpikes`, `src/lib/terrarium.ts`). On a slope the
   median is the pixel itself, so ordinary relief is left alone, but not every pixel of real terrain
-  is: on near-vertical walls it moves single rim and foot pixels (the verifier's 18 cliff and gorge
+  is: on near-vertical walls it moves single rim and foot pixels (18 cliff and gorge test
   sites, z10–14: Mt Thor at z11 25 pixels, by up to 527 m; El Capitan, Half Dome, Zion a few each,
   by 114–200 m; Lavaredo's Tre Cime at z11 one pixel, 401 m). On the four reference grids it
   replaces 0 pixels (at a 50 m threshold the CCC would already lose 527 real pixels, so the margin
@@ -396,9 +395,8 @@ without an error message but showed broken terrain and junk elevation. Rulings:
 - **Barometric series kept.** The 14 newer files have `<ele>` from −12.8 to 97 m, which looked
   relative. Against the DEM along the track they are absolute: the mean offset (file − DEM) is
   +3.3 to +11.0 m on the flat waterfront files and −4.5 and −6.5 m on the two hilly ones (within
-  both sources' noise), and where there is real relief both see it (the 17.8 km run: a
-  96 m hill at km 1.3–2.3 in the file, 94–101 m in the DEM, r = 0.7; the Chai Wan run starts at
-  49–56 m in both). On the flat waterfront both are noise around a 2–5 m truth (the file wanders
+  both sources' noise), and where there is real relief both see it (on the hilliest run, a
+  96 m hill at km 1.3–2.3 in the file, 94–101 m in the DEM, r = 0.7). On the flat waterfront both are noise around a 2–5 m truth (the file wanders
   ±10 m, the DEM has ±8 m bumps from roofs and flyovers), so neither is better and the file's own
   record wins, as for any file. No rule change, no new copy.
 - **Terrain elevations averaged over ±50 m of route** (`TERRAIN_SMOOTHING_M`, `smoothByDistance` in
@@ -407,43 +405,43 @@ without an error message but showed broken terrain and junk elevation. Rulings:
   add climb nobody ran: the terrain gave the sample +1,176 m, Lavaredo +1,222, the E51 +3,394 and
   the CCC +6,838 where their own recordings give +1,102, +1,062, +2,876 and +6,106 (+7 to +18%).
   Averaged over ±50 m: +1,094, +1,090, +2,958, +5,939 (−3 to +3%; ±35 m was +1 to +7%, ±75 m −7
-  to +2%), high points within 2 m. Sean's flat waterfront runs filled from the terrain read +22 to
+  to +2%), high points within 2 m. The flat waterfront runs filled from the terrain read +22 to
   +78 m instead of +39 to +196 m: still DEM noise on a flat run, said plainly ("Elevation from
   terrain data"). Files with their own elevations are not touched.
 - **Known limitation: flat-run vert from a noisy recorder.** The barometric waterfront files show
   +55 to +171 m on flat 5 km runs (Night Ridge puts it in the headline). A noise-adaptive
   hysteresis, max(2 m, k × the recording's noise), was tried and not shipped: no k separates them
   from the reference courses. Short-scale noise (robust sd of the residual after ±50 m, after the
-  median filter) is 0.6–1.2 m on Sean's files and 0.4–1.2 m on the courses (CCC 1.21): at k = 3
-  the CCC loses 2.8% (6,106 → 5,937) while Sean's files lose 0–21%. Over ±150 m the "noise" is
-  1.1–3.0 m on Sean's files and 1.7–3.3 m on the courses: k = 1 already takes the CCC down 2.8%
-  and the E51 0.4%, for 0–8% off Sean's. MAD of second differences: 0.30–0.44 m on Sean's, 0.06–0.61
-  on the courses. The wander is a ±10 m swell over hundreds of metres, which a recording alone
+  median filter) is 0.6–1.2 m on these files and 0.4–1.2 m on the courses (CCC 1.21): at k = 3
+  the CCC loses 2.8% (6,106 → 5,937) while these files lose 0–21%. Over ±150 m the "noise" is
+  1.1–3.0 m on these files and 1.7–3.3 m on the courses: k = 1 already takes the CCC down 2.8%
+  and the E51 0.4%, for 0–8% off these files. MAD of second differences: 0.30–0.44 m on these
+  files, 0.06–0.61 on the courses. The wander is a ±10 m swell over hundreds of metres, which a recording alone
   cannot tell from real 10 m hills; only the DEM could (and on these runs it is noisy too, see
-  above). The file's vert stands, as Sean's watch recorded it.
+  above). The file's vert stands, as the watch recorded it.
 - **Survey Quad's 0 m line, the coast, from a cleaned land / sea mask** (`seaLevelField` in
   `src/poster/contours.ts`; every other level is traced from the elevations as before). Terrarium's
-  sea is coarse bathymetry in blocks ~200 m across straddling 0 (Hong Kong harbour: −2 to +2 m,
+  sea is coarse bathymetry in blocks ~200 m across straddling 0 (the harbour: −2 to +2 m,
   most positive values under 0.5 m), so the raw 0 m index line drew a lattice of rectangles across
   the water; where the sea is exactly 0 (Étretat) it could not follow the shore and drew beads at
-  the cliff foot. (Round 1 dropped the 0 m line; that emptied Scheveningen's map, left Sean's routes
-  apparently running over water with the 20 m line 100–300 m inland, and took the 0 m line off the
+  the cliff foot. (A first fix dropped the 0 m line; that emptied Scheveningen's map, left the
+  harbour routes apparently running over water with the 20 m line 100–300 m inland, and took the 0 m line off the
   Masada escarpment.)
   - The mask: land above 0.5 m; opened, then closed, by 50 m (at least a sample); low land patches
     (never reaching 3 m) and sea patches under 250 × 250 m (and under 2% of the grid) flipped, at
     the map's edge too (a block cut by the frame stayed as a stray line out in the harbour); then
     any ground of 3 m or more is land again.
   - **Small islands stay.** A land patch is flipped only when it is low: the harbour's noise blocks
-    peak at 0–1.6 m, real islets rise far above (round 2 removed Château d'If, 2.5–4.4 ha). Land
+    peak at 0–1.6 m, real islets rise far above (a second fix removed Château d'If, 2.5–4.4 ha). Land
     kept within 400 m of the islet (mask / data above 0.5 m, z14): Château d'If 385 / 507 samples,
     Alcatraz 1,563 / 1,587, Bass Rock 1,603 / 1,627, St Michael's Mount 2,767 / 2,850, Green
     Island (HK) 3,382 / 3,332; Fort Boyard has no land in Terrarium at all. The harbour stays clean:
-    Hong Kong waterfront 2 lines (main 31), the 17.8 km run 13 (main 142), Chai Wan 2 (main 14).
+    the three harbour files draw 2, 13 and 2 lines (31, 142 and 14 before).
     Accepted limit: a real islet that is both low (peak under 3 m in the data) and small (under
     ~6 ha) is dropped with the noise, e.g. most of San Michele in Venice (peak 2.8 m, ~4.5 ha).
   - **Cost:** 50–76 ms on a 512 × 512 grid (24–38 ms before the smooth tracing), once per Survey
     Quad layout; acceptable for a poster.
-  - **Traced smooth.** Round 2 set the samples on the wrong side of the mask ±1 cm across 0, which
+  - **Traced smooth.** A second fix set the samples on the wrong side of the mask ±1 cm across 0, which
     snapped the line to the grid: 67–75% of its segments exactly horizontal, vertical or 45°, a
     1–3 mm staircase at 18 × 24 in the heaviest line of the map. Now, where cleaning left a sample as
     the threshold put it, the field is the elevation itself, its crossing moved from 0 to 0.5 m near
@@ -454,15 +452,15 @@ without an error message but showed broken terrain and junk elevation. Rulings:
     one to the other without a break. Last the field is clipped to ±0.5 m and blurred by 2 samples:
     that rounds what the data leaves on the grid (a constant sea against a cliff) without letting a
     cliff's tall side pull the line out to sea; it stays within about a sample of the crossing.
-    Snapped segments (H / V / 45° ± 0.5°, on the poster's smoothed grid), now vs main's raw 0 m line
-    vs the intermediate contours: Scheveningen 2% / 5% / –, Chai Wan 4% / 15% / 2%, Hong Kong
-    waterfront 2% / 23% / 2%, the 17.8 km run 3% / 12% / 2%, Étretat 3% / 13% / 3%, Masada 3% /
-    2% / 2%. What is left are straight runs (sea walls, the grid's edge), not steps; at 1:1 on the
-    18 × 24 exports the coast reads as one smooth stroke (`docs/verify/sean-gpx/coast-r3ui/crop-*`).
+    Snapped segments (H / V / 45° ± 0.5°, on the poster's smoothed grid), now vs the earlier raw
+    0 m line vs the intermediate contours: Scheveningen 2% / 5% / –, the three harbour files
+    4% / 15% / 2%, 2% / 23% / 2% and 3% / 12% / 2%, Étretat 3% / 13% / 3%, Masada 3% / 2% / 2%.
+    What is left are straight runs (sea walls, the grid's edge), not steps; at 1:1 on the
+    18 × 24 exports the coast reads as one smooth stroke.
   - **Scheveningen's coast sits inland of the water.** The beach there stays at 0–1.6 m for about
     300 m, and the line runs where it passes 0.5 m: measured against the data's sustained 0 m
     crossing (8 samples above 0), a median 82 m inland, p90 176 m, max 259 m (row by row, 370
-    rows). Sean's Hong Kong waterfront has no such beach: there the line is the quay.
+    rows). The harbour waterfront has no such beach: there the line is the quay.
   - The four reference courses never reach 0 m, so they are unchanged. O(n): chamfer distances,
     one flood fill per side and three box blurs.
 - **The View gets a fresh canvas per stage.** `pnpm dev` runs React StrictMode, which mounts,
@@ -479,7 +477,7 @@ without an error message but showed broken terrain and junk elevation. Rulings:
   "The terrain couldn't load: this site isn't serving elevation data right now. Try again later."
   (Try again kept). Stats, profile and posters B / E behave as for any terrain failure.
 - **Titles.** These files have no `<name>`, so the title is the file name, a 13-digit timestamp
-  ("1612088536516"). Vert does not invent a title; the poster's title field is where to type one.
+  ("1700000000000"). Vert does not invent a title; the poster's title field is where to type one.
 
 ## Export
 
@@ -578,7 +576,7 @@ without an error message but showed broken terrain and junk elevation. Rulings:
 - **Hosting**: Cloudflare connected the repo as a Worker with static assets
   (`vert.fum.workers.dev`), not Pages. So the app and the tile proxy ship as **one Worker**: static
   assets from `dist/`, with `/tiles/*` routed to Worker code (`run_worker_first`) and R2 bound as
-  `TILES`. Same parts as PLAN.md (static app + tile proxy + R2), one deployable, same origin (no
+  `TILES`. The same parts as planned (static app + tile proxy + R2), one deployable, same origin (no
   CORS, and tile requests never leave the app's origin).
 - **Tile zooms**: the Worker accepts z 6–15 (the heightfield drops below z12 only for very long
   routes, then samples one zoom finer; z6–7 covers 100+ km courses). Anything else, and any query
@@ -623,15 +621,15 @@ without an error message but showed broken terrain and junk elevation. Rulings:
   "the elevation data arrived, but this browser couldn't read it. Reload the page and try again."
   instead of "Check your connection".
 
-## Library for Activities (phase 4)
+## Library for Activities
 
-The host is Activities (activities.geekplux.org, repo geekplux/activities), whose Activity page has
-a `TerrainSlot` placeholder for Vert's TerrainView. Its two constraints decide the design: it
+The first host is Activities (activities.geekplux.com), whose activity page had room for Vert's
+TerrainView. Its two constraints decide the design: it
 publishes no latitude/longitude anywhere (its privacy test fails on any `\d{2}\.\d{4,}` in published
 text), and its Cloudflare build clones only its own repo, so it vendors files from `dist-lib/` and
 installs `three` from npm.
 
-- **Everything georeferenced happens offline**, in `pnpm bake` on Sean's machine. The browser gets
+- **Everything georeferenced happens offline**, in `pnpm bake` on the machine that has the activity. The browser gets
   a `.scene`: a height grid and a route in grid-local units, with no bounds, lat/lon, tile x/y or
   `failedTiles` (`docs/SCENE.md`). TerrainView's `scene` path never converts a coordinate.
 - **Grid-local frame**: metres from the grid's north-west corner, x east, y south; the grid's
@@ -679,7 +677,7 @@ installs `three` from npm.
 - **Accepted residual risk: the terrain is a fingerprint.** A height grid of a route's area could
   in principle be matched against a global elevation model to find where it is. No encoding of a
   real terrain avoids that; publishing a scene publishes the shape of the ground. The bake is per
-  activity and opt-in; Sean decides which activities get one ("Needs Sean" in PROGRESS.md).
+  activity and opt-in; whoever publishes chooses which activities get one.
 - **The bake (`pnpm bake`) never invents terrain.** Only a confirmed upstream 404 becomes a missing
   tile (filled from neighbours, as the app does, and counted in the summary). A 5xx, 429, timeout or
   dropped connection is retried once and then fails the bake, unlike the app, which fills: a
@@ -690,9 +688,9 @@ installs `three` from npm.
   whole new one, never a mix.
 - **Ids.** Every id is checked for coordinates of the run (degrees with a fraction, DMS, decimal
   minutes, digits run together, any separator); timestamps (epoch µs/ms/s/min, YYYYMMDD) only in
-  the default id taken from a file name (Sean's files are named by epoch ms), which then asks for
-  `--id`. An explicit `--id` of 10 or more digits only (a Strava activity id, already public on
-  Activities) is opaque and not read: time-ordered Strava ids were refused in whole bands at a place
+  the default id taken from a file name (some apps name files by epoch ms), which then asks for
+  `--id`. An explicit `--id` of 10 or more digits only (a Strava activity id, public on the host's
+  pages anyway) is opaque and not read: time-ordered Strava ids were refused in whole bands at a place
   (11,413,000,000–11,426,000,000 on the Hong Kong box). Accepted residuals: someone typing
   concatenated coordinates as a bare-digit `--id`, coordinates folded inside a hash-like token, a
   1-digit-degree coordinate at the start of a long digit run.
@@ -741,8 +739,8 @@ installs `three` from npm.
   disordered arrays), so a host hides the scrub rather than parking it where the runner was not;
   `sceneTimeRange` tells a heart-rate chart which stretch can drive it.
 - **No version bump for the `onScrub` type** (`(metres: number | null) => void`; a
-  `useState<number>` setter no longer fits): nothing has been vendored yet, so 0.1.0 is the whole
-  phase.
+  `useState<number>` setter no longer fits): nothing has been vendored yet, so 0.1.0 covers the
+  whole change.
 - **Attribution.** tilezen/joerd's `attribution.md` (the licence the AWS registry gives for Terrain
   Tiles) heads its per-source list "Required attribution" and asks that it appear "in a place that is
   reasonable to the medium". Vert's reading: the short credit `TERRAIN_ATTRIBUTION` ("AWS Terrain
@@ -751,17 +749,10 @@ installs `three` from npm.
 - **Package version** 0.1.0 (was 0.0.0): `VERT_LIB_VERSION` is `0.1.0+<short sha>` so a host can
   pin and report what it vendored.
 
-### Sean's rulings on embedding (2026-10-19)
+### Which activities get a scene
 
-On the three phase 4 items in PROGRESS.md "Needs Sean", Sean chose to follow the main agent's
-recommendations:
-
-- **Vendoring is allowed.** `dist-lib/` may be committed to geekplux/activities; Vert's repository
+- **Vendoring is allowed.** A host may commit `dist-lib/` to its own repository; Vert's repository
   is public ("Public release", below).
-- **Embedding is approved.** Activities may replace its `TerrainSlot` placeholder with Vert's
-  TerrainView (reversing its "Vert: link out" decision) and add `three` as an exact runtime
-  dependency. Activities records both in its own `docs/DECISIONS.md` when that work starts there;
-  this repo does not edit Activities.
 - **Which activities get a scene.** A scene is opt-in, one activity at a time, baked with the
   default `--trim 200`. When the bake warns that the real start or finish lies near the drawn route
   (a loop or laps), raise `--trim` until the warning clears. If it cannot clear without hiding most
@@ -771,14 +762,14 @@ recommendations:
 
 ## Public release (2026-10-19)
 
-Sean made the repository public and bound **vert.geekplux.org** to the Worker. He asked for the
-project's presentation to be redone without changing what Vert does.
+The repository became public and **vert.geekplux.org** was bound to the Worker. The project's
+presentation was redone without changing what Vert does.
 
 - **The domain is vert.geekplux.org** (the plan said vert.geekplux.com, which never served Vert;
   superseded by "Main domain: vert.geekplux.com").
   Posters print `VERT.GEEKPLUX.ORG` in the footer; `pnpm bake` defaults to its `/tiles/`; the tile
   proxy's User-Agent names it. `vert.fum.workers.dev` still answers as the Worker's own address.
-- **The wordmark links home.** In phase 2 the wordmark was plain text (there is no routing). With
+- **The wordmark links home.** At first the wordmark was plain text (there is no routing). With
   a landing section below the fold, the top-left name is where people expect "home". A plain click takes the
   same path as New file (no reload, no-op while a load is in flight); a modified click opens `/` in
   a new tab; on Upload it scrolls to the top (instantly with reduced motion) and focuses the h1.
@@ -799,7 +790,7 @@ project's presentation to be redone without changing what Vert does.
 
 ## Library 7: host feedback (2026-10-19)
 
-Activities, the first host, embedded the library and reported what it had to work around. Sean's
+Activities, the first host, embedded the library and reported what it had to work around. The
 rule for the changes: simple and easy to use, better defaults over new options, no new flag or
 prop unless two real uses genuinely differ. Version 0.1.1; no breaking change.
 
@@ -847,16 +838,16 @@ var(--route))`; width (2 px) and offset (2 px) stay fixed. It is not defined in 
   metres). A host that prefers the terrain leaves `ele` out of the points: the input already is
   the switch.
 - **Docs**: the scrub offset rule (`seconds − offset` in, `+ offset` out), the `.scene`
-  Content-Type rule and the `no-cache` policy, how scene distances are measured, what Activities'
-  importer and guards actually do, what reduced motion does. Not done, on purpose: per-end trims,
+  Content-Type rule and the `no-cache` policy, how scene distances are measured, what a host's
+  importer and guards can do, what reduced motion does. Not done, on purpose: per-end trims,
   `--accept-near-end`, `--elevation`, `--json`, a light entry, exported sidecar helpers,
   `--vert-*` colour aliases, a `start` field in the points file, a new heart-rate example, a tile
   cache default outside the checkout.
 
 ## Library 8: npm package (2026-10-19)
 
-Vert is published to npm so any site can install it, and Activities depends on the package instead
-of vendoring `dist-lib/`. Sean's rule: simple and easy to use, not over-engineered. Version 0.2.0
+Vert is published to npm so any site can install it, and a host depends on the package instead
+of vendoring `dist-lib/`. The rule: simple and easy to use, not over-engineered. Version 0.2.0
 (a new install surface); no change to the library's API or the scene format.
 
 - **Name `@geekplux/vert`.** `vert` on npm is someone else's package. Scoped, public
@@ -907,7 +898,7 @@ of vendoring `dist-lib/`. Sean's rule: simple and easy to use, not over-engineer
 
 Activities' "Open in Vert ↗" landed on Vert's home page and showed nothing of the session.
 Activities publishes baked scenes at `https://<host>/terrain/<id>.scene` and links to
-`https://vert.geekplux.org/?scene=<absolute scene URL>`. Sean's rule: simple, not over-engineered.
+`https://vert.geekplux.org/?scene=<absolute scene URL>`. The rule: simple, not over-engineered.
 The site changed, not the library: no version bump, no changelog entry.
 
 - **One query parameter, read once on load.** `App` passes `?scene=` to `Page`, which opens it as if
@@ -945,12 +936,12 @@ The site changed, not the library: no version bump, no changelog entry.
   (`scenePaceAt`, the run's 200 m window). Loop or not, and the summit, come from the markers the
   scene stores.
 - **Title: `&title=<text>`, optional.** The format carries no title (names are forbidden
-  content), and an h1 reading "8071241781" is not fit for a page Activities links to. So the link
+  content), and an h1 reading "1234567890" is not fit for a page Activities links to. So the link
   may carry the session's name. `sceneTitle` makes it fit to show: control characters become
   spaces, format characters (`\p{Cf}`: bidi overrides such as U+202E, zero-width spaces and joiners)
   are dropped so nothing can reverse or hide text, whitespace collapses, trimmed, cut at 80
   characters (code points). It is rendered as text only (React text and `document.title`, never
-  HTML) and is the h1 and the tab title ("Translantau 50 · Vert", restored when the scene is left).
+  HTML) and is the h1 and the tab title ("Coosa Backcountry · Vert", restored when the scene is left).
   Without it (or when nothing is left of it) the h1 is the file name without `.scene`, sanitised the
   same way, or the host when nothing is left of that either, and `document.title` is unchanged, as
   for a GPX. The mono line above the h1, where a run shows its date, stays `SCENE · <HOST>`, with the
@@ -977,7 +968,7 @@ The site changed, not the library: no version bump, no changelog entry.
 
 ## Main domain: vert.geekplux.com (2026-10-21)
 
-Sean bound **vert.geekplux.com** to the Worker as the main domain. **vert.geekplux.org** stays
+**vert.geekplux.com** was bound to the Worker as the main domain. **vert.geekplux.org** stays
 bound, but an account-level Bulk Redirect answers it first: every request, http or https, gets a
 301 to the same path and query string on `.com`, before it reaches the Worker. Links already out
 there (Activities' "Open in Vert ↗", shared `?scene=` links, posters printed before today) land on
@@ -1001,7 +992,7 @@ the same page; `/tiles/` requests are redirected too, and `fetch` follows them.
 
 ## Google Analytics (2026-10-22)
 
-Sean asked for Google Analytics (`G-CN7CN5MXMR`) on the live site. It overrules "no analytics" in
+Google Analytics (`G-CN7CN5MXMR`) was added on the live site. It overrules "no analytics" in
 CLAUDE.md, the README and the About dialog, which now say what is sent. `src/page/analytics.ts`:
 
 - **Live host only.** gtag.js loads when `location.hostname` is `vert.geekplux.com`. Local dev, the

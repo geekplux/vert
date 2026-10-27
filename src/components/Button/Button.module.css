@@ -99,8 +99,9 @@
 
 /*
  * Disabled: native `disabled` tells assistive tech. WCAG exempts disabled controls from contrast,
- * but Sean is colour-weak, so we choose legibility: every variant drops to --muted text and dims to
- * 0.8 (--muted at 0.8 is 3.39:1 on --bg and 3.58:1 on white; the old opacity 0.45 gave 1.88:1).
+ * but a colour-weak user still needs to read them, so we choose legibility: every variant drops to
+ * --muted text and dims to 0.8 (--muted at 0.8 is 3.39:1 on --bg and 3.58:1 on white; the old
+ * opacity 0.45 gave 1.88:1).
  * Primary also loses its ink fill for a --rule outline, a change of shape and not only of colour;
  * the outline is an inset shadow so toggling `disabled` never changes the button's size.
  */

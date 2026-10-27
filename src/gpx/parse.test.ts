@@ -194,7 +194,7 @@ describe('parseGpx: names and text', () => {
   it('ignores the author name inside metadata, comments and processing instructions', () => {
     const parsed = parseGpx(
       gpx(`<!-- <trk><name>commented out</name></trk> -->
-<metadata><author><name>Sean</name></author><name>Weekend</name></metadata>
+<metadata><author><name>Alex</name></author><name>Weekend</name></metadata>
 <?some-instruction data?>
 <trk><trkseg><!-- a > b --><trkpt lat="1" lon="1"/></trkseg></trk>`),
     );

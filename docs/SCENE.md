@@ -262,7 +262,7 @@ time).
 in float64 and kept as float32 or float64, not the decimal itself: a route elevation of 412.3 m is
 the float32 412.29998779296875. They re-encode to the same bytes, and they are fine for drawing and
 arithmetic. **A host must never write them into published text as they are**: printed in full,
-such numbers match Activities' coordinate pattern `\d{2}\.\d{4,}`, which its guards apply to its
+such numbers match a coordinate check such as `\d{2}\.\d{4,}`, which a host may apply to its
 published data. Round to the step's decimals (or whole units) before printing.
 
 A sketch of a decoder's main loop, for orientation (the reference code is `src/scene/decode.ts`):
@@ -325,10 +325,9 @@ newline; shown here more compactly). The Coosa sample's,
 | `summary` | the decoded summary in **whole metres** (`climb` is `null` when unknown)                 |
 
 The sidecar's summary is read back from the scene bytes, so it always matches the file. Every
-number in it is a whole number, so it never matches Activities' coordinate pattern
-`\d{2}\.\d{4,}` (a coordinate-like decimal). Activities' privacy test and deploy guard apply that
-pattern to its published data files (`data/activities.json`, `data/meta.json`), not to scenes or
-sidecars; a host can extend its guard to sidecars and they pass (docs/INTEGRATION.md, "Scenes").
+number in it is a whole number, so it never matches a coordinate pattern such as
+`\d{2}\.\d{4,}` (a coordinate-like decimal). A host that applies such a pattern to its published
+data can extend its guard to sidecars and they pass (docs/INTEGRATION.md, "Scenes").
 
 ## Forbidden content
 
@@ -438,7 +437,7 @@ enough for zoom 14.
   10⁻⁵° of a key value; (lat, lon) pairs among adjacent array elements or among one object's
   numbers; epoch-like timestamps; `x`/`y` scalars equal to a tile index. A lone number merely
   inside the box is not flagged: route times pass through 34.8 s, and a low grid through 46.6 m.
-- **Sidecar.** Activities' pattern.
+- **Sidecar.** The coordinate pattern `\d{2}\.\d{4,}`.
 
 Tested on the Coosa track with a synthetic grid (trim 200 and 0, and moved to a low-lying place
 where times and elevations share the coordinates' range), and on all four real scenes at trim 200
@@ -511,13 +510,13 @@ Integrating the files into a host page is `docs/INTEGRATION.md`'s subject.
   id), widened by 0.01°, the id is refused. A date in an id can collide with a run's box by chance
   (`lap-10-03` reads as 10° 3′); the message then asks for another id.
   - **Hashes are skipped**: a run of 16 or more hex characters, or a UUID, with a letter in it
-    (Activities' file ids are `f:<sha1>`, `f-<sha1>` once sanitised). Over 5,000 random ids each
+    (a file's `f:<sha1>` id, say, `f-<sha1>` once sanitised). Over 5,000 random ids each
     against the Coosa, CCC and a Hong Kong box, none of `f-<sha1>` or UUIDs is refused.
   - **An explicit `--id` of 10 or more digits and nothing else is not read at all**: it is an
     opaque public identifier, such as a Strava activity id. Strava's ids are 11 digits that rise
     with time, so the prefix readings refused whole bands of them, not a scattering, wherever a
     run's latitude or longitude is 10–19° or 100–199° (every id from 11,413,000,000 to
-    11,426,000,000 on a Hong Kong run; 1.2116e10–1.2203e10 on Lavaredo). A sweep of every
+    11,426,000,000 on a Hong Kong box; 1.2116e10–1.2203e10 on Lavaredo). A sweep of every
     millionth id from 1.0e9 to 2.0e10 is refused nowhere on the test boxes. The residual risk,
     accepted: someone typing concatenated coordinates as a bare-digit `--id`. A default id (from
     the file name) keeps every reading, digit-only or not, and so does any explicit id with

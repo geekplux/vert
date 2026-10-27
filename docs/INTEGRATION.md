@@ -1,9 +1,8 @@
 # Integrating Vert into a host site
 
-This guide is for a site that shows Vert's 3D terrain of a run on one of its own pages. The first
-host is [Activities](https://activities.geekplux.com) (repo the host site repo), whose Activity
-page has a `TerrainSlot` placeholder for it, so its examples are written for that page; nothing in
-it is specific to Activities otherwise.
+This guide is for a site that shows Vert's 3D terrain of a run on one of its own pages. Its
+examples are written for a host page that shows one recorded activity, with a heart-rate chart
+that shares the terrain's scrub; nothing in them depends on a particular site.
 
 Read with it: [`docs/SCENE.md`](SCENE.md) (the scene format and the bake, in full) and
 the package's `dist-lib/README.md` (the library's own reference, shipped with it; source
@@ -46,39 +45,18 @@ in `docs/DECISIONS.md` ("Library for Activities") and `docs/SCENE.md` ("Forbidde
   format's defined fields (column 0 lies within about 5.6° east of 180°); the decoded-object scan
   still covers them.
 
-**For Activities, the whole change**, each item explained below:
+**A host's whole change**, each item explained below:
 
-- **Approval first.** Embedding Vert reverses an Activities decision marked "do not relitigate"
-  (its `CLAUDE.md`, "Vert: link out; `TerrainSlot` placeholder"; `docs/PLAN.md` §2, "integrate
-  later as a package"), adds a runtime dependency (`three`, exact) and a vendored folder. the maintainer
-  approved it on 2026-10-19 (Vert's `docs/DECISIONS.md`); Activities records it in its own
-  `docs/DECISIONS.md`.
-- `@geekplux/vert` and `three@0.186.1` installed ([Installing](#2-installing)). Before 0.2.0
-  Activities vendored `vendor/vert/` with a pin test; both go when it moves to the package.
-- `public/scenes/` with the baked pairs, the `virtual:vert-scenes` plugin, a `/scenes/*` rule in
-  `public/_headers` and its line in `deploy.test.ts` ([Scenes](#3-scenes)).
-- In `Activity.tsx`, `TerrainSlot` replaced by the worked example's `TerrainCard` (in
-  `ActivityBody`) and `TerrainCardGhost` (in `ActivityGhost`), and the heart-rate chart wrapped in
-  `HeartRateScrub` when there is a series; `HeartRateGhost` and `HeartRateEmpty` unchanged
-  ([the worked example](#a-worked-example-activities-terrain-card)).
-- Tests updated: the ones that failed in a copy of Activities with this guide applied, running its
-  whole Vitest suite and its whole Playwright suite (every spec, all three projects; 375 passed,
-  185 skipped by the specs themselves, and nothing failed but these):
-  - `src/pages/Wp5Pages.test.tsx`, "a GPS session": it looks for `TERRAIN_PLACEHOLDER`.
-  - `e2e/activity.spec.ts`, "a GPS + HR session" (lines 68–75): the Terrain region's placeholder
-    text and 16:9 box.
-  - `e2e/activity.spec.ts`, the keyboard walk (lines 302–325): the heart-rate slider ("Time in the
-    session") is a new stop, and once the card has loaded so are the terrain view, Rotate / Flat /
-    Reset, the profile and the credit link.
-  - `e2e/activity.spec.ts`, the "1 px sweep" of More like this (line 365) on Translantau50, which
-    had a scene in that copy: about 23 s instead of 2 s, because every one of its 1,600 viewport
-    resizes redraws the terrain. It passed alone but timed out (30 s) in the full run; give it a
-    longer timeout, or sweep a session without a scene.
-
-  Every `e2e/polish.spec.ts` test passed there, its layout rule (section tops within 2 px,
-  skeleton vs loaded, every session at 320, 390, 768 and 1440 px) included.
-
-- A script that bakes chosen activities on the maintainer's machine ([Baking](#from-activities-importer)).
+- `@geekplux/vert` and `three@0.186.1` installed ([Installing](#2-installing)).
+- `public/scenes/` with the baked pairs, the `virtual:vert-scenes` plugin and a `/scenes/*` rule in
+  `public/_headers` ([Scenes](#3-scenes)).
+- On the activity page, a terrain card (`TerrainCard`, with `TerrainCardGhost` in the loading
+  skeleton), and the heart-rate chart wrapped in `HeartRateScrub` when there is a series
+  ([the worked example](#a-worked-example-a-terrain-card)).
+- A jsdom test of the card and an axe check of the page in a browser
+  ([Testing](#10-testing-in-the-host)).
+- A script that bakes chosen activities on the machine that has them
+  ([Baking](#from-a-hosts-importer)).
 
 ## 2. Installing
 
@@ -161,7 +139,7 @@ and nothing else.
   React 19. `react-dom` is your own (the library does not import it).
 - **`@types/three` (0.186.0, dev)**: only if your TypeScript checks declaration files. The
   declarations import `WebGLRenderer` from `three`, which ships no types: with `skipLibCheck: false`
-  that is `TS7016` in `types/vert-lib/types.d.ts`; with `skipLibCheck: true` (as Activities has)
+  that is `TS7016` in `types/vert-lib/types.d.ts`; with `skipLibCheck: true`
   everything type-checks without it, and only `TerrainRenderer`'s members become untyped. To add
   it: `pnpm add -D --save-exact @types/three@0.186.0`.
 
@@ -169,15 +147,15 @@ and nothing else.
 
 The package's `exports` carry a `types` condition, and the declarations' relative imports carry
 `.js` extensions, so `moduleResolution` `bundler`, `node16` and `nodenext` all resolve them
-(checked under `strict` with Activities' own options: `verbatimModuleSyntax`,
-`noUncheckedSideEffectImports`, `noUncheckedIndexedAccess`); the old `node` (`node10`) resolution
-does not read `exports`. The side-effect import `@geekplux/vert/vert.css` needs a `*.css` module
-declaration, which `vite/client` (in Activities' `types`) provides.
+(checked under `strict` with `verbatimModuleSyntax`, `noUncheckedSideEffectImports` and
+`noUncheckedIndexedAccess`); the old `node` (`node10`) resolution does not read `exports`. The
+side-effect import `@geekplux/vert/vert.css` needs a `*.css` module declaration, which
+`vite/client` (in a Vite app's `types`) provides.
 
 ### Load it lazily
 
 three.js is most of the weight: the terrain chunk of the example in
-[Rendering](#a-worked-example-activities-terrain-card) is 657 KB minified (172 KB gzipped) with
+[Rendering](#a-worked-example-a-terrain-card) is 657 KB minified (172 KB gzipped) with
 three inside. Import Vert only from a module you load with `import()`, so it loads on pages that
 show a scene and nowhere else: `React.lazy` does that. Everything the page itself imports from
 `@geekplux/vert` must be `import type`, or the bundle comes back into the page's chunk.
@@ -220,16 +198,15 @@ The format is specified in [`docs/SCENE.md`](SCENE.md); a host needs only `decod
 ### Where to keep them
 
 Bake into a folder of its own under `public/` and commit both files of each pair. The examples
-here use `public/scenes/`, served at `/scenes/<id>.scene`; Activities uses `public/terrain/`. Not
-`public/data/`: Activities' deploy guard allows only `activities.json` and `meta.json` there.
+here use `public/scenes/`, served at `/scenes/<id>.scene`.
 
 A page needs to know which activities have a scene before it asks for one. On a host with
-single-page-app fallback (Activities: `not_found_handling: "single-page-application"`, no Worker
-script), a missing file comes back as `index.html` with **200**, so a probe cannot tell. Read the
-sidecars at build time instead (the page's loading skeleton needs the same answer, see
-[the worked example](#a-worked-example-activities-terrain-card)). A Vite plugin in the style of
-Activities' own hint modules, in `scripts/vertScenes.ts` (Node code, so under `tsconfig.node.json`)
-and added to `plugins` in `vite.config.ts`:
+single-page-app fallback (on Workers static assets, `not_found_handling: "single-page-application"`
+with no Worker script), a missing file comes back as `index.html` with **200**, so a probe cannot
+tell. Read the sidecars at build time instead (the page's loading skeleton needs the same answer,
+see [the worked example](#a-worked-example-a-terrain-card)). A Vite plugin, in
+`scripts/vertScenes.ts` (Node code, so under `tsconfig.node.json`) and added to `plugins` in
+`vite.config.ts`:
 
 ```ts
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -328,8 +305,8 @@ and with `nosniff` the browser guesses nothing. In `public/_headers`:
 **Caching.** The page fetches `/scenes/<id>.scene?v=<sidecar hash>` (FNV-1a of the bytes), so a
 re-bake is a new URL. Two policies work:
 
-- `no-cache` (what Activities does, `/terrain/*`): the file names are not hashed and a re-bake
-  rewrites them in place, so every load revalidates (a 304 when unchanged).
+- `no-cache`: the file names are not hashed and a re-bake rewrites them in place, so every load
+  revalidates (a 304 when unchanged).
 - `public, max-age=31536000, immutable`: only if every URL that reaches the file carries `?v=`.
 
 ```text
@@ -337,17 +314,17 @@ re-bake is a new URL. Two policies work:
   Cache-Control: no-cache
 ```
 
-(Activities' `deploy.test.ts` checks every path has exactly one `Cache-Control` rule; the
-`Content-Type` rule adds none.) Compression does not matter: a scene is already entropy-coded
-(brotli saves 2% on the Coosa sample, gzip 1.5%; Cloudflare does not compress
-`application/octet-stream` anyway), and the sidecar is under 300 bytes.
+The `Content-Type` rule adds no second `Cache-Control` rule, for a host that checks each path has
+exactly one. Compression does not matter: a scene is already entropy-coded (brotli saves 2% on the
+Coosa sample, gzip 1.5%; Cloudflare does not compress `application/octet-stream` anyway), and the
+sidecar is under 300 bytes.
 
 ### Distances
 
 A scene's distances (the scrub, the profile's km, the sidecar's `distance` and `drawnLength`) are
 Vert's own: the 2D haversine sum over the input's raw points (`src/gpx/stats.ts`: no smoothing, no
 elevation). GPS jitter makes them a percent or two longer than a watch's recorded distance
-(Activities measured +1.0 to +2.6%). Show the activity's own distance as its distance, and sync
+(+1.0 to +2.6% on the runs measured). Show the activity's own distance as its distance, and sync
 by time ([Scrub sync](#scrub-sync-with-a-time-chart)), not by km.
 
 ### Sizes
@@ -359,36 +336,35 @@ At most 80 KB before compression for a ~20 km route; measured (default settings)
 ### Never publish decoded values as they are
 
 Decoded numbers are float32/float64 approximations of stepped values (an elevation of 412.3 m is
-412.29998779296875). Printed in full they match Activities' coordinate check `\d{2}\.\d{4,}`.
+412.29998779296875). Printed in full they match a coordinate check such as `\d{2}\.\d{4,}`.
 Round before printing anything (whole metres, or km to one decimal), and never serialise a decoded
 `Scene` into a published file. Runtime DOM text is not scanned by that check, but round it there
 too (the examples here do).
 
-### Activities' privacy and deploy guards
+### A host's own privacy and deploy guards
 
-What Activities built (its `scripts/import/sceneGuard.ts`, `scripts/deploy/checks.ts`):
+A host that checks what it publishes can check its scenes too:
 
-- **A scene guard**, run by the importer on each pair it bakes, by the privacy test on the
-  committed files and by the deploy guard on `dist/terrain/`: only `<id>.scene` /
-  `<id>.scene.json` pairs whose id is a Strava id or a bare file's hash, each listed in its
-  `meta.json` and the reverse; the sidecar exactly what Vert writes for those bytes; the scene
-  decoded with the vendored `decodeScene`, no forbidden key, every number on its format step (so
-  a coordinate has nowhere to hide), no (lat, lon)-shaped adjacent pair; size budgets.
-- **The deploy guard** also refuses a `.scene` file anywhere outside `dist/terrain/`.
+- **A scene guard**, run on each pair the importer bakes, on the committed files and on the
+  deploy output: only `<id>.scene` / `<id>.scene.json` pairs with the host's own ids, each listed
+  in its index and the reverse; the sidecar exactly what Vert writes for those bytes; the scene
+  decoded with `decodeScene`, no forbidden key, every number on its format step (so a coordinate
+  has nowhere to hide), no (lat, lon)-shaped adjacent pair; size budgets.
+- **A deploy guard** that refuses a `.scene` file anywhere outside the scenes folder.
 - **Why they find nothing**: a scene holds no coordinates, bounds, tile numbers or clock times
   ([Forbidden content](SCENE.md#forbidden-content)), and the bake refuses to write one its own
   scanners flag, with the run's true coordinates in hand. The guard is the host's second look,
   without them. Decoded floats printed in full would match a `\d{2}\.\d{4,}` coordinate check:
   [round them](#never-publish-decoded-values-as-they-are).
-- **CSP**: unchanged. The scene is a same-origin `fetch` (`connect-src 'self'`); the library and
-  three.js need no `eval`, no inline script or `<style>`, no `blob:` or worker. The example page
-  below ran under Activities' policy (`default-src`, `script-src`, `connect-src` and `img-src` as
-  in its `_headers`) with no violation.
+- **CSP**: nothing to add. The scene is a same-origin `fetch` (`connect-src 'self'`); the library
+  and three.js need no `eval`, no inline script or `<style>`, no `blob:` or worker. The example
+  page below ran with no violation under a strict `default-src`, `script-src`, `connect-src` and
+  `img-src` policy.
 
 ### Link to Vert
 
 A page that shows a scene can also link to Vert's own page for it, a bigger view with nothing to
-install (Activities' "Open in Vert ↗"):
+install (an "Open in Vert ↗" link):
 
 ```text
 https://vert.geekplux.com/?scene=<absolute URL of the .scene file>
@@ -396,11 +372,11 @@ https://vert.geekplux.com/?scene=<absolute URL of the .scene file>
 
 ```ts
 const href = `https://vert.geekplux.com/?scene=${encodeURIComponent(
-  new URL(`/terrain/${id}.scene`, location.origin).href,
+  new URL(`/scenes/${id}.scene`, location.origin).href,
 )}&title=${encodeURIComponent(activity.name)}`;
 ```
 
-`&title=` is optional: the session's name for Vert's h1 and tab ("Translantau 50 · Vert"), shown as
+`&title=` is optional: the session's name for Vert's h1 and tab ("Coosa Backcountry · Vert"), shown as
 plain text, trimmed, whitespace collapsed, at most 80 characters; without it the h1 is the file name.
 
 Encode the scene's URL as a query value (`encodeURIComponent`), so a `?v=<hash>` on it stays part
@@ -424,22 +400,21 @@ too large, not an https link).
 
 **What the scene's host must serve.**
 
-- **CORS** on the scenes: `Access-Control-Allow-Origin` for `/terrain/*` (Activities; `/scenes/*` in
-  this guide's examples). `*` is right: the fetch carries no credentials, and a fixed value needs no
+- **CORS** on the scenes: `Access-Control-Allow-Origin` for the scenes folder (`/scenes/*` in this
+  guide's examples). `*` is right: the fetch carries no credentials, and a fixed value needs no
   `Vary: Origin`. Without it the browser keeps the bytes from Vert ("the server could not be
   reached, or it does not let other sites read the file (CORS)"). The request is a plain GET with no
   custom headers, so there is no preflight. In `public/_headers`:
 
   ```text
-  /terrain/*
+  /scenes/*
     Access-Control-Allow-Origin: *
   ```
 
-  It adds no `Cache-Control` rule, so Activities' one-rule-per-path check still holds.
+  It adds no `Cache-Control` rule.
 
-  A redirect on the way needs the header too: an old hostname that 301s to a new one (as
-  activities.geekplux.org does to `.com`) answers without it, and the browser stops there. Link the
-  scene's final URL.
+  A redirect on the way needs the header too: an old hostname that 301s to a new one answers
+  without it, and the browser stops there. Link the scene's final URL.
 
 - **Content-Type** `application/octet-stream` for `*.scene`, as in
   [Serving](#serving-type-caching-compression). Vert reads the bytes whatever the type and checks the
@@ -502,9 +477,8 @@ similar, write a **points file**:
 
 The same points as a GPX or as a points file bake to the same bytes (checked on the Coosa sample).
 
-For Activities (`scripts/import/types.ts`): from a parsed FIT's `RawRecord`s, keep those with a
-position and write `{ lat, lon, t }` (`t` is already epoch ms, or `null`). `RawRecord` has no
-elevation today; add FIT `enhancedAltitude` (or `altitude`), in metres as the FIT SDK decodes it, as
+From a FIT file, keep the records with a position and write `{ lat, lon, t }` (`t` in epoch ms,
+or `null`). Add FIT `enhancedAltitude` (or `altitude`), in metres as the FIT SDK decodes it, as
 `ele` to keep the recorded climb, or leave it out and let the bake use the terrain. Two things to
 know:
 
@@ -525,16 +499,16 @@ The id becomes a published file name, so the bake checks it:
   exit 1, "pass another with --id". Hashes are skipped: a hex run of 16 or more, or a UUID, with a
   letter in it.
 - **An explicit `--id` of 10 or more digits and nothing else is opaque**: not read at all, so a
-  Strava activity id (already public on Activities) is never refused. Shorter digit-only ids, and
+  Strava activity id (public on the host's pages anyway) is never refused. Shorter digit-only ids, and
   any id with other characters, are read.
 - **Default ids** (from the file name: lower-cased, accents dropped, other runs turned into `-`)
   are also refused, exit 2, when a digit run reads as a timestamp (epoch µs/ms/s/min from 2000 to
   2100, or YYYYMMDD), since some apps name exports by the time of the run. Pass `--id`. An explicit
   id is never checked for timestamps.
 
-Activities' ids: every published id today is a 10- or 11-digit Strava id, which passes as it is
-(`--id 8071241781`); a bare file's `f:<sha1>` has a `:`, which `--id` refuses (exit 2): bake it as
-`f-<sha1>` and look it up the same way (`activityId.replace(/:/g, '-')`).
+A host's own ids: a 10- or 11-digit Strava id passes as it is (`--id 1234567890`); an id with a
+`:`, such as `f:<sha1>` for a file with no Strava id, is refused (exit 2): bake it as `f-<sha1>`
+and look it up the same way (`activityId.replace(/:/g, '-')`).
 
 ### Trim, loops and laps
 
@@ -595,17 +569,14 @@ Nothing printed, errors included, holds a coordinate, a bound, a tile x/y or a t
 
 ### From a host's importer
 
-Scenes are baked on the owner's machine and committed; a deployed build only copies them.
-Activities' `pnpm run import` (`scripts/import/scenes.ts`, with Vert checked out next to it until
-it installs the package) bakes the
-activities its config lists (scenes are opt-in, each with its own `trim`, and an `elevation`
-option, `file` or `terrain`, that leaves `ele` out of the points for a recorder it does not
-trust), and removes pairs no longer listed. As of 0.1.0 it writes each points file to a private
-temporary folder, owned by a child process that removes it on exit and on signals.
+Scenes are baked on the owner's machine and committed; a deployed build only copies them. A
+host's importer bakes the activities its config lists (scenes are opt-in, each with its own
+`trim`, and with a way to leave `ele` out of the points for a recorder it does not trust), and
+removes pairs no longer listed.
 
-With 0.1.1 a host can pipe the points to the bake instead, so no coordinate file touches disk
-(Activities moves to this with its next sync). The recommended pattern, with the package
-installed (from a checkout next to the host, the script is `'../vert/scripts/bake.ts'`):
+Pipe the points to the bake (since 0.1.1), so no coordinate file touches disk. The recommended
+pattern, with the package installed (from a checkout next to the host, the script is
+`'../vert/scripts/bake.ts'`):
 
 ```ts
 import { spawnSync } from 'node:child_process';
@@ -618,7 +589,7 @@ const BAKE = join(VERT, 'dist-lib', 'bake.js');
 
 const result = spawnSync(
   process.execPath,
-  [BAKE, '-', '--id', id, '--out', 'public/terrain', '--trim', String(trim), '--cache', cacheDir],
+  [BAKE, '-', '--id', id, '--out', 'public/scenes', '--trim', String(trim), '--cache', cacheDir],
   {
     input: JSON.stringify({ points }),
     encoding: 'utf8',
@@ -632,8 +603,8 @@ standard input as a stream, so any size up to the 128 MB limit goes through a pi
 
 - `NODE_NO_WARNINGS=1` keeps Node's own warnings off stderr, so stderr holds only the bake's.
 - Refuse the pair on a non-zero exit, and on **any** stderr line at exit 0 (a warning: a near end,
-  a tile cache it could not write), showing the bake's words; this is what Activities does. Then
-  run your own guard on the pair (Activities' scene guard), and record the scene's hash and the
+  a tile cache it could not write), showing the bake's words. Then run your own guard on the pair
+  ([guards](#a-hosts-own-privacy-and-deploy-guards)), and record the scene's hash and the
   [time offset](#scrub-sync-with-a-time-chart) next to its id.
 - Always pass `--cache`: without it the tiles land in `node_modules/.cache/vert-bake/` under the
   current directory (`vert-bake`) or in `../vert/scripts/.cache/terrarium/`, inside Vert's
@@ -780,9 +751,9 @@ linearly; a stop is one long step. Use `sceneTimeRange` to shade or mute the par
 the terrain cannot show.
 
 **The offset rule.** The helpers' seconds count from the scene's first point. A host whose time
-axis starts earlier (Activities' session clock starts at the session's start, 36–45 s before the
-first GPS fix on two of its races) keeps that gap, `offset` in whole seconds, next to the scene id,
-passes `seconds − offset` in and adds `offset` back out:
+axis starts earlier (a session clock that starts with the recording, often tens of seconds before
+the first GPS fix) keeps that gap, `offset` in whole seconds, next to the scene id, passes
+`seconds − offset` in and adds `offset` back out:
 
 ```ts
 const scrub = seconds === null ? null : metresAtTime(scene, seconds - offset);
@@ -791,99 +762,55 @@ onSeconds(time === null ? null : time + offset);
 ```
 
 `sceneTimeRange(scene)` shifted by `offset` is the stretch of your axis to shade. Without the
-offset, the terrain runs 36–45 s ahead of the chart (tens of metres at a run's pace).
-Activities' heart-rate series `w` is 48 buckets of the HR samples drawn across the elapsed time
-`min`: with regular recording, x ∝ seconds, which is what the example assumes.
+offset, the terrain runs that many seconds ahead of the chart (tens of metres at a run's pace).
+The example's heart-rate chart is drawn across the elapsed time with regular recording, so x ∝
+seconds.
 
-### A worked example: Activities' terrain card
+### A worked example: a terrain card
 
-What was checked, and how: the files below, unchanged, in a scratch host with Activities'
-`tsconfig.app.json` and `tsconfig.node.json`, its ESLint rules and Prettier, its `tokens.css` and
-`base.css`, and a reduced copy of its Activity page (its own `HeartRate.tsx`, `Skeleton.tsx` and
-`Activity.module.css`, with the changes below): typecheck, lint, format, Vitest and build pass; in
-Chromium, scrub sync both ways, Escape, Flat, the heart-rate slider with a mouse and by touch
-(below), axe with no violation at 390 (touch, with a position) and 1440, and Activities' CSP with
-no violation. **Layout**: the tops of `main`'s sections and of the footer, skeleton vs loaded
-and while the scene loads, moved by 0 px at 320, 390, 768 and 1440 px for a session with a scene
-and heart rate, with heart rate and no scene, with a scene and no heart rate, and with neither
-(`e2e/polish.spec.ts` allows 2 px).
+A card for an activity page whose heart-rate chart shares the terrain's scrub: the card itself
+(page-side, with a ghost for the loading skeleton), the lazy chunk that imports Vert, and a slider
+over the heart-rate chart, each with its CSS module. The CSS's `--page-*`, `--space-*` and
+`--radius-*` names stand for the host's own tokens.
 
-Then the whole change, as this guide gives it, applied to a copy of Activities (the vendored
-`dist-lib`, `three` 0.186.1, the plugin, the files below, the patch, and the Coosa scene baked as
-`8071241781.scene`, Translantau50's id): typecheck, ESLint and Prettier pass; its whole Vitest and
-Playwright suites fail only where [§1's list](#1-what-you-get) says, and every `polish.spec.ts`
-layout test and `home.spec.ts`'s media-query rule pass.
+**The page** keeps one position, in **seconds** (the heart-rate chart's unit; the page must not
+import the library eagerly, and the helpers live in the lazy chunk). It renders the card where the
+terrain goes and its ghost in the loading skeleton, and wraps the heart-rate chart in
+`HeartRateScrub` when there is a series: the slider lies over the chart and takes no room, and a
+session without heart rate has no slider.
 
-**The page.** `ActivityBody` keeps one position, in **seconds** (the heart-rate chart's unit; the
-page must not import the library eagerly, and the helpers live in the lazy chunk), and
-`ActivityGhost` renders the card's ghost. Activities' `HeartRateGhost` and `HeartRateEmpty` stay as
-they are: the slider lies over the chart and takes no room, and a session without heart rate has
-no slider. As a patch against Activities' current `src/pages/Activity.tsx` (`git apply --check`
-passes on a copy of it):
+```tsx
+// The activity page (excerpt): one position for the terrain, its profile and the heart-rate chart.
+function ActivityPage({ activity }: { activity: Activity }) {
+  const [seconds, setSeconds] = useState<number | null>(null);
+  return (
+    <>
+      <TerrainCard
+        activityId={activity.id}
+        title={activity.name}
+        seconds={seconds}
+        onSeconds={setSeconds}
+      />
+      {activity.heartRate ? (
+        <HeartRateScrub
+          durationSeconds={activity.elapsedSeconds}
+          seconds={seconds}
+          onSeconds={setSeconds}
+        >
+          <HeartRateChart series={activity.heartRate} />
+        </HeartRateScrub>
+      ) : null}
+    </>
+  );
+}
 
-```diff
---- a/src/pages/Activity.tsx
-+++ b/src/pages/Activity.tsx
-@@ -6,12 +6,13 @@
- import { useFitFigures } from '../app/useFitFigures.ts';
- import { useSettlePage } from '../app/pageSettled.ts';
- import { HeartRate, HeartRateEmpty, HeartRateGhost, NO_HR } from '../charts/HeartRate.tsx';
-+import { HeartRateScrub } from '../charts/HeartRateScrub.tsx';
- import { ChipLink } from '../components/Chip.tsx';
- import { ClockKey, ClockKeyGhost } from '../components/ClockKey.tsx';
- import { Ghost, GhostBlock, GhostDot } from '../components/Skeleton.tsx';
- import { SportDot } from '../components/SportDot.tsx';
- import { StatStrip, StatTile } from '../components/StatTile.tsx';
--import { TerrainSlot } from '../components/TerrainSlot.tsx';
-+import { TerrainCard, TerrainCardGhost } from '../components/TerrainCard.tsx';
- import { fmtDur, keepTogether, when } from '../data/format.ts';
- import { maskDigits } from '../data/activityHint.ts';
- import { useActivities } from '../data/load.ts';
-@@ -209,7 +210,7 @@
-         </div>
-       </section>
-
--      {e.d ? <TerrainSlot activity={{ id: hint.ids[at] ?? '', d: 'M0 0' }} /> : null}
-+      {e.d ? <TerrainCardGhost activityId={hint.ids[at] ?? ''} /> : null}
-
-       <section className={styles.card} aria-labelledby={ids.hr}>
-         <div className={styles.cardHead}>
-@@ -315,6 +316,8 @@
-   useFitFigures(text, FACT_SIZE, a.id);
-   // The part of the session clock its key points at (none for a route).
-   const [part, setPart] = useState<ClockPart | null>(null);
-+  // One position for the terrain, its profile and the heart-rate chart: seconds into the session.
-+  const [seconds, setSeconds] = useState<number | null>(null);
-   return (
-     <>
-       <section className={styles.hero} aria-labelledby={ids.hero}>
-@@ -385,7 +388,7 @@
-         </div>
-       </section>
-
--      <TerrainSlot activity={a} />
-+      <TerrainCard activityId={a.id} title={a.n} seconds={seconds} onSeconds={setSeconds} />
-
-       {/* Without an HR series the section stays, empty, saying so (Detail.dc.html). */}
-       <section className={styles.card} aria-labelledby={ids.hr}>
-@@ -395,7 +398,13 @@
-           </h2>
-           <p className={styles.sub}>{hr ? hr.range : NO_HR}</p>
-         </div>
--        {hr ? <HeartRate chart={hr} sport={sport} /> : <HeartRateEmpty duration={fmtDur(a.min)} />}
-+        {hr ? (
-+          <HeartRateScrub durationSeconds={a.min * 60} seconds={seconds} onSeconds={setSeconds}>
-+            <HeartRate chart={hr} sport={sport} />
-+          </HeartRateScrub>
-+        ) : (
-+          <HeartRateEmpty duration={fmtDur(a.min)} />
-+        )}
-       </section>
-
-       {more.length ? (
+// The page's loading skeleton keeps the card's room.
+function ActivityPageSkeleton({ activityId }: { activityId: string }) {
+  return <TerrainCardGhost activityId={activityId} />;
+}
 ```
 
-**The card, page-side**, which replaces `TerrainSlot` (it imports nothing from `@geekplux/vert`). It
+**The card, page-side** (it imports nothing from `@geekplux/vert`). It
 renders only for an activity with a baked scene, and it is the same size in every state: a 16:9 box
 (at most 420 px tall) and a row of fixed height under it, empty in the ghost, the Suspense fallback
 and the error fallback, filled once the scene is drawn. `TerrainCardGhost` renders nothing without
@@ -930,7 +857,7 @@ function Placeholder({ message }: { message?: string }) {
 }
 
 export interface TerrainCardProps {
-  /** Activities' id: a Strava id, or `f:<sha1>` for a bare file. */
+  /** The host's activity id: a Strava id, say, or `f:<sha1>` for a file with none. */
   activityId: string;
   title: string;
   seconds: number | null;
@@ -981,7 +908,7 @@ export function TerrainCardGhost({ activityId }: { activityId: string }) {
 }
 ```
 
-Vert's custom properties are mapped to Activities' tokens on the card, so they reach both
+Vert's custom properties are mapped to the page's tokens on the card, so they reach both
 components and nothing else on the page ([CSS custom properties](#8-css-custom-properties)):
 
 ```css
@@ -989,23 +916,23 @@ components and nothing else on the page ([CSS custom properties](#8-css-custom-p
 /*
  * The Terrain card, in every state (ghost, loading, loaded, failed): a 16:9 box and a row of fixed
  * height under it, so the page never moves when the data, the chunk or the scene arrives.
- * Vert's custom properties are mapped to Activities' tokens here, on the card, not on :root.
+ * Vert's custom properties are mapped to the page's tokens here, on the card, not on :root.
  */
 .card {
-  --surface: var(--empty-cell);
-  --surface-strong: var(--hairline);
-  --ink: var(--ink-primary);
-  --muted: var(--ink-muted);
-  --route: var(--sport-run);
-  --white: var(--ink-primary);
+  --surface: var(--page-cell);
+  --surface-strong: var(--page-rule);
+  --ink: var(--page-ink);
+  --muted: var(--page-muted);
+  --route: var(--page-accent);
+  --white: var(--page-ink);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
   padding: 28px;
-  border: var(--hairline-width) solid var(--edge-strong);
+  border: var(--hairline-width) solid var(--page-edge);
   border-radius: var(--radius-card);
-  background: var(--raised);
+  background: var(--page-raised);
 }
 
 .head {
@@ -1026,7 +953,7 @@ components and nothing else on the page ([CSS custom properties](#8-css-custom-p
 .note {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--page-muted);
 }
 
 .box {
@@ -1036,14 +963,14 @@ components and nothing else on the page ([CSS custom properties](#8-css-custom-p
   justify-content: center;
   aspect-ratio: 16 / 9;
   max-height: 420px;
-  border-radius: var(--radius-swatch);
-  background: var(--ground);
+  border-radius: var(--radius-small);
+  background: var(--page-ground);
 }
 
 .message {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--ink-muted);
+  color: var(--page-muted);
 }
 
 /* The controls (one 44 px row) and the profile (164 px: its 140 px plot and the ticks), a gap
@@ -1063,9 +990,9 @@ components and nothing else on the page ([CSS custom properties](#8-css-custom-p
 ```
 
 **The lazy chunk**, the only module that imports Vert. It fills the card's box and row; the credit
-sits in the box, in room the view keeps free with `insets`. The host's buttons keep Activities'
-own focus ring (2 px ink, `base.css`); only Vert's two widgets ring in `--route` (or in
-`--vert-focus`, when the card sets it).
+sits in the box, in room the view keeps free with `insets`. The host's buttons keep the page's own
+focus ring; only Vert's two widgets ring in `--route` (or in `--vert-focus`, when the card sets
+it).
 
 ```tsx
 // src/vert/VertTerrain.tsx
@@ -1086,7 +1013,7 @@ import { loadScene } from './loadScene.ts';
 import styles from './VertTerrain.module.css';
 
 export interface VertTerrainProps {
-  /** The scene's file name base (`8071241781`, `f-<sha1>`) and its sidecar's hash. */
+  /** The scene's file name base (`1234567890`, `f-<sha1>`) and its sidecar's hash. */
   sceneId: string;
   hash: string;
   /** The activity's name, for the canvas's accessible name. */
@@ -1247,10 +1174,10 @@ export default function VertTerrain({
   left: var(--space-3);
   font-size: 12px;
   line-height: 1.4;
-  color: var(--ink-muted);
+  color: var(--page-muted);
 }
 
-/* One link, at least 44 px tall, as Activities' page checks require (two lines fit at 320 px). */
+/* One link, at least 44 px tall (two lines fit at 320 px). */
 .credit a {
   display: inline-flex;
   align-items: center;
@@ -1264,20 +1191,20 @@ export default function VertTerrain({
   gap: var(--space-2);
 }
 
-/* Activities' own focus ring (base.css, 2 px ink) applies: only Vert's widgets use --route. */
+/* The page's own focus ring applies: only Vert's widgets use --route. */
 .button {
   min-width: 44px;
   min-height: 44px;
   padding: 0 var(--space-3);
-  border: var(--hairline-width) solid var(--control-edge);
-  border-radius: var(--radius-swatch);
+  border: var(--hairline-width) solid var(--page-control-edge);
+  border-radius: var(--radius-small);
   background: transparent;
-  color: var(--ink-primary);
+  color: var(--page-ink);
   font: inherit;
 }
 
 .button:disabled {
-  color: var(--ink-muted);
+  color: var(--page-muted);
 }
 ```
 
@@ -1291,12 +1218,10 @@ export default function VertTerrain({
   click or drag anywhere on the plot scrubs.
 - Without hover (a phone, a tablet) the input takes no pointer events, so a swipe over the chart
   scrolls the page. A 44 px strip along the plot's foot, marked by tick marks at 0, ¼, ½ and ¾ on a
-  base line (`--ink-muted`, 5.30:1 on the card), scrubs on a tap or a sideways drag; a vertical
+  base line (`--page-muted`, 5.30:1 on the card), scrubs on a tap or a sideways drag; a vertical
   swipe there scrolls too (`touch-action: pan-y`; the browser then cancels the gesture and the
-  position stays). The strip is `aria-hidden` and not focusable: the slider is the control.
-  Activities' CSS allows only its two breakpoints, `(hover: hover)` and
-  `(prefers-reduced-motion: reduce)` as media queries (`e2e/home.spec.ts`), hence the switch on
-  hover, not on `(pointer: coarse)`.
+  position stays). The strip is `aria-hidden` and not focusable: the slider is the control. The
+  switch is on `(hover: hover)`, not on `(pointer: coarse)`.
 - **Clear** (44 px, over the plot's top-right corner, only while there is a position) removes it
   for touch and mouse users, as Escape does for keyboards, and returns focus to the slider.
 
@@ -1304,7 +1229,7 @@ A known limitation: on a device with hover that also takes touch (a touch-screen
 input takes touches over the whole plot, so a swipe that scrolls the page can also move the
 position.
 
-If Activities' plot height changes, change the 140 px (and the strip's 96 px top) with it.
+If the chart's plot height changes, change the 140 px (and the strip's 96 px top) with it.
 
 ```tsx
 // src/charts/HeartRateScrub.tsx
@@ -1317,7 +1242,7 @@ export interface HeartRateScrubProps {
   /** The shared position, seconds since the run's first point, or null for none. */
   seconds: number | null;
   onSeconds: (seconds: number | null) => void;
-  /** The chart itself: Activities' `HeartRate`, whose 140 px plot spans the elapsed time. */
+  /** The chart itself, whose 140 px plot spans the elapsed time. */
   children: ReactNode;
 }
 
@@ -1436,7 +1361,7 @@ export function HeartRateScrub({
 
 ```css
 /* src/charts/HeartRateScrub.module.css */
-/* It all lies over the chart's 140 px plot (HeartRate.module.css `.svg`): no added height. */
+/* It all lies over the chart's 140 px plot: no added height. */
 .wrap {
   position: relative;
 }
@@ -1447,7 +1372,7 @@ export function HeartRateScrub({
   height: 140px;
   width: 2px;
   margin-left: -1px;
-  background: var(--ink-primary);
+  background: var(--page-ink);
   pointer-events: none;
 }
 
@@ -1498,13 +1423,12 @@ export function HeartRateScrub({
   height: 44px;
   touch-action: pan-y;
   background:
-    linear-gradient(var(--ink-muted), var(--ink-muted)) bottom / 100% 1px no-repeat,
-    repeating-linear-gradient(to right, var(--ink-muted) 0 1px, transparent 1px 25%) bottom / 100%
+    linear-gradient(var(--page-muted), var(--page-muted)) bottom / 100% 1px no-repeat,
+    repeating-linear-gradient(to right, var(--page-muted) 0 1px, transparent 1px 25%) bottom / 100%
       8px no-repeat;
 }
 
-/* With hover (a mouse, a trackpad): the slider takes the pointer anywhere on the plot; no strip.
-   Activities' CSS allows this query, besides its two breakpoints. */
+/* With hover (a mouse, a trackpad): the slider takes the pointer anywhere on the plot; no strip. */
 @media (hover: hover) {
   .slider {
     pointer-events: auto;
@@ -1523,10 +1447,10 @@ export function HeartRateScrub({
   min-width: 44px;
   min-height: 44px;
   padding: 0 var(--space-3);
-  border: var(--hairline-width) solid var(--control-edge);
-  border-radius: var(--radius-swatch);
-  background: var(--raised);
-  color: var(--ink-primary);
+  border: var(--hairline-width) solid var(--page-control-edge);
+  border-radius: var(--radius-small);
+  background: var(--page-raised);
+  color: var(--page-ink);
   font: inherit;
 }
 ```
@@ -1562,32 +1486,31 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
 - **Scope them to a wrapper** around both components (the example's card), not `:root`: the view
   reads its colours from the properties as they reach its own element, and the profile's CSS
   inherits them, so both follow the wrapper. A page that uses these names for something else keeps
-  its meaning everywhere else. Activities already defines `--font-mono` (JetBrains Mono) and
-  `--space-1` (4 px) on `:root`, which Vert then uses; it defines none of the colour names.
+  its meaning everywhere else. A page that already defines `--font-mono` or
+  `--space-1` on `:root` passes them to Vert as well.
 - **A dark page must set them.** The fallbacks are dark ink on light paper; the profile is
   transparent, so on a dark page they fail contrast. Map them to the page's own tokens. The
-  example's mapping onto Activities' `tokens.css`, with its contrast:
+  example's mapping onto a dark page's tokens, with its contrast:
 
-  | Vert               | Activities token        | contrast                                                                                                 |
+  | Vert               | page token              | contrast                                                                                                 |
   | ------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------- |
-  | `--surface`        | `--empty-cell` #1b1c1f  | terrain fill and climb bands; `--muted` climb numbers on it 4.99:1                                       |
-  | `--surface-strong` | `--hairline` #26272b    | the steepest climb's band; its `--ink` number 12.98:1                                                    |
-  | `--ink`            | `--ink-primary` #f0efec | profile line and ridge lines; 15.73:1 on the card (`--raised` #151619)                                   |
-  | `--muted`          | `--ink-muted` #8c8b85   | ticks: 5.30:1 on the card; the credit in the box: 5.49:1 on `--ground` #111214                           |
-  | `--route`          | `--sport-run` #d95926   | route, scrub marker, Vert's focus ring (non-text, 3:1 needed): 4.66:1 on the card, 4.39:1 on `--surface` |
-  | `--white`          | `--ink-primary` #f0efec | the route's halo and the markers' rings                                                                  |
+  | `--surface`        | `--page-cell` #1b1c1f   | terrain fill and climb bands; `--muted` climb numbers on it 4.99:1                                       |
+  | `--surface-strong` | `--page-rule` #26272b   | the steepest climb's band; its `--ink` number 12.98:1                                                    |
+  | `--ink`            | `--page-ink` #f0efec    | profile line and ridge lines; 15.73:1 on the card (`--page-raised` #151619)                              |
+  | `--muted`          | `--page-muted` #8c8b85  | ticks: 5.30:1 on the card; the credit in the box: 5.49:1 on `--page-ground` #111214                      |
+  | `--route`          | `--page-accent` #d95926 | route, scrub marker, Vert's focus ring (non-text, 3:1 needed): 4.66:1 on the card, 4.39:1 on `--surface` |
+  | `--white`          | `--page-ink` #f0efec    | the route's halo and the markers' rings                                                                  |
 
-  `--sport-run` is the run colour, as identity: a page showing another sport can map `--route` to
-  that sport's token instead (check it at 3:1 against `--raised` and `--empty-cell`).
+  `--page-accent` is the run colour, as identity: a page showing another sport can map `--route`
+  to that sport's colour instead (check it at 3:1 against `--page-raised` and `--page-cell`).
 
 - **`palette` and `routePalette`** props override the view's colours (`palette` is read once, at
   mount); the profile has no such props and follows the properties only. Prefer the properties, so
   the two stay in step.
 - **Focus ring**: Vert's is `2px solid var(--vert-focus, var(--route))`, offset 2px, on the view's
   wrapper and the profile's slider, and only there (its CSS scopes it to those two). Set
-  `--vert-focus` on the wrapper to give them your page's ring colour: in Activities,
-  `--vert-focus: var(--ink-primary)` matches its 2 px ink outline from `base.css`, which its own
-  controls keep. Width and offset are fixed.
+  `--vert-focus` on the wrapper to give them your page's ring colour; for a page whose own ring is
+  a 2 px ink outline, that is `--vert-focus: var(--page-ink)`. Width and offset are fixed.
 
 ## 9. Accessibility
 
@@ -1596,7 +1519,7 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
   Backcountry Trail, 4.4 by 6.7 km, with the route drawn from km 0.2 to km 21.3; markers: start and
   finish ○ (a loop), highest point ▲ at km 11.3."). Not "3D terrain" alone.
 - **Text alternative**: the canvas cannot hold data, so the page shows it as text: the activity's
-  stats (Activities' hero already does). The profile numbers and shades each climb, and its slider
+  stats. The profile numbers and shades each climb, and its slider
   describes them in words to screen readers; a page with room to spare can also list them (round
   the values, as in `describe` above).
 - **Colour is never alone**: markers differ by shape (start ○, finish ◉, summit ▲, scrub ● with a
@@ -1625,9 +1548,8 @@ Vert reads these, each with a fallback (its value in Vert's style A, which suits
 ## 10. Testing in the host
 
 **jsdom.** jsdom has no WebGL, so pass `createRenderer` a stub; it also has no 2D canvas, which the
-view does without. Query by role and name, as everywhere. In Activities this test lives in `src/`
-(say `src/vert/VertTerrain.test.tsx`: Vitest collects `.tsx` tests only there), where
-`tsconfig.app.json` has only `vite/client` types, so it references Node's types itself for
+view does without. Query by role and name, as everywhere. A test under an app `tsconfig` that has
+only `vite/client` types (say `src/vert/VertTerrain.test.tsx`) references Node's types itself for
 `node:fs`:
 
 ```tsx
@@ -1645,7 +1567,7 @@ import {
   type TerrainRenderer,
 } from '@geekplux/vert';
 
-const scene = decodeScene(readFileSync('public/scenes/8071241781.scene'));
+const scene = decodeScene(readFileSync('public/scenes/coosa-sample.scene'));
 
 /** jsdom has no WebGL: the view draws into this stub instead. */
 const createRenderer = (): TerrainRenderer => ({
@@ -1709,9 +1631,9 @@ A committed scene is fine as a fixture (it holds no coordinates). Building one n
 repository, so tests use a baked file: `@geekplux/vert/fixtures/coosa-backcountry.scene` (and
 its sidecar; `dist-lib/fixtures/` when vendored) comes with the library for that.
 
-**axe.** Run it in a real browser, where the canvas draws and colours resolve: Activities'
-Playwright suite (`@axe-core/playwright`, 0 violations at 1440, 768 and 390) covers the Activity
-page once the card is there. Headless Chromium draws WebGL (software), which Vert's own end-to-end
+**axe.** Run it in a real browser, where the canvas draws and colours resolve: a Playwright suite
+with `@axe-core/playwright`, at each width the page supports, covers the card once it is on the
+page. Headless Chromium draws WebGL (software), which Vert's own end-to-end
 tests rely on; wait for `canvas[role="img"][data-visible]` (set after the first frame) before
 checking.
 

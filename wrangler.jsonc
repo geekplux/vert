@@ -9,7 +9,8 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page",
-    // Only tile requests run Worker code; everything else is a static asset (or the SPA shell).
+    // Only tile requests run Worker code; everything else is a static asset, and any path that is
+    // not a file gets dist/404.html with status 404 (vite.not-found.ts).
     "run_worker_first": ["/tiles/*"],
   },
   "r2_buckets": [{ "binding": "TILES", "bucket_name": "vert-tiles" }],

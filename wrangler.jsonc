@@ -8,7 +8,7 @@
   "compatibility_date": "2026-10-12",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application",
+    "not_found_handling": "404-page",
     // Only tile requests run Worker code; everything else is a static asset (or the SPA shell).
     "run_worker_first": ["/tiles/*"],
   },

@@ -28,6 +28,8 @@
     "vite.bake.config.ts",
     "vite.tile-proxy.ts",
     "vite.tile-proxy.test.ts",
+    "vite.not-found.ts",
+    "vite.not-found.test.ts",
     "playwright.config.ts",
     "e2e",
     ".ladle/*.ts"

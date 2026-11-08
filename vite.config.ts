@@ -1,9 +1,10 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { notFoundPage } from './vite.not-found.ts';
 import { tileProxy } from './vite.tile-proxy.ts';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), notFoundPage()],
   // The GPX parse worker (`src/gpx/worker.ts`) is a module worker; bundle it as ES too.
   worker: { format: 'es' },
   // The terrain chunk (three.js, ~615 kB, ~156 kB gzipped) loads only once a run is chosen
@@ -18,6 +19,7 @@ export default defineConfig({
       'scripts/**/*.test.ts',
       'worker/src/**/*.test.ts',
       'vite.tile-proxy.test.ts',
+      'vite.not-found.test.ts',
     ],
     setupFiles: ['src/test/setup.ts'],
   },
